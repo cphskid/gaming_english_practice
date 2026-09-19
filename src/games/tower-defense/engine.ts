@@ -1,4 +1,4 @@
-import { CRYSTAL, FOCUS_MAX, FOCUS_STEP, TOWERS, refundOf } from '@/data/towers'
+import { CRYSTAL, FOCUS_MAX, FOCUS_STEP, SOLDIER_REACH, SOLDIER_SLOW, TOWERS, refundOf } from '@/data/towers'
 import type { GameContext, GameHandle, LevelData, Point, Word } from '@/core/types'
 import { loadArt } from './art'
 
@@ -384,17 +384,39 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     syncUI()
   }
 
+  /**
+   * 士兵要站在路的哪一點。
+   *
+   * 原本是「離軍營最近的路點」，結果士兵常常站在沒有任何箭塔罩得到的地方，
+   * 怪纏在那裡誰也打不到。這不是個案：魔王關八個塔位裡有五個是這種。
+   *
+   * 現在改成在軍營走得到的範圍內，挑**被最多箭塔罩到**的那一點，
+   * 一樣近的就挑離軍營近的。附近完全沒有箭塔罩得到（例如開場還沒蓋塔）
+   * 就退回最近的路點。士兵每次重生都會重算，所以後來才蓋的箭塔
+   * 會把士兵吸進火力網裡，玩家亂放也不會白放。
+   */
   function makeSoldier(slotIdx: number): Soldier {
     const s = SLOTS[slotIdx]
-    let best: { d: number; x: number; y: number; path: number; dist: number } | null = null
+    const archers = S.towers.filter((t) => t.kind === 'archery').map((t) => SLOTS[t.slot])
+    // 跟 data/levels.ts 的 volleyOf 用同一個判定，不然難度算出來的跟實際打到的會不一樣
+    const covered = (px: number, py: number) =>
+      archers.reduce((n, a) => n + (Math.hypot(a.x - px, a.y - 20 - (py - 22)) <= TOWERS.archery.range ? 1 : 0), 0)
+
+    type Spot = { score: number; d: number; x: number; y: number; path: number; dist: number }
+    const spots: Spot[] = []
     PATHS.forEach((pts, pi) => {
       for (let d = 0; d < PATH_LEN[pi]; d += 6) {
         const p = pointAt(pts, d)
-        const dd = Math.hypot(p.x - s.x, p.y - s.y)
-        if (!best || dd < best.d) best = { d: dd, x: p.x, y: p.y, path: pi, dist: d }
+        spots.push({
+          score: covered(p.x, p.y), d: Math.hypot(p.x - s.x, p.y - s.y),
+          x: p.x, y: p.y, path: pi, dist: d,
+        })
       }
     })
-    const b = best!
+    // 走得到而且真的有箭塔罩得到的點優先；一個都沒有就退回最近的點。
+    const reachable = spots.filter((sp) => sp.d <= SOLDIER_REACH && sp.score > 0)
+    const pool = reachable.length ? reachable : spots
+    const b = pool.reduce((a, c) => (c.score > a.score || (c.score === a.score && c.d < a.d) ? c : a))
     return { x: b.x, y: b.y, path: b.path, dist: b.dist, hp: TOWERS.barracks.soldierHp!, respawn: 0 }
   }
 
@@ -426,8 +448,12 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
           if (gap >= -4 && gap < TOWERS.barracks.blockRadius!) blocker = sd
         }
         e.blocked = !!blocker
+        // 士兵是「纏住」不是「擋死」。擋死會產生一個修不掉的壞情況：
+        // 卡點如果在所有箭塔的射程外，那隻怪就永遠停在那裡，誰也打不到牠。
+        // 拖慢之後怪再慢也一定會走進箭塔的範圍，那個壞情況就消失了，
+        // 而軍營原本的用處（替你爭取時間）完全保留。
         if (blocker) blocker.hp -= dt * 9
-        else e.dist += e.speed * dt
+        e.dist += e.speed * (blocker ? SOLDIER_SLOW : 1) * dt
 
         const p = pointAt(PATHS[e.path], e.dist)
         e.x = p.x; e.y = p.y

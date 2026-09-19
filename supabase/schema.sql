@@ -43,10 +43,26 @@ create table if not exists public.levels (
 --    老師是真的 Supabase 帳號（email 登入）。學生不是。
 -- -----------------------------------------------------------------------------
 
+-- 老師是真的 email 帳號。**但不是註冊了就是老師**：要管理員先把 email 放進
+-- teacher_invites，註冊完呼叫 claim_teacher() 才會變成老師。
+-- 沒有這道關卡的話，開放學生自由註冊之後，任何人拿 email 註冊都能開班。
 create table if not exists public.teachers (
   user_id      uuid primary key references auth.users(id) on delete cascade,
   display_name text not null default '老師',
+  -- 最高管理者。可以發老師邀請、停用老師、重設任何人的密碼、看所有班級。
+  is_admin     boolean not null default false,
+  -- 停用的老師登入得了，但開不了班也看不到班級資料。
+  active       boolean not null default true,
   created_at   timestamptz not null default now()
+);
+
+-- 管理員指定「這個 email 可以成為老師」。老師自己註冊、自己設密碼，
+-- 管理員不用經手別人的密碼，也不用等老師申請再核准。
+create table if not exists public.teacher_invites (
+  email      text primary key check (email = lower(btrim(email)) and email like '%@%'),
+  invited_by uuid references auth.users(id) on delete set null,
+  used_at    timestamptz,
+  created_at timestamptz not null default now()
 );
 
 create table if not exists public.classes (
@@ -62,22 +78,43 @@ create index if not exists classes_owner on public.classes(owner);
 
 -- -----------------------------------------------------------------------------
 -- 3. 學生
+--    **帳號（你是誰）跟班級（你現在在哪一班）是分開的。**
+--    班級只是一筆可以改的歸屬，所以升級換班不會弄丟角色與進度，
+--    沒有班級的人（朋友的小孩）也照樣能玩。
+--
 --    id 用 uuid，不要用「班級代碼:暱稱」當主鍵——那樣暱稱永遠改不了。
---    暱稱在班內唯一，就是那個人。
 -- -----------------------------------------------------------------------------
 
 create table if not exists public.students (
   id         uuid primary key default gen_random_uuid(),
-  class_code text not null references public.classes(code) on delete cascade,
+
+  -- 登入用的帳號，全站唯一。限英數與底線並一律存小寫：
+  -- 中文帳號在不同裝置的輸入法會打出不一樣的字，小朋友會登入不了卻不知道為什麼。
+  login_id   text not null unique
+             check (login_id = lower(login_id) and login_id ~ '^[a-z0-9_]{3,16}$'),
+  -- 六位以上英數密碼的 bcrypt。比對前一律轉小寫，
+  -- 否則小朋友會被大寫鎖定鍵擋在門外，而且他們想不到是這個原因。
+  pw_hash    text not null,
+
+  -- 排行榜上顯示的名字，可以改，跟登入帳號無關。
   nickname   text not null check (length(btrim(nickname)) between 1 and 16),
-  -- 可選的四位數密碼。null＝沒設，任何人打這個暱稱都能接手這個存檔。
-  -- 預設不設，因為 Chuck 要的是「班級代碼＋暱稱」就能進。
-  -- 要防同學互相亂用的時候，把 join_class 的 p_pin 接起來就好，資料表不用再改。
-  pin_hash   text,
-  created_at timestamptz not null default now(),
-  unique (class_code, nickname)
+  nickname_changed_at timestamptz,
+
+  -- 現在在哪一班。null＝還沒加入任何班級。
+  class_code text references public.classes(code) on delete set null on update cascade,
+
+  -- 試錯鎖定。六位英數聽起來安全，但小朋友實際會取 abc123、自己的名字，
+  -- 真正擋住猜測的是這個，不是長度。
+  failed_attempts int not null default 0,
+  locked_until    timestamptz,
+
+  created_at timestamptz not null default now()
 );
 create index if not exists students_class on public.students(class_code);
+-- 暱稱只在班內唯一。跨班重複沒關係，因為排行榜只比班內；
+-- 同班重複才會讓人搞混誰是誰。沒有班級的人不受限制。
+create unique index if not exists students_class_nickname
+  on public.students(class_code, nickname) where class_code is not null;
 
 -- 這台裝置現在是誰。匿名登入每台裝置一組 uid，靠這張表接回同一個學生，
 -- 所以換平板也看得到自己的存檔——這就是要接後端的原因。
@@ -178,7 +215,13 @@ alter table public.teacher_open   enable row level security;
 -- 沒寫 policy 的動作一律擋掉。寫入全部走 RPC，所以這裡只開讀。
 revoke all on all tables in schema public from anon, authenticated;
 grant select on public.words, public.levels to anon, authenticated;
-grant select on public.classes, public.students, public.characters,
+-- **students 只給得出這三欄。**
+-- 同學之間要看得到彼此的暱稱（排行榜要用），但這張表現在還放著密碼雜湊、
+-- 登入帳號和鎖定狀態。整張表 grant 出去的話，一個小朋友就能把全班的
+-- 密碼雜湊撈回自己的平板慢慢破，RLS 擋不了這件事（RLS 管的是列，不是欄）。
+grant select (id, nickname, class_code) on public.students to authenticated;
+
+grant select on public.classes, public.characters,
                 public.answer_events, public.word_stats,
                 public.level_progress, public.teacher_open, public.student_links
   to authenticated;
@@ -200,10 +243,23 @@ returns text language sql stable security definer set search_path = public, pg_t
    where l.user_id = auth.uid();
 $$;
 
-create or replace function public.is_teacher_of(p_code text)
+-- 最高管理者。
+create or replace function public.is_admin()
 returns boolean language sql stable security definer set search_path = public, pg_temp as $$
   select exists (
-    select 1 from public.classes c where c.code = p_code and c.owner = auth.uid()
+    select 1 from public.teachers t
+     where t.user_id = auth.uid() and t.is_admin and t.active
+  );
+$$;
+
+-- 這是不是你的班。被停用的老師會回 false，管理員對所有班都是 true。
+create or replace function public.is_teacher_of(p_code text)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $$
+  select public.is_admin() or exists (
+    select 1
+      from public.classes c
+      join public.teachers t on t.user_id = c.owner
+     where c.code = p_code and c.owner = auth.uid() and t.active
   );
 $$;
 
@@ -235,19 +291,32 @@ create policy words_read on public.words for select to anon, authenticated using
 drop policy if exists levels_read on public.levels;
 create policy levels_read on public.levels for select to anon, authenticated using (true);
 
+-- 邀請名單只有管理員看得到，而且只能透過 RPC 改。
+alter table public.teacher_invites enable row level security;
+drop policy if exists teacher_invites_admin on public.teacher_invites;
+create policy teacher_invites_admin on public.teacher_invites for select to authenticated
+  using (public.is_admin());
+
 drop policy if exists teachers_self on public.teachers;
 create policy teachers_self on public.teachers for select to authenticated
-  using (user_id = auth.uid());
+  using (user_id = auth.uid() or public.is_admin());
 
 -- 學生看得到自己那一班（要顯示班名），老師看得到自己開的班
 drop policy if exists classes_read on public.classes;
 create policy classes_read on public.classes for select to authenticated
-  using (owner = auth.uid() or code = public.current_class_code());
+  using (owner = auth.uid() or code = public.current_class_code() or public.is_admin());
 
--- 同班同學互相看得到暱稱，排行榜要用。這裡本來就沒有真實姓名。
+-- 同班同學互相看得到暱稱，排行榜要用（只有三個欄位 grant 得出去，見上面）。
+-- 第一條是「自己一定看得到自己」：沒有加入任何班級的人（朋友的小孩）
+-- class_code 是 null，少了這條他連自己都讀不到。
 drop policy if exists students_read on public.students;
 create policy students_read on public.students for select to authenticated
-  using (class_code = public.current_class_code() or public.is_teacher_of(class_code));
+  using (
+    id = public.current_student_id()
+    or (class_code is not null and class_code = public.current_class_code())
+    or (class_code is not null and public.is_teacher_of(class_code))
+    or public.is_admin()
+  );
 
 drop policy if exists student_links_self on public.student_links;
 create policy student_links_self on public.student_links for select to authenticated
@@ -316,65 +385,215 @@ $$;
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- 進場：班級代碼＋暱稱。沒有這個暱稱就開一個新的存檔。
--- p_pin 現在前端都傳 null。之後要防同學互相亂用，前端加一個四位數欄位就好。
+-- 學生帳號
+--
+-- 學生**不用** Supabase 的 email 帳號，理由是實測發現的：Supabase 的註冊
+-- 一定綁 email，每註冊一個就想寄一封確認信，而內建寄信額度非常小，
+-- 連續註冊五個就被擋（email rate limit）。一整班三十個人同時註冊會直接卡死。
+--
+-- 所以學生走這條路：裝置先匿名登入拿到一個 auth 身分，再呼叫底下的
+-- register_student / login_student 帶帳號密碼，驗過就把這台裝置綁到那個學生。
+-- 密碼用 bcrypt 存在我們自己的表裡，完全不碰寄信。
 -- -----------------------------------------------------------------------------
-create or replace function public.join_class(
-  p_code     text,
-  p_nickname text,
-  p_pin      text default null
+
+-- 密碼規則。不要求大小寫混合或特殊符號：那種規則只會讓國小生記不住，
+-- 然後全班都來找老師重設。真正擋住猜測的是底下的試錯鎖定。
+create or replace function public.password_problem(p_password text, p_login_id text)
+returns text language plpgsql immutable as $$
+declare v text := lower(coalesce(p_password, ''));
+begin
+  if length(v) < 6 or length(v) > 32 then return '密碼要 6 到 32 個字'; end if;
+  if v !~ '^[a-z0-9]+$' then return '密碼只能用英文字母和數字'; end if;
+  if v ~ '^(.)\1+$' then return '密碼不能整串都是同一個字'; end if;
+  if strpos('0123456789', v) > 0 or strpos('abcdefghijklmnopqrstuvwxyz', v) > 0
+    then return '密碼不能是連號或照順序的字母'; end if;
+  if v = lower(coalesce(p_login_id, '')) then return '密碼不能跟帳號一樣'; end if;
+  return null;
+end;
+$$;
+
+-- 把這台裝置綁到某個學生身上，並把試錯次數歸零。
+create or replace function public.link_device(p_student uuid)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  insert into public.student_links (user_id, student_id)
+  values (auth.uid(), p_student)
+  on conflict (user_id) do update set student_id = excluded.student_id, linked_at = now();
+  update public.students
+     set failed_attempts = 0, locked_until = null
+   where id = p_student;
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 註冊。班級代碼就是邀請碼：沒有一組有效而且開放加入的代碼就註冊不了，
+-- 所以網址流出去也不會變成一個任何人都能進的公開網站。
+-- -----------------------------------------------------------------------------
+create or replace function public.register_student(
+  p_login_id   text,
+  p_password   text,
+  p_nickname   text,
+  p_class_code text
 )
-returns table (student_id uuid, class_code text, nickname text)
+returns table (student_id uuid, login_id text, nickname text, class_code text)
 language plpgsql security definer set search_path = public, extensions, pg_temp as $$
--- returns table 的欄位名會變成 PL/pgSQL 變數，跟資料表欄位撞名時 Postgres 會直接拒絕。
--- 這一行叫它撞名時一律當作欄位（回傳值都是用 return query 給的，不靠變數名）。
 #variable_conflict use_column
 declare
-  v_code  text := upper(btrim(p_code));
-  v_nick  text := btrim(p_nickname);
+  v_login text := lower(btrim(coalesce(p_login_id, '')));
+  v_nick  text := btrim(coalesce(p_nickname, ''));
+  v_code  text := upper(btrim(coalesce(p_class_code, '')));
   v_open  boolean;
+  v_bad   text;
   v_id    uuid;
-  v_hash  text;
 begin
-  if auth.uid() is null then
-    raise exception '請先登入（學生用匿名登入）';
+  if auth.uid() is null then raise exception '請先開啟遊戲再註冊'; end if;
+  if v_login !~ '^[a-z0-9_]{3,16}$' then
+    raise exception '帳號要 3 到 16 個字，只能用英文字母、數字和底線';
   end if;
-  if v_nick = '' or length(v_nick) > 16 then
-    raise exception '暱稱要 1 到 16 個字';
-  end if;
+  if v_nick = '' or length(v_nick) > 16 then raise exception '暱稱要 1 到 16 個字'; end if;
+
+  v_bad := public.password_problem(p_password, v_login);
+  if v_bad is not null then raise exception '%', v_bad; end if;
 
   select c.open into v_open from public.classes c where c.code = v_code;
-  if v_open is null then
-    raise exception '找不到班級代碼 %', v_code;
+  if v_open is null then raise exception '找不到這組班級代碼'; end if;
+  if not v_open then raise exception '這一班目前沒有開放加入，請老師打開'; end if;
+
+  if exists (select 1 from public.students s where s.login_id = v_login) then
+    raise exception '這個帳號已經有人用了，換一個';
+  end if;
+  if exists (select 1 from public.students s where s.class_code = v_code and s.nickname = v_nick) then
+    raise exception '這一班已經有人叫這個暱稱了，換一個';
   end if;
 
-  select s.id, s.pin_hash into v_id, v_hash
-    from public.students s
-   where s.class_code = v_code and s.nickname = v_nick;
+  insert into public.students (login_id, pw_hash, nickname, class_code)
+  values (v_login, extensions.crypt(lower(p_password), extensions.gen_salt('bf')), v_nick, v_code)
+  returning id into v_id;
+  insert into public.characters (student_id) values (v_id) on conflict (student_id) do nothing;
 
-  if v_id is null then
-    if not v_open then
-      raise exception '這一班已經關閉，不能再加入新同學';
-    end if;
-    insert into public.students (class_code, nickname, pin_hash)
-    values (v_code, v_nick,
-            case when p_pin is null then null
-                 else extensions.crypt(p_pin, extensions.gen_salt('bf')) end)
-    returning id into v_id;
-    insert into public.characters (student_id) values (v_id)
-      on conflict (student_id) do nothing;
-  elsif v_hash is not null then
-    if p_pin is null or extensions.crypt(p_pin, v_hash) <> v_hash then
-      raise exception '密碼不對';
-    end if;
+  perform public.link_device(v_id);
+  return query select v_id, v_login, v_nick, v_code;
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 登入。連續錯五次鎖十分鐘，老師或管理員可以立刻解鎖。
+--
+-- **這支不用 raise exception 回報失敗，而是回一個 error 欄位**，理由踩過坑：
+-- 在 Postgres 裡 raise exception 會把同一筆交易裡的 update 一起回滾，
+-- 所以「記下這次打錯了」跟「丟出錯誤」不能並存——本機測試就是這樣抓到的，
+-- 鎖定次數永遠停在 0。現在改成回傳錯誤字串，由前端自己丟出來。
+--
+-- 帳號不存在跟密碼錯誤回同一句話，才不會讓人拿這支函式問出誰有註冊。
+-- -----------------------------------------------------------------------------
+create or replace function public.login_student(p_login_id text, p_password text)
+returns table (student_id uuid, login_id text, nickname text, class_code text, error text)
+language plpgsql security definer set search_path = public, extensions, pg_temp as $$
+#variable_conflict use_column
+declare
+  v_login text := lower(btrim(coalesce(p_login_id, '')));
+  v_rec   public.students%rowtype;
+  v_wait  int;
+begin
+  if auth.uid() is null then
+    return query select null::uuid, null::text, null::text, null::text, '請先開啟遊戲再登入'::text;
+    return;
   end if;
 
-  -- 這台裝置從現在起是這個學生
-  insert into public.student_links (user_id, student_id)
-  values (auth.uid(), v_id)
-  on conflict (user_id) do update set student_id = excluded.student_id, linked_at = now();
+  select * into v_rec from public.students s where s.login_id = v_login;
+  if v_rec.id is null then
+    return query select null::uuid, null::text, null::text, null::text, '帳號或密碼不對'::text;
+    return;
+  end if;
 
-  return query select v_id, v_code, v_nick;
+  if v_rec.locked_until is not null and v_rec.locked_until > now() then
+    v_wait := greatest(1, ceil(extract(epoch from (v_rec.locked_until - now())) / 60));
+    return query select null::uuid, null::text, null::text, null::text,
+      format('密碼錯太多次了，請等 %s 分鐘再試，或請老師幫你重設', v_wait);
+    return;
+  end if;
+
+  if extensions.crypt(lower(coalesce(p_password, '')), v_rec.pw_hash) <> v_rec.pw_hash then
+    update public.students
+       set failed_attempts = failed_attempts + 1,
+           locked_until = case when failed_attempts + 1 >= 5
+                               then now() + interval '10 minutes' end
+     where id = v_rec.id;
+    return query select null::uuid, null::text, null::text, null::text, '帳號或密碼不對'::text;
+    return;
+  end if;
+
+  perform public.link_device(v_rec.id);
+  return query select v_rec.id, v_rec.login_id, v_rec.nickname, v_rec.class_code, null::text;
+end;
+$$;
+
+-- 學生自己改密碼。要先打對舊的，免得別人拿到一台沒鎖的平板就把密碼換掉。
+create or replace function public.student_set_password(p_old text, p_new text)
+returns void language plpgsql security definer set search_path = public, extensions, pg_temp as $$
+declare v_id uuid := public.current_student_id(); v_hash text; v_login text; v_bad text;
+begin
+  if v_id is null then raise exception '請先登入'; end if;
+  select s.pw_hash, s.login_id into v_hash, v_login from public.students s where s.id = v_id;
+  if extensions.crypt(lower(coalesce(p_old, '')), v_hash) <> v_hash then
+    raise exception '舊密碼不對';
+  end if;
+  v_bad := public.password_problem(p_new, v_login);
+  if v_bad is not null then raise exception '%', v_bad; end if;
+  update public.students
+     set pw_hash = extensions.crypt(lower(p_new), extensions.gen_salt('bf'))
+   where id = v_id;
+end;
+$$;
+
+-- 學生自己改暱稱。一週一次，不然一定有人整節課都在改名字玩。
+create or replace function public.student_set_nickname(p_nickname text)
+returns text language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_id uuid := public.current_student_id();
+  v_nick text := btrim(coalesce(p_nickname, ''));
+  v_code text; v_last timestamptz;
+begin
+  if v_id is null then raise exception '請先登入'; end if;
+  if v_nick = '' or length(v_nick) > 16 then raise exception '暱稱要 1 到 16 個字'; end if;
+
+  select s.class_code, s.nickname_changed_at into v_code, v_last
+    from public.students s where s.id = v_id;
+
+  if v_last is not null and v_last > now() - interval '7 days' then
+    raise exception '暱稱一週只能改一次，上次是 % ', to_char(v_last, 'MM/DD');
+  end if;
+  if v_code is not null and exists (
+    select 1 from public.students s
+     where s.class_code = v_code and s.nickname = v_nick and s.id <> v_id
+  ) then raise exception '這一班已經有人叫這個暱稱了'; end if;
+
+  update public.students set nickname = v_nick, nickname_changed_at = now() where id = v_id;
+  return v_nick;
+end;
+$$;
+
+-- 換班（或第一次加入班級）。角色、金幣、進度完全不動，只換一筆歸屬。
+create or replace function public.student_join_class(p_class_code text)
+returns text language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_id uuid := public.current_student_id();
+  v_code text := upper(btrim(coalesce(p_class_code, '')));
+  v_open boolean; v_nick text;
+begin
+  if v_id is null then raise exception '請先登入'; end if;
+  select c.open into v_open from public.classes c where c.code = v_code;
+  if v_open is null then raise exception '找不到這組班級代碼'; end if;
+  if not v_open then raise exception '這一班目前沒有開放加入'; end if;
+
+  select s.nickname into v_nick from public.students s where s.id = v_id;
+  if exists (select 1 from public.students s
+              where s.class_code = v_code and s.nickname = v_nick and s.id <> v_id) then
+    raise exception '這一班已經有人叫「%」了，請先改一個別的暱稱再加入', v_nick;
+  end if;
+
+  update public.students set class_code = v_code where id = v_id;
+  return v_code;
 end;
 $$;
 
@@ -594,8 +813,11 @@ language plpgsql security definer set search_path = public, pg_temp as $$
 #variable_conflict use_column
 declare v_code text := upper(btrim(p_code));
 begin
-  if not public.is_real_account() then
-    raise exception '老師要用 email 登入，匿名帳號不能開班';
+  -- 以前這裡只擋匿名帳號，等於任何人拿 email 註冊就能開班變老師。
+  -- 開放學生自由註冊之後那會是個真的洞，所以改成必須是啟用中的老師。
+  if not exists (select 1 from public.teachers t
+                  where t.user_id = auth.uid() and t.active) then
+    raise exception '只有老師可以開班。請先請管理員把你加進老師名單';
   end if;
   if v_code !~ '^[A-Z0-9]{3,12}$' then
     raise exception '班級代碼只能用英文字母和數字，3 到 12 個字';
@@ -604,7 +826,6 @@ begin
     raise exception '這個班級代碼已經有人用了';
   end if;
 
-  insert into public.teachers (user_id) values (auth.uid()) on conflict do nothing;
   insert into public.classes as c (code, name, owner) values (v_code, coalesce(p_name,''), auth.uid())
     on conflict (code) do update set name = excluded.name;
 
@@ -625,19 +846,37 @@ end;
 $$;
 
 -- 老師加人。小朋友自己進不來的時候（打錯暱稱、忘記），老師直接開一個。
-create or replace function public.teacher_add_student(p_code text, p_nickname text)
-returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
+-- 老師代學生開帳號。小朋友自己註冊是常態，這支是補救用的：
+-- 有人忘記註冊、或是註冊卡住，老師可以直接幫他開一個再把密碼告訴他。
+create or replace function public.teacher_add_student(
+  p_code text, p_login_id text, p_password text, p_nickname text
+)
+returns uuid language plpgsql security definer set search_path = public, extensions, pg_temp as $$
 declare
-  v_code text := upper(btrim(p_code));
-  v_nick text := btrim(p_nickname);
-  v_id   uuid;
+  v_code  text := upper(btrim(p_code));
+  v_login text := lower(btrim(coalesce(p_login_id, '')));
+  v_nick  text := btrim(coalesce(p_nickname, ''));
+  v_bad   text;
+  v_id    uuid;
 begin
   if not public.is_teacher_of(v_code) then raise exception '這不是你的班'; end if;
+  if v_login !~ '^[a-z0-9_]{3,16}$' then
+    raise exception '帳號要 3 到 16 個字，只能用英文字母、數字和底線';
+  end if;
   if v_nick = '' or length(v_nick) > 16 then raise exception '暱稱要 1 到 16 個字'; end if;
+  v_bad := public.password_problem(p_password, v_login);
+  if v_bad is not null then raise exception '%', v_bad; end if;
+  if exists (select 1 from public.students s where s.login_id = v_login) then
+    raise exception '這個帳號已經有人用了';
+  end if;
+  if exists (select 1 from public.students s
+              where s.class_code = v_code and s.nickname = v_nick) then
+    raise exception '這一班已經有人叫這個暱稱了';
+  end if;
 
-  insert into public.students (class_code, nickname) values (v_code, v_nick)
-    on conflict (class_code, nickname) do update set nickname = excluded.nickname
-    returning id into v_id;
+  insert into public.students (login_id, pw_hash, nickname, class_code)
+  values (v_login, extensions.crypt(lower(p_password), extensions.gen_salt('bf')), v_nick, v_code)
+  returning id into v_id;
   insert into public.characters (student_id) values (v_id) on conflict do nothing;
   return v_id;
 end;
@@ -656,17 +895,148 @@ end;
 $$;
 
 -- 老師重設某個學生的密碼（傳 null 就是拿掉密碼）
-create or replace function public.teacher_reset_pin(p_student uuid, p_pin text default null)
+-- 學生忘記密碼。老師重設自己班的，管理員重設任何人的。
+-- 順便解鎖，因為忘記密碼的小朋友通常已經試到被鎖住了。
+create or replace function public.teacher_reset_student_password(p_student uuid, p_password text)
 returns void language plpgsql security definer set search_path = public, extensions, pg_temp as $$
-declare v_code text;
+declare v_code text; v_login text; v_bad text;
 begin
-  select s.class_code into v_code from public.students s where s.id = p_student;
-  if v_code is null or not public.is_teacher_of(v_code) then raise exception '這不是你的班'; end if;
+  select s.class_code, s.login_id into v_code, v_login
+    from public.students s where s.id = p_student;
+  if v_login is null then raise exception '找不到這個學生'; end if;
+  -- 沒有班級的學生（朋友的小孩）只有管理員管得到
+  if not (public.is_admin() or (v_code is not null and public.is_teacher_of(v_code))) then
+    raise exception '這不是你的班';
+  end if;
+  v_bad := public.password_problem(p_password, v_login);
+  if v_bad is not null then raise exception '%', v_bad; end if;
+
   update public.students
-     set pin_hash = case when p_pin is null then null
-                         else extensions.crypt(p_pin, extensions.gen_salt('bf')) end
+     set pw_hash = extensions.crypt(lower(p_password), extensions.gen_salt('bf')),
+         failed_attempts = 0, locked_until = null
    where id = p_student;
 end;
+$$;
+
+-- 老師開關「可不可以加入」。班級代碼就是邀請碼，上課時打開讓全班註冊，
+-- 註冊完關起來，代碼之後流出去也沒用。
+create or replace function public.class_set_open(p_code text, p_open boolean)
+returns boolean language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_code text := upper(btrim(p_code));
+begin
+  if not public.is_teacher_of(v_code) then raise exception '這不是你的班'; end if;
+  update public.classes set open = coalesce(p_open, true) where code = v_code;
+  return coalesce(p_open, true);
+end;
+$$;
+
+-- 代碼流出去了就換一組。學生的 class_code 是 on update cascade，所以班上的人
+-- 會自動跟著新代碼走，不會被踢出去。
+create or replace function public.class_regenerate_code(p_code text)
+returns text language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_code text := upper(btrim(p_code)); v_new text;
+begin
+  if not public.is_teacher_of(v_code) then raise exception '這不是你的班'; end if;
+  loop
+    -- 拿掉容易看錯的 0/O 與 1/I，老師要在黑板上寫、小朋友要照著打
+    v_new := (select string_agg(substr('ABCDEFGHJKLMNPQRSTUVWXYZ23456789',
+                                       (random() * 31)::int + 1, 1), '')
+                from generate_series(1, 6));
+    exit when not exists (select 1 from public.classes c where c.code = v_new);
+  end loop;
+  update public.classes set code = v_new where code = v_code;
+  return v_new;
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 管理員
+-- -----------------------------------------------------------------------------
+
+-- 第一個管理員怎麼來。還沒有任何管理員的時候，第一個用 email 帳號呼叫的人
+-- 就是管理員；有了之後這支就永遠拒絕，所以不會變成後門。
+create or replace function public.claim_first_admin()
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if not public.is_real_account() then raise exception '要先用 email 登入'; end if;
+  if exists (select 1 from public.teachers t where t.is_admin) then
+    raise exception '這個系統已經有管理員了';
+  end if;
+  insert into public.teachers (user_id, display_name, is_admin)
+  values (auth.uid(), '管理員', true)
+  on conflict (user_id) do update set is_admin = true, active = true;
+end;
+$$;
+
+-- 管理員指定某個 email 可以成為老師。對方自己註冊、自己設密碼，
+-- 管理員不用經手別人的密碼，老師也不用等人核准。
+create or replace function public.admin_invite_teacher(p_email text)
+returns text language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_email text := lower(btrim(coalesce(p_email, '')));
+begin
+  if not public.is_admin() then raise exception '只有管理員可以做這件事'; end if;
+  if v_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
+    raise exception 'email 格式不對';
+  end if;
+  insert into public.teacher_invites (email, invited_by) values (v_email, auth.uid())
+    on conflict (email) do update set invited_by = auth.uid(), used_at = null;
+  return v_email;
+end;
+$$;
+
+-- 老師用 email 註冊完之後呼叫這支，名單上有他的 email 才會變成老師。
+create or replace function public.claim_teacher(p_display_name text default null)
+returns text language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_email text := lower(btrim(coalesce(auth.jwt() ->> 'email', '')));
+begin
+  if not public.is_real_account() then raise exception '老師要用 email 登入'; end if;
+  if exists (select 1 from public.teachers t where t.user_id = auth.uid()) then
+    return v_email;
+  end if;
+  if not exists (select 1 from public.teacher_invites i where i.email = v_email) then
+    raise exception '這個 email 不在老師名單裡，請先請管理員把你加進去';
+  end if;
+
+  insert into public.teachers (user_id, display_name)
+  values (auth.uid(), coalesce(nullif(btrim(p_display_name), ''), '老師'));
+  update public.teacher_invites set used_at = now() where email = v_email;
+  return v_email;
+end;
+$$;
+
+-- 停用或恢復一位老師。停用的老師登入得了，但開不了班也看不到班級資料。
+create or replace function public.admin_set_teacher_active(p_user uuid, p_active boolean)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if not public.is_admin() then raise exception '只有管理員可以做這件事'; end if;
+  if p_user = auth.uid() then raise exception '不能停用自己'; end if;
+  update public.teachers set active = coalesce(p_active, true) where user_id = p_user;
+end;
+$$;
+
+-- 管理員看到的老師名單：每位老師、開了幾班、班上共幾個學生。
+create or replace function public.admin_list_teachers()
+returns table (user_id uuid, display_name text, is_admin boolean, active boolean,
+               classes bigint, students bigint, created_at timestamptz)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select t.user_id, t.display_name, t.is_admin, t.active,
+         (select count(*) from public.classes c where c.owner = t.user_id),
+         (select count(*) from public.students s
+            join public.classes c on c.code = s.class_code where c.owner = t.user_id),
+         t.created_at
+    from public.teachers t
+   where public.is_admin()
+   order by t.is_admin desc, t.created_at;
+$$;
+
+-- 管理員看到的老師邀請名單（還沒註冊的也看得到）。
+create or replace function public.admin_list_invites()
+returns table (email text, used_at timestamptz, created_at timestamptz)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select i.email, i.used_at, i.created_at
+    from public.teacher_invites i
+   where public.is_admin()
+   order by i.created_at desc;
 $$;
 
 -- 「全班最常錯的字」。這是整個系統對老師最有價值的東西。
@@ -742,8 +1112,13 @@ $$;
 -- -----------------------------------------------------------------------------
 revoke all on all functions in schema public from anon, authenticated;
 
+-- 學生（匿名帳號也算 authenticated）
 grant execute on function
-  public.join_class(text, text, text),
+  public.register_student(text, text, text, text),
+  public.login_student(text, text),
+  public.student_set_password(text, text),
+  public.student_set_nickname(text),
+  public.student_join_class(text),
   public.submit_answers(jsonb),
   public.save_progress(text, int, int, boolean),
   public.set_job(text),
@@ -753,13 +1128,27 @@ grant execute on function
   public.rebuild_word_stats(uuid)
 to authenticated;
 
+-- 老師。函式裡面自己會檢查「這是不是你的班」，所以給 authenticated 沒關係。
 grant execute on function
   public.create_class(text, text),
+  public.claim_teacher(text),
   public.teacher_set_open(text, text[]),
-  public.teacher_add_student(text, text),
+  public.teacher_add_student(text, text, text, text),
   public.teacher_remove_student(uuid),
-  public.teacher_reset_pin(uuid, text),
+  public.teacher_reset_student_password(uuid, text),
+  public.class_set_open(text, boolean),
+  public.class_regenerate_code(text),
   public.class_most_missed(text, int),
   public.class_overview(text),
   public.is_teacher_of(text)
+to authenticated;
+
+-- 管理員。同樣靠函式內部的 is_admin() 把關。
+grant execute on function
+  public.claim_first_admin(),
+  public.admin_invite_teacher(text),
+  public.admin_set_teacher_active(uuid, boolean),
+  public.admin_list_teachers(),
+  public.admin_list_invites(),
+  public.is_admin()
 to authenticated;

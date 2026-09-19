@@ -67,17 +67,27 @@ for (let i = 0; i < 400; i++) {
 
 const TEACHER = '11111111-1111-1111-1111-111111111111'
 const STUDENT = '22222222-2222-2222-2222-222222222222'
-const as = (uid, anon) =>
-  `select set_config('test.uid','${uid}',false), set_config('test.jwt','{"is_anonymous":${anon}}',false);`
+const TEACHER_EMAIL = 'parity-teacher@example.com'
+const as = (uid, anon, email = null) =>
+  `select set_config('test.uid','${uid}',false), set_config('test.jwt','${JSON.stringify({
+    is_anonymous: anon, email,
+  })}',false);`
 
 psql(`
+  delete from public.students where login_id = 'parityming';
   delete from public.classes where code = 'PARITY';
+  delete from public.teachers where user_id in ('${TEACHER}','${STUDENT}');
+  delete from public.teacher_invites where email = '${TEACHER_EMAIL}';
   delete from auth.users where id in ('${TEACHER}','${STUDENT}');
-  insert into auth.users (id, email) values ('${TEACHER}', 'teacher@example.com');
+  insert into auth.users (id, email) values ('${TEACHER}', '${TEACHER_EMAIL}');
   insert into auth.users (id) values ('${STUDENT}');
 `)
-psql(`${as(TEACHER, false)} select public.create_class('PARITY','對帳班');`)
-psql(`${as(STUDENT, true)} select public.join_class('PARITY','對帳小明');`)
+// 開班要先是老師。這支在對帳金幣，不是在測權限（那個是 01_rls_test.sql 的事），
+// 所以直接用 postgres 的身分把老師那一列塞進去，不繞邀請流程。
+psql(`insert into public.teachers (user_id, display_name) values ('${TEACHER}','對帳老師')
+        on conflict (user_id) do update set active = true;`)
+psql(`${as(TEACHER, false, TEACHER_EMAIL)} select public.create_class('PARITY','對帳班');`)
+psql(`${as(STUDENT, true)} select public.register_student('parityming','apple99','對帳小明','PARITY');`)
 
 // 一次最多 500 題，這裡 400 題一次送完
 const file = join(tmp, 'events.json')
