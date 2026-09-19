@@ -28,7 +28,13 @@
       "weather",
       "wh-words"
     ],
-    "spell_rule": "每個主題取較短、較常用的字，合計 180 字，對應課綱「至少 180 個字詞會拼寫」。"
+    "spell_rule": "每個主題取較短、較常用的字，合計 180 字，對應課綱「至少 180 個字詞會拼寫」。",
+    "levels": {
+      "1": 100,
+      "2": 100,
+      "3": 100
+    },
+    "level_rule": "LV1 最簡單，依字長、是否為拼寫層、主題具體程度排序後平均切三段，各 100 字。"
   },
   "words": [
     {
@@ -38,7 +44,8 @@
       "zh": "零",
       "theme": "numbers",
       "emoji": "0️⃣",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 2,
@@ -47,7 +54,8 @@
       "zh": "一",
       "theme": "numbers",
       "emoji": "1️⃣",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 3,
@@ -56,7 +64,8 @@
       "zh": "二",
       "theme": "numbers",
       "emoji": "2️⃣",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 4,
@@ -65,7 +74,8 @@
       "zh": "三",
       "theme": "numbers",
       "emoji": "3️⃣",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 5,
@@ -74,7 +84,8 @@
       "zh": "四",
       "theme": "numbers",
       "emoji": "4️⃣",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 6,
@@ -83,7 +94,8 @@
       "zh": "五",
       "theme": "numbers",
       "emoji": "5️⃣",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 7,
@@ -92,7 +104,8 @@
       "zh": "六",
       "theme": "numbers",
       "emoji": "6️⃣",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 8,
@@ -101,7 +114,8 @@
       "zh": "七",
       "theme": "numbers",
       "emoji": "7️⃣",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 9,
@@ -110,7 +124,8 @@
       "zh": "八",
       "theme": "numbers",
       "emoji": "8️⃣",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 10,
@@ -119,7 +134,8 @@
       "zh": "九",
       "theme": "numbers",
       "emoji": "9️⃣",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 11,
@@ -128,7 +144,8 @@
       "zh": "十",
       "theme": "numbers",
       "emoji": "🔟",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 12,
@@ -137,7 +154,8 @@
       "zh": "十一",
       "theme": "numbers",
       "emoji": "🔢",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 13,
@@ -146,7 +164,8 @@
       "zh": "十二",
       "theme": "numbers",
       "emoji": "🔢",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 14,
@@ -155,7 +174,8 @@
       "zh": "十三",
       "theme": "numbers",
       "emoji": "🔢",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 15,
@@ -164,7 +184,8 @@
       "zh": "十四",
       "theme": "numbers",
       "emoji": "🔢",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 16,
@@ -173,7 +194,8 @@
       "zh": "十五",
       "theme": "numbers",
       "emoji": "🔢",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 17,
@@ -182,7 +204,8 @@
       "zh": "十六",
       "theme": "numbers",
       "emoji": "🔢",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 18,
@@ -191,7 +214,8 @@
       "zh": "十七",
       "theme": "numbers",
       "emoji": "🔢",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 19,
@@ -200,7 +224,8 @@
       "zh": "十八",
       "theme": "numbers",
       "emoji": "🔢",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 20,
@@ -209,7 +234,8 @@
       "zh": "十九",
       "theme": "numbers",
       "emoji": "🔢",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 21,
@@ -218,7 +244,8 @@
       "zh": "二十",
       "theme": "numbers",
       "emoji": "🔢",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 22,
@@ -227,7 +254,8 @@
       "zh": "紅色的",
       "theme": "colors",
       "emoji": "🔴",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 23,
@@ -236,7 +264,8 @@
       "zh": "藍色的",
       "theme": "colors",
       "emoji": "🔵",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 24,
@@ -245,7 +274,8 @@
       "zh": "黃色的",
       "theme": "colors",
       "emoji": "🟡",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 25,
@@ -254,7 +284,8 @@
       "zh": "綠色的",
       "theme": "colors",
       "emoji": "🟢",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 26,
@@ -263,7 +294,8 @@
       "zh": "黑色的",
       "theme": "colors",
       "emoji": "⚫",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 27,
@@ -272,7 +304,8 @@
       "zh": "白色的",
       "theme": "colors",
       "emoji": "⚪",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 28,
@@ -281,7 +314,8 @@
       "zh": "橘色的",
       "theme": "colors",
       "emoji": "🟠",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 29,
@@ -290,7 +324,8 @@
       "zh": "紫色的",
       "theme": "colors",
       "emoji": "🟣",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 30,
@@ -299,7 +334,8 @@
       "zh": "咖啡色的",
       "theme": "colors",
       "emoji": "🟤",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 31,
@@ -308,7 +344,8 @@
       "zh": "粉紅色的",
       "theme": "colors",
       "emoji": "🌸",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 32,
@@ -317,7 +354,8 @@
       "zh": "動物",
       "theme": "animals",
       "emoji": "🐾",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 33,
@@ -326,7 +364,8 @@
       "zh": "狗",
       "theme": "animals",
       "emoji": "🐶",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 34,
@@ -335,7 +374,8 @@
       "zh": "貓",
       "theme": "animals",
       "emoji": "🐱",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 35,
@@ -344,7 +384,8 @@
       "zh": "鳥",
       "theme": "animals",
       "emoji": "🐦",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 36,
@@ -353,7 +394,8 @@
       "zh": "魚",
       "theme": "animals",
       "emoji": "🐟",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 37,
@@ -362,7 +404,8 @@
       "zh": "豬",
       "theme": "animals",
       "emoji": "🐷",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 38,
@@ -371,7 +414,8 @@
       "zh": "牛",
       "theme": "animals",
       "emoji": "🐮",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 39,
@@ -380,7 +424,8 @@
       "zh": "馬",
       "theme": "animals",
       "emoji": "🐴",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 40,
@@ -389,7 +434,8 @@
       "zh": "綿羊",
       "theme": "animals",
       "emoji": "🐑",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 41,
@@ -398,7 +444,8 @@
       "zh": "鴨子",
       "theme": "animals",
       "emoji": "🦆",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 42,
@@ -407,7 +454,8 @@
       "zh": "雞",
       "theme": "animals",
       "emoji": "🐔",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 43,
@@ -416,7 +464,8 @@
       "zh": "兔子",
       "theme": "animals",
       "emoji": "🐰",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 44,
@@ -425,7 +474,8 @@
       "zh": "老鼠",
       "theme": "animals",
       "emoji": "🐭",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 45,
@@ -434,7 +484,8 @@
       "zh": "熊",
       "theme": "animals",
       "emoji": "🐻",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 46,
@@ -443,7 +494,8 @@
       "zh": "獅子",
       "theme": "animals",
       "emoji": "🦁",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 47,
@@ -452,7 +504,8 @@
       "zh": "老虎",
       "theme": "animals",
       "emoji": "🐯",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 48,
@@ -461,7 +514,8 @@
       "zh": "大象",
       "theme": "animals",
       "emoji": "🐘",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 49,
@@ -470,7 +524,8 @@
       "zh": "猴子",
       "theme": "animals",
       "emoji": "🐵",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 50,
@@ -479,7 +534,8 @@
       "zh": "青蛙",
       "theme": "animals",
       "emoji": "🐸",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 51,
@@ -488,7 +544,8 @@
       "zh": "蛇",
       "theme": "animals",
       "emoji": "🐍",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 52,
@@ -497,7 +554,8 @@
       "zh": "烏龜",
       "theme": "animals",
       "emoji": "🐢",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 53,
@@ -506,7 +564,8 @@
       "zh": "蜜蜂",
       "theme": "animals",
       "emoji": "🐝",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 54,
@@ -515,7 +574,8 @@
       "zh": "螞蟻",
       "theme": "animals",
       "emoji": "🐜",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 55,
@@ -524,7 +584,8 @@
       "zh": "蝴蝶",
       "theme": "animals",
       "emoji": "🦋",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 56,
@@ -533,7 +594,8 @@
       "zh": "身體",
       "theme": "body",
       "emoji": "🧍",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 57,
@@ -542,7 +604,8 @@
       "zh": "頭",
       "theme": "body",
       "emoji": "🙂",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 58,
@@ -551,7 +614,8 @@
       "zh": "臉",
       "theme": "body",
       "emoji": "😀",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 59,
@@ -560,7 +624,8 @@
       "zh": "頭髮",
       "theme": "body",
       "emoji": "💇",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 60,
@@ -569,7 +634,8 @@
       "zh": "眼睛",
       "theme": "body",
       "emoji": "👁️",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 61,
@@ -578,7 +644,8 @@
       "zh": "耳朵",
       "theme": "body",
       "emoji": "👂",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 62,
@@ -587,7 +654,8 @@
       "zh": "鼻子",
       "theme": "body",
       "emoji": "👃",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 63,
@@ -596,7 +664,8 @@
       "zh": "嘴巴",
       "theme": "body",
       "emoji": "👄",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 64,
@@ -605,7 +674,8 @@
       "zh": "牙齒",
       "theme": "body",
       "emoji": "🦷",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 65,
@@ -614,7 +684,8 @@
       "zh": "手",
       "theme": "body",
       "emoji": "✋",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 66,
@@ -623,7 +694,8 @@
       "zh": "手臂",
       "theme": "body",
       "emoji": "💪",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 67,
@@ -632,7 +704,8 @@
       "zh": "手指",
       "theme": "body",
       "emoji": "👆",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 68,
@@ -641,7 +714,8 @@
       "zh": "腿",
       "theme": "body",
       "emoji": "🦵",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 69,
@@ -650,7 +724,8 @@
       "zh": "腳",
       "theme": "body",
       "emoji": "🦶",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 70,
@@ -659,7 +734,8 @@
       "zh": "膝蓋",
       "theme": "body",
       "emoji": "🦵",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 71,
@@ -668,7 +744,8 @@
       "zh": "家庭",
       "theme": "family",
       "emoji": "👨‍👩‍👧",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 72,
@@ -677,7 +754,8 @@
       "zh": "爸爸",
       "theme": "family",
       "emoji": "👨",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 73,
@@ -686,7 +764,8 @@
       "zh": "媽媽",
       "theme": "family",
       "emoji": "👩",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 74,
@@ -695,7 +774,8 @@
       "zh": "兄弟",
       "theme": "family",
       "emoji": "👦",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 75,
@@ -704,7 +784,8 @@
       "zh": "姊妹",
       "theme": "family",
       "emoji": "👧",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 76,
@@ -713,7 +794,8 @@
       "zh": "祖父",
       "theme": "family",
       "emoji": "👴",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 77,
@@ -722,7 +804,8 @@
       "zh": "祖母",
       "theme": "family",
       "emoji": "👵",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 78,
@@ -731,7 +814,8 @@
       "zh": "兒子",
       "theme": "family",
       "emoji": "👦",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 79,
@@ -740,7 +824,8 @@
       "zh": "女兒",
       "theme": "family",
       "emoji": "👧",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 80,
@@ -749,7 +834,8 @@
       "zh": "叔叔；舅舅",
       "theme": "family",
       "emoji": "🧔",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 81,
@@ -758,7 +844,8 @@
       "zh": "阿姨；姑姑",
       "theme": "family",
       "emoji": "👩",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 82,
@@ -767,7 +854,8 @@
       "zh": "食物",
       "theme": "food",
       "emoji": "🍽️",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 83,
@@ -776,7 +864,8 @@
       "zh": "水果",
       "theme": "food",
       "emoji": "🍇",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 84,
@@ -785,7 +874,8 @@
       "zh": "蘋果",
       "theme": "food",
       "emoji": "🍎",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 85,
@@ -794,7 +884,8 @@
       "zh": "香蕉",
       "theme": "food",
       "emoji": "🍌",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 86,
@@ -803,7 +894,8 @@
       "zh": "葡萄",
       "theme": "food",
       "emoji": "🍇",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 87,
@@ -812,7 +904,8 @@
       "zh": "草莓",
       "theme": "food",
       "emoji": "🍓",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 88,
@@ -821,7 +914,8 @@
       "zh": "西瓜",
       "theme": "food",
       "emoji": "🍉",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 89,
@@ -830,7 +924,8 @@
       "zh": "番茄",
       "theme": "food",
       "emoji": "🍅",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 90,
@@ -839,7 +934,8 @@
       "zh": "蔬菜",
       "theme": "food",
       "emoji": "🥬",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 91,
@@ -848,7 +944,8 @@
       "zh": "米飯",
       "theme": "food",
       "emoji": "🍚",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 92,
@@ -857,7 +954,8 @@
       "zh": "麵包",
       "theme": "food",
       "emoji": "🍞",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 93,
@@ -866,7 +964,8 @@
       "zh": "麵條",
       "theme": "food",
       "emoji": "🍜",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 94,
@@ -875,7 +974,8 @@
       "zh": "蛋",
       "theme": "food",
       "emoji": "🥚",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 95,
@@ -884,7 +984,8 @@
       "zh": "湯",
       "theme": "food",
       "emoji": "🍲",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 96,
@@ -893,7 +994,8 @@
       "zh": "披薩",
       "theme": "food",
       "emoji": "🍕",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 97,
@@ -902,7 +1004,8 @@
       "zh": "漢堡",
       "theme": "food",
       "emoji": "🍔",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 98,
@@ -911,7 +1014,8 @@
       "zh": "蛋糕",
       "theme": "food",
       "emoji": "🍰",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 99,
@@ -920,7 +1024,8 @@
       "zh": "糖果",
       "theme": "food",
       "emoji": "🍬",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 100,
@@ -929,7 +1034,8 @@
       "zh": "餅乾",
       "theme": "food",
       "emoji": "🍪",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 101,
@@ -938,7 +1044,8 @@
       "zh": "巧克力",
       "theme": "food",
       "emoji": "🍫",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 102,
@@ -947,7 +1054,8 @@
       "zh": "冰淇淋",
       "theme": "food",
       "emoji": "🍦",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 103,
@@ -956,7 +1064,8 @@
       "zh": "牛奶",
       "theme": "food",
       "emoji": "🥛",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 104,
@@ -965,7 +1074,8 @@
       "zh": "水",
       "theme": "food",
       "emoji": "💧",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 105,
@@ -974,7 +1084,8 @@
       "zh": "果汁",
       "theme": "food",
       "emoji": "🧃",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 106,
@@ -983,7 +1094,8 @@
       "zh": "茶",
       "theme": "food",
       "emoji": "🍵",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 107,
@@ -992,7 +1104,8 @@
       "zh": "早餐",
       "theme": "food",
       "emoji": "🌅",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 108,
@@ -1001,7 +1114,8 @@
       "zh": "午餐",
       "theme": "food",
       "emoji": "🍱",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 109,
@@ -1010,7 +1124,8 @@
       "zh": "晚餐",
       "theme": "food",
       "emoji": "🍽️",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 110,
@@ -1019,7 +1134,8 @@
       "zh": "碗",
       "theme": "tableware",
       "emoji": "🥣",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 111,
@@ -1028,7 +1144,8 @@
       "zh": "杯子",
       "theme": "tableware",
       "emoji": "🥤",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 112,
@@ -1037,7 +1154,8 @@
       "zh": "盤子",
       "theme": "tableware",
       "emoji": "🍽️",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 113,
@@ -1046,7 +1164,8 @@
       "zh": "湯匙",
       "theme": "tableware",
       "emoji": "🥄",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 114,
@@ -1055,7 +1174,8 @@
       "zh": "叉子",
       "theme": "tableware",
       "emoji": "🍴",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 115,
@@ -1064,7 +1184,8 @@
       "zh": "筷子",
       "theme": "tableware",
       "emoji": "🥢",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 116,
@@ -1073,7 +1194,8 @@
       "zh": "學校",
       "theme": "school",
       "emoji": "🏫",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 117,
@@ -1082,7 +1204,8 @@
       "zh": "教室",
       "theme": "school",
       "emoji": "🪑",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 118,
@@ -1091,7 +1214,8 @@
       "zh": "圖書館",
       "theme": "school",
       "emoji": "📚",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 119,
@@ -1100,7 +1224,8 @@
       "zh": "操場",
       "theme": "school",
       "emoji": "🛝",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 120,
@@ -1109,7 +1234,8 @@
       "zh": "老師",
       "theme": "school",
       "emoji": "👩‍🏫",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 121,
@@ -1118,7 +1244,8 @@
       "zh": "學生",
       "theme": "school",
       "emoji": "🧑‍🎓",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 122,
@@ -1127,7 +1254,8 @@
       "zh": "同學",
       "theme": "school",
       "emoji": "👫",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 123,
@@ -1136,7 +1264,8 @@
       "zh": "朋友",
       "theme": "school",
       "emoji": "🧑‍🤝‍🧑",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 124,
@@ -1145,7 +1274,8 @@
       "zh": "書",
       "theme": "school",
       "emoji": "📖",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 125,
@@ -1154,7 +1284,8 @@
       "zh": "原子筆",
       "theme": "school",
       "emoji": "🖊️",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 126,
@@ -1163,7 +1294,8 @@
       "zh": "鉛筆",
       "theme": "school",
       "emoji": "✏️",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 127,
@@ -1172,7 +1304,8 @@
       "zh": "橡皮擦",
       "theme": "school",
       "emoji": "🧽",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 128,
@@ -1181,7 +1314,8 @@
       "zh": "尺",
       "theme": "school",
       "emoji": "📏",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 129,
@@ -1190,7 +1324,8 @@
       "zh": "書包",
       "theme": "school",
       "emoji": "🎒",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 130,
@@ -1199,7 +1334,8 @@
       "zh": "書桌",
       "theme": "school",
       "emoji": "🪑",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 131,
@@ -1208,7 +1344,8 @@
       "zh": "家庭作業",
       "theme": "school",
       "emoji": "📝",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 132,
@@ -1217,7 +1354,8 @@
       "zh": "測驗",
       "theme": "school",
       "emoji": "📋",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 133,
@@ -1226,7 +1364,8 @@
       "zh": "英文",
       "theme": "school",
       "emoji": "🔤",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 134,
@@ -1235,7 +1374,8 @@
       "zh": "數學",
       "theme": "school",
       "emoji": "➗",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 135,
@@ -1244,7 +1384,8 @@
       "zh": "音樂",
       "theme": "school",
       "emoji": "🎵",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 136,
@@ -1253,7 +1394,8 @@
       "zh": "美術",
       "theme": "school",
       "emoji": "🎨",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 137,
@@ -1262,7 +1404,8 @@
       "zh": "自然科學",
       "theme": "school",
       "emoji": "🔬",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 138,
@@ -1271,7 +1414,8 @@
       "zh": "星期一",
       "theme": "time",
       "emoji": "📅",
-      "spell": true
+      "spell": true,
+      "level": 3
     },
     {
       "id": 139,
@@ -1280,7 +1424,8 @@
       "zh": "星期二",
       "theme": "time",
       "emoji": "📅",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 140,
@@ -1289,7 +1434,8 @@
       "zh": "星期三",
       "theme": "time",
       "emoji": "📅",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 141,
@@ -1298,7 +1444,8 @@
       "zh": "星期四",
       "theme": "time",
       "emoji": "📅",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 142,
@@ -1307,7 +1454,8 @@
       "zh": "星期五",
       "theme": "time",
       "emoji": "📅",
-      "spell": true
+      "spell": true,
+      "level": 3
     },
     {
       "id": 143,
@@ -1316,7 +1464,8 @@
       "zh": "星期六",
       "theme": "time",
       "emoji": "📅",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 144,
@@ -1325,7 +1474,8 @@
       "zh": "星期日",
       "theme": "time",
       "emoji": "📅",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 145,
@@ -1334,7 +1484,8 @@
       "zh": "一月",
       "theme": "time",
       "emoji": "🗓️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 146,
@@ -1343,7 +1494,8 @@
       "zh": "二月",
       "theme": "time",
       "emoji": "🗓️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 147,
@@ -1352,7 +1504,8 @@
       "zh": "三月",
       "theme": "time",
       "emoji": "🗓️",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 148,
@@ -1361,7 +1514,8 @@
       "zh": "四月",
       "theme": "time",
       "emoji": "🗓️",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 149,
@@ -1370,7 +1524,8 @@
       "zh": "五月",
       "theme": "time",
       "emoji": "🗓️",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 150,
@@ -1379,7 +1534,8 @@
       "zh": "六月",
       "theme": "time",
       "emoji": "🗓️",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 151,
@@ -1388,7 +1544,8 @@
       "zh": "七月",
       "theme": "time",
       "emoji": "🗓️",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 152,
@@ -1397,7 +1554,8 @@
       "zh": "八月",
       "theme": "time",
       "emoji": "🗓️",
-      "spell": true
+      "spell": true,
+      "level": 3
     },
     {
       "id": 153,
@@ -1406,7 +1564,8 @@
       "zh": "九月",
       "theme": "time",
       "emoji": "🗓️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 154,
@@ -1415,7 +1574,8 @@
       "zh": "十月",
       "theme": "time",
       "emoji": "🗓️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 155,
@@ -1424,7 +1584,8 @@
       "zh": "十一月",
       "theme": "time",
       "emoji": "🗓️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 156,
@@ -1433,7 +1594,8 @@
       "zh": "十二月",
       "theme": "time",
       "emoji": "🗓️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 157,
@@ -1442,7 +1604,8 @@
       "zh": "春天",
       "theme": "time",
       "emoji": "🌸",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 158,
@@ -1451,7 +1614,8 @@
       "zh": "夏天",
       "theme": "time",
       "emoji": "☀️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 159,
@@ -1460,7 +1624,8 @@
       "zh": "秋天",
       "theme": "time",
       "emoji": "🍁",
-      "spell": true
+      "spell": true,
+      "level": 3
     },
     {
       "id": 160,
@@ -1469,7 +1634,8 @@
       "zh": "冬天",
       "theme": "time",
       "emoji": "❄️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 161,
@@ -1478,7 +1644,8 @@
       "zh": "早上",
       "theme": "time",
       "emoji": "🌅",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 162,
@@ -1487,7 +1654,8 @@
       "zh": "下午",
       "theme": "time",
       "emoji": "🌇",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 163,
@@ -1496,7 +1664,8 @@
       "zh": "晚上",
       "theme": "time",
       "emoji": "🌙",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 164,
@@ -1505,7 +1674,8 @@
       "zh": "衣服",
       "theme": "clothing",
       "emoji": "👕",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 165,
@@ -1514,7 +1684,8 @@
       "zh": "襯衫",
       "theme": "clothing",
       "emoji": "👔",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 166,
@@ -1523,7 +1694,8 @@
       "zh": "T恤",
       "theme": "clothing",
       "emoji": "👕",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 167,
@@ -1532,7 +1704,8 @@
       "zh": "外套",
       "theme": "clothing",
       "emoji": "🧥",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 168,
@@ -1541,7 +1714,8 @@
       "zh": "夾克",
       "theme": "clothing",
       "emoji": "🧥",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 169,
@@ -1550,7 +1724,8 @@
       "zh": "洋裝",
       "theme": "clothing",
       "emoji": "👗",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 170,
@@ -1559,7 +1734,8 @@
       "zh": "裙子",
       "theme": "clothing",
       "emoji": "👗",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 171,
@@ -1568,7 +1744,8 @@
       "zh": "長褲",
       "theme": "clothing",
       "emoji": "👖",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 172,
@@ -1577,7 +1754,8 @@
       "zh": "短褲",
       "theme": "clothing",
       "emoji": "🩳",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 173,
@@ -1586,7 +1764,8 @@
       "zh": "襪子",
       "theme": "clothing",
       "emoji": "🧦",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 174,
@@ -1595,7 +1774,8 @@
       "zh": "鞋子",
       "theme": "clothing",
       "emoji": "👟",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 175,
@@ -1604,7 +1784,8 @@
       "zh": "帽子",
       "theme": "clothing",
       "emoji": "👒",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 176,
@@ -1613,7 +1794,8 @@
       "zh": "鴨舌帽",
       "theme": "clothing",
       "emoji": "🧢",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 177,
@@ -1622,7 +1804,8 @@
       "zh": "雨傘",
       "theme": "clothing",
       "emoji": "☂️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 178,
@@ -1631,7 +1814,8 @@
       "zh": "天氣",
       "theme": "weather",
       "emoji": "🌤️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 179,
@@ -1640,7 +1824,8 @@
       "zh": "晴朗的",
       "theme": "weather",
       "emoji": "☀️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 180,
@@ -1649,7 +1834,8 @@
       "zh": "下雨的",
       "theme": "weather",
       "emoji": "🌧️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 181,
@@ -1658,7 +1844,8 @@
       "zh": "多雲的",
       "theme": "weather",
       "emoji": "☁️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 182,
@@ -1667,7 +1854,8 @@
       "zh": "有風的",
       "theme": "weather",
       "emoji": "💨",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 183,
@@ -1676,7 +1864,8 @@
       "zh": "熱的",
       "theme": "weather",
       "emoji": "🥵",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 184,
@@ -1685,7 +1874,8 @@
       "zh": "冷的",
       "theme": "weather",
       "emoji": "🥶",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 185,
@@ -1694,7 +1884,8 @@
       "zh": "溫暖的",
       "theme": "weather",
       "emoji": "🌡️",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 186,
@@ -1703,7 +1894,8 @@
       "zh": "雨",
       "theme": "weather",
       "emoji": "🌧️",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 187,
@@ -1712,7 +1904,8 @@
       "zh": "雪",
       "theme": "weather",
       "emoji": "❄️",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 188,
@@ -1721,7 +1914,8 @@
       "zh": "風",
       "theme": "weather",
       "emoji": "💨",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 189,
@@ -1730,7 +1924,8 @@
       "zh": "雲",
       "theme": "weather",
       "emoji": "☁️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 190,
@@ -1739,7 +1934,8 @@
       "zh": "太陽",
       "theme": "weather",
       "emoji": "☀️",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 191,
@@ -1748,7 +1944,8 @@
       "zh": "月亮",
       "theme": "weather",
       "emoji": "🌙",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 192,
@@ -1757,7 +1954,8 @@
       "zh": "星星",
       "theme": "weather",
       "emoji": "⭐",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 193,
@@ -1766,7 +1964,8 @@
       "zh": "彩虹",
       "theme": "weather",
       "emoji": "🌈",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 194,
@@ -1775,7 +1974,8 @@
       "zh": "公車",
       "theme": "transportation",
       "emoji": "🚌",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 195,
@@ -1784,7 +1984,8 @@
       "zh": "汽車",
       "theme": "transportation",
       "emoji": "🚗",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 196,
@@ -1793,7 +1994,8 @@
       "zh": "火車",
       "theme": "transportation",
       "emoji": "🚆",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 197,
@@ -1802,7 +2004,8 @@
       "zh": "計程車",
       "theme": "transportation",
       "emoji": "🚕",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 198,
@@ -1811,7 +2014,8 @@
       "zh": "腳踏車",
       "theme": "transportation",
       "emoji": "🚲",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 199,
@@ -1820,7 +2024,8 @@
       "zh": "機車",
       "theme": "transportation",
       "emoji": "🏍️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 200,
@@ -1829,7 +2034,8 @@
       "zh": "飛機",
       "theme": "transportation",
       "emoji": "✈️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 201,
@@ -1838,7 +2044,8 @@
       "zh": "小船",
       "theme": "transportation",
       "emoji": "🛶",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 202,
@@ -1847,7 +2054,8 @@
       "zh": "卡車",
       "theme": "transportation",
       "emoji": "🚚",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 203,
@@ -1856,7 +2064,8 @@
       "zh": "車站",
       "theme": "transportation",
       "emoji": "🚉",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 204,
@@ -1865,7 +2074,8 @@
       "zh": "機場",
       "theme": "transportation",
       "emoji": "🛫",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 205,
@@ -1874,7 +2084,8 @@
       "zh": "家",
       "theme": "places",
       "emoji": "🏠",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 206,
@@ -1883,7 +2094,8 @@
       "zh": "公園",
       "theme": "places",
       "emoji": "🏞️",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 207,
@@ -1892,7 +2104,8 @@
       "zh": "動物園",
       "theme": "places",
       "emoji": "🦓",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 208,
@@ -1901,7 +2114,8 @@
       "zh": "商店",
       "theme": "places",
       "emoji": "🏪",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 209,
@@ -1910,7 +2124,8 @@
       "zh": "市場",
       "theme": "places",
       "emoji": "🏬",
-      "spell": false
+      "spell": false,
+      "level": 2
     },
     {
       "id": 210,
@@ -1919,7 +2134,8 @@
       "zh": "超級市場",
       "theme": "places",
       "emoji": "🛒",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 211,
@@ -1928,7 +2144,8 @@
       "zh": "銀行",
       "theme": "places",
       "emoji": "🏦",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 212,
@@ -1937,7 +2154,8 @@
       "zh": "醫院",
       "theme": "places",
       "emoji": "🏥",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 213,
@@ -1946,7 +2164,8 @@
       "zh": "餐廳",
       "theme": "places",
       "emoji": "🍴",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 214,
@@ -1955,7 +2174,8 @@
       "zh": "郵局",
       "theme": "places",
       "emoji": "📮",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 215,
@@ -1964,7 +2184,8 @@
       "zh": "書店",
       "theme": "places",
       "emoji": "📚",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 216,
@@ -1973,7 +2194,8 @@
       "zh": "海灘",
       "theme": "places",
       "emoji": "🏖️",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 217,
@@ -1982,7 +2204,8 @@
       "zh": "農場",
       "theme": "places",
       "emoji": "🚜",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 218,
@@ -1991,7 +2214,8 @@
       "zh": "城市",
       "theme": "places",
       "emoji": "🏙️",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 219,
@@ -2000,7 +2224,8 @@
       "zh": "房子",
       "theme": "house",
       "emoji": "🏡",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 220,
@@ -2009,7 +2234,8 @@
       "zh": "門",
       "theme": "house",
       "emoji": "🚪",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 221,
@@ -2018,7 +2244,8 @@
       "zh": "窗戶",
       "theme": "house",
       "emoji": "🪟",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 222,
@@ -2027,7 +2254,8 @@
       "zh": "房間",
       "theme": "house",
       "emoji": "🛋️",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 223,
@@ -2036,7 +2264,8 @@
       "zh": "臥室",
       "theme": "house",
       "emoji": "🛏️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 224,
@@ -2045,7 +2274,8 @@
       "zh": "浴室",
       "theme": "house",
       "emoji": "🛁",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 225,
@@ -2054,7 +2284,8 @@
       "zh": "廚房",
       "theme": "house",
       "emoji": "🍳",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 226,
@@ -2063,7 +2294,8 @@
       "zh": "床",
       "theme": "house",
       "emoji": "🛏️",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 227,
@@ -2072,7 +2304,8 @@
       "zh": "椅子",
       "theme": "house",
       "emoji": "🪑",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 228,
@@ -2081,7 +2314,8 @@
       "zh": "桌子",
       "theme": "house",
       "emoji": "🪑",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 229,
@@ -2090,7 +2324,8 @@
       "zh": "鑰匙",
       "theme": "house",
       "emoji": "🔑",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 230,
@@ -2099,7 +2334,8 @@
       "zh": "棒球",
       "theme": "sports",
       "emoji": "⚾",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 231,
@@ -2108,7 +2344,8 @@
       "zh": "籃球",
       "theme": "sports",
       "emoji": "🏀",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 232,
@@ -2117,7 +2354,8 @@
       "zh": "足球",
       "theme": "sports",
       "emoji": "⚽",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 233,
@@ -2126,7 +2364,8 @@
       "zh": "羽毛球",
       "theme": "sports",
       "emoji": "🏸",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 234,
@@ -2135,7 +2374,8 @@
       "zh": "游泳",
       "theme": "sports",
       "emoji": "🏊",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 235,
@@ -2144,7 +2384,8 @@
       "zh": "跑步",
       "theme": "sports",
       "emoji": "🏃",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 236,
@@ -2153,7 +2394,8 @@
       "zh": "遊戲；比賽",
       "theme": "sports",
       "emoji": "🎮",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 237,
@@ -2162,7 +2404,8 @@
       "zh": "跳舞",
       "theme": "sports",
       "emoji": "💃",
-      "spell": true
+      "spell": true,
+      "level": 1
     },
     {
       "id": 238,
@@ -2171,7 +2414,8 @@
       "zh": "醫生",
       "theme": "jobs",
       "emoji": "👨‍⚕️",
-      "spell": true
+      "spell": true,
+      "level": 3
     },
     {
       "id": 239,
@@ -2180,7 +2424,8 @@
       "zh": "護理師",
       "theme": "jobs",
       "emoji": "👩‍⚕️",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 240,
@@ -2189,7 +2434,8 @@
       "zh": "農夫",
       "theme": "jobs",
       "emoji": "👨‍🌾",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 241,
@@ -2198,7 +2444,8 @@
       "zh": "廚師",
       "theme": "jobs",
       "emoji": "👨‍🍳",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 242,
@@ -2207,7 +2454,8 @@
       "zh": "司機",
       "theme": "jobs",
       "emoji": "🚗",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 243,
@@ -2216,7 +2464,8 @@
       "zh": "警察",
       "theme": "jobs",
       "emoji": "👮",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 244,
@@ -2225,7 +2474,8 @@
       "zh": "歌手",
       "theme": "jobs",
       "emoji": "🎤",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 245,
@@ -2234,7 +2484,8 @@
       "zh": "工人",
       "theme": "jobs",
       "emoji": "👷",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 246,
@@ -2243,7 +2494,8 @@
       "zh": "店員",
       "theme": "jobs",
       "emoji": "🧑‍💼",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 247,
@@ -2252,7 +2504,8 @@
       "zh": "快樂的",
       "theme": "feelings",
       "emoji": "😄",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 248,
@@ -2261,7 +2514,8 @@
       "zh": "難過的",
       "theme": "feelings",
       "emoji": "😢",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 249,
@@ -2270,7 +2524,8 @@
       "zh": "生氣的",
       "theme": "feelings",
       "emoji": "😠",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 250,
@@ -2279,7 +2534,8 @@
       "zh": "害怕的",
       "theme": "feelings",
       "emoji": "😨",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 251,
@@ -2288,7 +2544,8 @@
       "zh": "疲倦的",
       "theme": "feelings",
       "emoji": "😴",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 252,
@@ -2297,7 +2554,8 @@
       "zh": "興奮的",
       "theme": "feelings",
       "emoji": "🤩",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 253,
@@ -2306,7 +2564,8 @@
       "zh": "無聊的",
       "theme": "feelings",
       "emoji": "😑",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 254,
@@ -2315,7 +2574,8 @@
       "zh": "飢餓的",
       "theme": "feelings",
       "emoji": "🍽️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 255,
@@ -2324,7 +2584,8 @@
       "zh": "口渴的",
       "theme": "feelings",
       "emoji": "🥤",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 256,
@@ -2333,7 +2594,8 @@
       "zh": "生病的",
       "theme": "feelings",
       "emoji": "🤒",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 257,
@@ -2342,7 +2604,8 @@
       "zh": "親切的",
       "theme": "feelings",
       "emoji": "🤗",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 258,
@@ -2351,7 +2614,8 @@
       "zh": "吃",
       "theme": "verbs",
       "emoji": "🍽️",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 259,
@@ -2360,7 +2624,8 @@
       "zh": "喝",
       "theme": "verbs",
       "emoji": "🥤",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 260,
@@ -2369,7 +2634,8 @@
       "zh": "睡覺",
       "theme": "verbs",
       "emoji": "😴",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 261,
@@ -2378,7 +2644,8 @@
       "zh": "走路",
       "theme": "verbs",
       "emoji": "🚶",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 262,
@@ -2387,7 +2654,8 @@
       "zh": "跳",
       "theme": "verbs",
       "emoji": "🤸",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 263,
@@ -2396,7 +2664,8 @@
       "zh": "唱歌",
       "theme": "verbs",
       "emoji": "🎤",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 264,
@@ -2405,7 +2674,8 @@
       "zh": "閱讀",
       "theme": "verbs",
       "emoji": "📖",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 265,
@@ -2414,7 +2684,8 @@
       "zh": "寫",
       "theme": "verbs",
       "emoji": "✍️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 266,
@@ -2423,7 +2694,8 @@
       "zh": "畫",
       "theme": "verbs",
       "emoji": "🎨",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 267,
@@ -2432,7 +2704,8 @@
       "zh": "玩",
       "theme": "verbs",
       "emoji": "🎮",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 268,
@@ -2441,7 +2714,8 @@
       "zh": "去",
       "theme": "verbs",
       "emoji": "➡️",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 269,
@@ -2450,7 +2724,8 @@
       "zh": "來",
       "theme": "verbs",
       "emoji": "⬅️",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 270,
@@ -2459,7 +2734,8 @@
       "zh": "看",
       "theme": "verbs",
       "emoji": "👀",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 271,
@@ -2468,7 +2744,8 @@
       "zh": "聽",
       "theme": "verbs",
       "emoji": "👂",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 272,
@@ -2477,7 +2754,8 @@
       "zh": "說",
       "theme": "verbs",
       "emoji": "🗣️",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 273,
@@ -2486,7 +2764,8 @@
       "zh": "學習",
       "theme": "verbs",
       "emoji": "🧠",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 274,
@@ -2495,7 +2774,8 @@
       "zh": "教",
       "theme": "verbs",
       "emoji": "👩‍🏫",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 275,
@@ -2504,7 +2784,8 @@
       "zh": "幫助",
       "theme": "verbs",
       "emoji": "🤝",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 276,
@@ -2513,7 +2794,8 @@
       "zh": "打開",
       "theme": "verbs",
       "emoji": "🔓",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 277,
@@ -2522,7 +2804,8 @@
       "zh": "關上",
       "theme": "verbs",
       "emoji": "🔒",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 278,
@@ -2531,7 +2814,8 @@
       "zh": "買",
       "theme": "verbs",
       "emoji": "🛍️",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 279,
@@ -2540,7 +2824,8 @@
       "zh": "給",
       "theme": "verbs",
       "emoji": "🎁",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 280,
@@ -2549,7 +2834,8 @@
       "zh": "製作",
       "theme": "verbs",
       "emoji": "🔨",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 281,
@@ -2558,7 +2844,8 @@
       "zh": "喜歡",
       "theme": "verbs",
       "emoji": "👍",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 282,
@@ -2567,7 +2854,8 @@
       "zh": "愛",
       "theme": "verbs",
       "emoji": "❤️",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 283,
@@ -2576,7 +2864,8 @@
       "zh": "大的",
       "theme": "adjectives",
       "emoji": "🐘",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 284,
@@ -2585,7 +2874,8 @@
       "zh": "小的",
       "theme": "adjectives",
       "emoji": "🐜",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 285,
@@ -2594,7 +2884,8 @@
       "zh": "長的",
       "theme": "adjectives",
       "emoji": "📏",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 286,
@@ -2603,7 +2894,8 @@
       "zh": "短的；矮的",
       "theme": "adjectives",
       "emoji": "📐",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 287,
@@ -2612,7 +2904,8 @@
       "zh": "高的",
       "theme": "adjectives",
       "emoji": "🦒",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 288,
@@ -2621,7 +2914,8 @@
       "zh": "新的",
       "theme": "adjectives",
       "emoji": "✨",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 289,
@@ -2630,7 +2924,8 @@
       "zh": "舊的；老的",
       "theme": "adjectives",
       "emoji": "👴",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 290,
@@ -2639,7 +2934,8 @@
       "zh": "好的",
       "theme": "adjectives",
       "emoji": "👍",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 291,
@@ -2648,7 +2944,8 @@
       "zh": "壞的",
       "theme": "adjectives",
       "emoji": "👎",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 292,
@@ -2657,7 +2954,8 @@
       "zh": "快的",
       "theme": "adjectives",
       "emoji": "⚡",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 293,
@@ -2666,7 +2964,8 @@
       "zh": "慢的",
       "theme": "adjectives",
       "emoji": "🐌",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 294,
@@ -2675,7 +2974,8 @@
       "zh": "美麗的",
       "theme": "adjectives",
       "emoji": "🌺",
-      "spell": false
+      "spell": false,
+      "level": 3
     },
     {
       "id": 295,
@@ -2684,7 +2984,8 @@
       "zh": "什麼",
       "theme": "wh-words",
       "emoji": "❓",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 296,
@@ -2693,7 +2994,8 @@
       "zh": "誰",
       "theme": "wh-words",
       "emoji": "❓",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 297,
@@ -2702,7 +3004,8 @@
       "zh": "哪裡",
       "theme": "wh-words",
       "emoji": "📍",
-      "spell": true
+      "spell": true,
+      "level": 3
     },
     {
       "id": 298,
@@ -2711,7 +3014,8 @@
       "zh": "什麼時候",
       "theme": "wh-words",
       "emoji": "🕐",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 299,
@@ -2720,7 +3024,8 @@
       "zh": "為什麼",
       "theme": "wh-words",
       "emoji": "❓",
-      "spell": true
+      "spell": true,
+      "level": 2
     },
     {
       "id": 300,
@@ -2729,7 +3034,8 @@
       "zh": "如何",
       "theme": "wh-words",
       "emoji": "❓",
-      "spell": true
+      "spell": true,
+      "level": 2
     }
   ]
 }

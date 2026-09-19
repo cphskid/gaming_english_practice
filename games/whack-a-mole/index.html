@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>打地鼠學單字</title>
+<style>
+  :root{
+    --bg:#fdf6e3; --ink:#3d2b1f; --muted:#8a7560;
+    --card:#fffdf7; --line:#e6d9c3;
+    --grass:#7cc35a; --grass2:#5fa843; --dirt:#8b5e3c; --dirt2:#6b4429;
+    --good:#2e9e5b; --bad:#d94f4f; --gold:#f2b229; --accent:#4a7fd4;
+    --shadow:0 4px 0 rgba(0,0,0,.18);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden; user-select:none;
+  }
+  #app{width:100%;max-width:560px;height:100%;max-height:920px;display:flex;flex-direction:column;padding:12px;gap:10px}
+  .screen{flex:1;display:none;flex-direction:column;gap:14px}
+  .screen.on{display:flex}
+
+  /* ---------- 開始畫面 ---------- */
+  #start{align-items:center;justify-content:center;text-align:center}
+  h1{font-size:34px;margin:0;letter-spacing:1px}
+  .sub{color:var(--muted);font-size:15px;margin:-4px 0 6px}
+  .pick{width:100%;display:flex;flex-direction:column;gap:10px}
+  .diff{
+    display:flex;align-items:center;gap:12px;width:100%;
+    background:var(--card);border:2px solid var(--line);border-radius:16px;
+    padding:14px 16px;cursor:pointer;transition:.12s;box-shadow:var(--shadow);
+  }
+  .diff:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.18)}
+  .diff.sel{border-color:var(--accent);background:#eef3fd}
+  .diff .ico{font-size:28px;width:38px;text-align:center}
+  .diff .t{font-weight:700;font-size:17px}
+  .diff .d{font-size:13px;color:var(--muted);margin-top:2px}
+  .btn{
+    border:none;border-radius:16px;padding:16px 28px;font-size:19px;font-weight:800;
+    color:#fff;background:var(--good);cursor:pointer;box-shadow:var(--shadow);
+    font-family:inherit;
+  }
+  .btn:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.18)}
+  .btn.ghost{background:var(--card);color:var(--ink);border:2px solid var(--line)}
+  .best{font-size:14px;color:var(--muted)}
+
+  /* ---------- HUD ---------- */
+  #hud{display:flex;align-items:center;gap:8px;font-weight:700}
+  .chip{background:var(--card);border:2px solid var(--line);border-radius:12px;padding:6px 10px;font-size:14px}
+  .chip.lv{background:var(--gold);border-color:#d99a12;color:#4a3000}
+  #lives{margin-left:auto;font-size:18px;letter-spacing:2px}
+  #bar{height:10px;background:#e8dcc6;border-radius:99px;overflow:hidden}
+  #barfill{height:100%;width:0;background:linear-gradient(90deg,var(--gold),#ff8c42);transition:width .3s}
+
+  /* ---------- 題目 ---------- */
+  #quiz{
+    background:var(--card);border:2px solid var(--line);border-radius:18px;
+    padding:12px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow);
+  }
+  #qemoji{font-size:42px;line-height:1}
+  #qzh{font-size:26px;font-weight:800;flex:1;line-height:1.2}
+  #qpos{font-size:13px;color:var(--muted);font-weight:400}
+  #say{
+    border:none;background:#eef3fd;color:var(--accent);border-radius:12px;
+    width:48px;height:48px;font-size:22px;cursor:pointer;flex:none;
+  }
+
+  /* ---------- 地洞 ---------- */
+  #field{
+    flex:1;background:linear-gradient(180deg,var(--grass),var(--grass2));
+    border-radius:20px;padding:10px;display:grid;
+    grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+    gap:6px;position:relative;overflow:hidden;align-content:center;
+  }
+  .hole{position:relative;overflow:hidden;border-radius:12px}
+  /* 土丘在下，地鼠從洞口升起站在前面，確保單字看得清楚 */
+  .hole::after{
+    content:"";position:absolute;bottom:18%;left:50%;transform:translateX(-50%);
+    width:94%;height:24%;background:var(--dirt2);border-radius:50%;
+    box-shadow:inset 0 5px 8px rgba(0,0,0,.45);z-index:1;
+  }
+  .mole{
+    position:absolute;bottom:24%;left:50%;transform:translate(-50%,130%);
+    width:92%;display:flex;flex-direction:column;align-items:center;
+    transition:transform .18s cubic-bezier(.2,1.4,.5,1);cursor:pointer;z-index:4;
+  }
+  .mole.up{transform:translate(-50%,0)}
+  .mole.hit{transition:transform .12s ease-in}
+  .mole .body{
+    background:var(--dirt);border:3px solid var(--dirt2);border-radius:46% 46% 38% 38%;
+    width:100%;padding:5px 3px 12px;text-align:center;box-shadow:0 3px 0 rgba(0,0,0,.25);
+  }
+  .mole .fur{font-size:clamp(16px,5vw,24px);line-height:1}
+  .mole .w{
+    color:#fff;font-weight:800;font-size:clamp(11px,3.9vw,18px);
+    word-break:break-word;line-height:1.1;margin-top:1px;
+  }
+  .mole.ok .body{background:var(--good);border-color:#1f7a44}
+  .mole.no .body{background:var(--bad);border-color:#a83434}
+
+  #float{position:absolute;inset:0;pointer-events:none;z-index:5}
+  .pop{
+    position:absolute;font-weight:900;font-size:22px;color:#fff;
+    text-shadow:0 2px 4px rgba(0,0,0,.4);animation:rise .8s ease-out forwards;
+  }
+  @keyframes rise{to{transform:translateY(-52px);opacity:0}}
+  #combo{
+    position:absolute;top:8px;right:12px;font-weight:900;color:#fff;
+    text-shadow:0 2px 4px rgba(0,0,0,.4);font-size:18px;opacity:0;transition:.2s;z-index:6;
+  }
+  #combo.on{opacity:1}
+  #levelup{
+    position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.5);z-index:10;font-size:30px;font-weight:900;color:#fff;text-align:center;
+  }
+  #levelup.on{display:flex;animation:flash .2s}
+  @keyframes flash{from{opacity:0}to{opacity:1}}
+
+  /* ---------- 結束 ---------- */
+  #over{align-items:center;justify-content:center;text-align:center;gap:10px}
+  #over .big{font-size:52px;font-weight:900;color:var(--gold);line-height:1}
+  .stats{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .stat{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:10px 16px;min-width:96px}
+  .stat b{display:block;font-size:22px}
+  .stat span{font-size:12px;color:var(--muted)}
+  #missed{font-size:13px;color:var(--muted);max-width:100%;line-height:1.6}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- 開始 -->
+  <section id="start" class="screen on">
+    <h1>🔨 打地鼠學單字</h1>
+    <p class="sub">看中文，打出正確的英文</p>
+    <div class="pick">
+      <div class="diff sel" data-diff="easy">
+        <div class="ico">🐢</div>
+        <div><div class="t">簡單</div><div class="d">3 隻地鼠，慢慢冒出來</div></div>
+      </div>
+      <div class="diff" data-diff="normal">
+        <div class="ico">🐇</div>
+        <div><div class="t">普通</div><div class="d">4 隻地鼠，速度中等</div></div>
+      </div>
+      <div class="diff" data-diff="hard">
+        <div class="ico">⚡</div>
+        <div><div class="t">困難</div><div class="d">5 隻地鼠，一下就縮回去</div></div>
+      </div>
+    </div>
+    <button class="btn" id="go">開始遊戲</button>
+    <div class="best" id="best"></div>
+  </section>
+
+  <!-- 遊戲 -->
+  <section id="play" class="screen">
+    <div id="hud">
+      <span class="chip lv" id="lvchip">LV1</span>
+      <span class="chip" id="score">0 分</span>
+      <span id="lives">❤️❤️❤️</span>
+    </div>
+    <div id="bar"><div id="barfill"></div></div>
+    <div id="quiz">
+      <div id="qemoji">🐶</div>
+      <div><div id="qzh">狗</div><div id="qpos">n.</div></div>
+      <button id="say">🔊</button>
+    </div>
+    <div id="field">
+      <div id="float"></div>
+      <div id="combo"></div>
+      <div id="levelup"></div>
+    </div>
+  </section>
+
+  <!-- 結束 -->
+  <section id="over" class="screen">
+    <h1>遊戲結束</h1>
+    <div class="big" id="final">0</div>
+    <div class="stats">
+      <div class="stat"><b id="sLv">1</b><span>最高等級</span></div>
+      <div class="stat"><b id="sAcc">0%</b><span>正確率</span></div>
+      <div class="stat"><b id="sCombo">0</b><span>最佳連擊</span></div>
+    </div>
+    <div id="missed"></div>
+    <button class="btn" id="again">再玩一次</button>
+    <button class="btn ghost" id="home">換難度</button>
+  </section>
+
+</div>
+
+<script src="../../data/core300.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  var WORDS = (window.CORE300 && window.CORE300.words) || [];
+  if (!WORDS.length) {
+    document.getElementById('start').innerHTML =
+      '<h1>題庫載入失敗</h1><p class="sub">找不到 data/core300.js，請確認資料夾結構完整。</p>';
+    return;
+  }
+
+  // 每個難度：同時冒出的地鼠數、停留毫秒、下一批間隔
+  var DIFF = {
+    easy:   { moles:3, stay:3200, gap:700 },
+    normal: { moles:4, stay:2400, gap:550 },
+    hard:   { moles:5, stay:1800, gap:400 }
+  };
+  // 升到下一級所需的累積分數
+  var LEVEL_UP = [0, 300, 800];
+  var MAX_LV = 3;
+  var BASE_POINTS = 10;
+
+  var byLevel = {1:[],2:[],3:[]};
+  WORDS.forEach(function(w){ byLevel[w.level].push(w); });
+
+  var S = null;          // 目前這局的狀態
+  var diff = 'easy';
+  var holes = [];
+  var timers = [];
+
+  var $ = function(id){ return document.getElementById(id); };
+  var field = $('field'), floatL = $('float');
+
+  // ---- 建 3x3 地洞 ----
+  for (var i = 0; i < 9; i++) {
+    var h = document.createElement('div');
+    h.className = 'hole';
+    field.appendChild(h);
+    holes.push(h);
+  }
+
+  function clearTimers(){ timers.forEach(clearTimeout); timers = []; }
+  function later(fn, ms){ var t = setTimeout(fn, ms); timers.push(t); return t; }
+
+  function shuffle(a){
+    a = a.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  // 出題：七成抽目前等級，三成抽較低等級當複習
+  function pickTarget(){
+    var lv = S.lv;
+    if (lv > 1 && Math.random() < 0.3) lv = 1 + Math.floor(Math.random() * (lv - 1));
+    var pool = byLevel[lv];
+    var w, guard = 0;
+    do { w = pool[Math.floor(Math.random() * pool.length)]; guard++; }
+    while (w === S.lastWord && pool.length > 1 && guard < 8);
+    return w;
+  }
+
+  // 干擾項：先找同主題同等級的，不夠再從同等級補
+  function pickDecoys(target, n){
+    var pool = byLevel[target.level].filter(function(w){ return w.id !== target.id; });
+    var same = shuffle(pool.filter(function(w){ return w.theme === target.theme; }));
+    var rest = shuffle(pool.filter(function(w){ return w.theme !== target.theme; }));
+    return same.concat(rest).slice(0, n);
+  }
+
+  function speak(text){
+    if (!('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-US'; u.rate = 0.85;
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+
+  function popText(hole, text, color){
+    var r = hole.getBoundingClientRect(), f = field.getBoundingClientRect();
+    var el = document.createElement('div');
+    el.className = 'pop';
+    el.textContent = text;
+    el.style.color = color;
+    el.style.left = (r.left - f.left + r.width / 2 - 20) + 'px';
+    el.style.top  = (r.top - f.top + r.height / 2) + 'px';
+    floatL.appendChild(el);
+    setTimeout(function(){ el.remove(); }, 800);
+  }
+
+  function updateHUD(){
+    $('lvchip').textContent = 'LV' + S.lv;
+    $('score').textContent = S.score + ' 分';
+    $('lives').textContent = '❤️'.repeat(S.lives) + '🖤'.repeat(3 - S.lives);
+    var need = LEVEL_UP[S.lv] || null;
+    var prev = LEVEL_UP[S.lv - 1] || 0;
+    var pct = need ? Math.min(100, (S.score - prev) / (need - prev) * 100) : 100;
+    $('barfill').style.width = pct + '%';
+  }
+
+  function clearMoles(){
+    holes.forEach(function(h){
+      var m = h.querySelector('.mole');
+      if (m) m.remove();
+    });
+  }
+
+  // ---- 一個回合 ----
+  function round(){
+    if (!S || S.over) return;
+    clearMoles();
+
+    var target = pickTarget();
+    S.lastWord = target;
+    S.answered = false;
+    S.asked++;
+
+    $('qemoji').textContent = target.emoji;
+    $('qzh').textContent = target.zh;
+    $('qpos').textContent = target.pos + '　' + target.theme;
+
+    var cfg = DIFF[diff];
+    var words = shuffle([target].concat(pickDecoys(target, cfg.moles - 1)));
+    var spots = shuffle([0,1,2,3,4,5,6,7,8]).slice(0, words.length);
+
+    words.forEach(function(w, i){
+      var hole = holes[spots[i]];
+      var mole = document.createElement('div');
+      mole.className = 'mole';
+      mole.innerHTML = '<div class="body"><div class="fur">🐹</div><div class="w"></div></div>';
+      mole.querySelector('.w').textContent = w.word;
+      hole.appendChild(mole);
+      later(function(){ mole.classList.add('up'); }, 40 + i * 60);
+      mole.addEventListener('pointerdown', function(ev){
+        ev.preventDefault();
+        hit(w, target, mole, hole);
+      });
+    });
+
+    // 時間到還沒打中 → 算錯過
+    later(function(){
+      if (S.answered || S.over) return;
+      S.answered = true;
+      S.combo = 0;
+      $('combo').classList.remove('on');
+      S.missedWords.push(target);
+      holes.forEach(function(h){
+        var m = h.querySelector('.mole');
+        if (m) m.classList.remove('up');
+      });
+      later(round, cfg.gap);
+    }, cfg.stay);
+  }
+
+  function hit(w, target, mole, hole){
+    if (S.answered || S.over) return;
+
+    if (w.id === target.id) {
+      S.answered = true;
+      S.correct++;
+      S.combo++;
+      S.bestCombo = Math.max(S.bestCombo, S.combo);
+
+      var mult = Math.min(3, 1 + Math.floor(S.combo / 3));
+      var gain = BASE_POINTS * S.lv * mult;
+      S.score += gain;
+
+      mole.classList.add('ok', 'hit');
+      mole.classList.remove('up');
+      popText(hole, '+' + gain, '#fff');
+      speak(target.word);
+
+      if (S.combo >= 3) {
+        $('combo').textContent = S.combo + ' 連擊！ x' + mult;
+        $('combo').classList.add('on');
+      }
+      updateHUD();
+
+      holes.forEach(function(h){
+        var m = h.querySelector('.mole');
+        if (m && m !== mole) m.classList.remove('up');
+      });
+
+      if (S.lv < MAX_LV && S.score >= LEVEL_UP[S.lv]) return levelUp();
+      later(round, DIFF[diff].gap);
+
+    } else {
+      // 打錯：扣一顆心，連擊歸零，該隻變紅縮回，但題目還沒結束
+      S.lives--;
+      S.combo = 0;
+      $('combo').classList.remove('on');
+      mole.classList.add('no');
+      mole.classList.remove('up');
+      popText(hole, '✗', '#ffd7d7');
+      updateHUD();
+      if (S.lives <= 0) return gameOver();
+    }
+  }
+
+  function levelUp(){
+    S.lv++;
+    updateHUD();
+    var box = $('levelup');
+    box.innerHTML = '🎉<br>LV' + S.lv + '<br><span style="font-size:17px">單字變難囉</span>';
+    box.classList.add('on');
+    later(function(){
+      box.classList.remove('on');
+      round();
+    }, 1400);
+  }
+
+  function gameOver(){
+    S.over = true;
+    clearTimers();
+    clearMoles();
+
+    var best = 0;
+    try { best = parseInt(localStorage.getItem('wam_best_' + diff) || '0', 10); } catch (e) {}
+    if (S.score > best) {
+      try { localStorage.setItem('wam_best_' + diff, String(S.score)); } catch (e) {}
+    }
+
+    $('final').textContent = S.score;
+    $('sLv').textContent = S.lv;
+    $('sAcc').textContent = S.asked ? Math.round(S.correct / S.asked * 100) + '%' : '0%';
+    $('sCombo').textContent = S.bestCombo;
+
+    var miss = [];
+    var seen = {};
+    S.missedWords.forEach(function(w){
+      if (!seen[w.id]) { seen[w.id] = 1; miss.push(w.emoji + ' ' + w.word + ' ' + w.zh); }
+    });
+    if (miss.length) {
+      $('missed').innerHTML = '<b>沒打到的字：</b><br>' + miss.slice(0, 12).join('、');
+    } else if (S.correct > 0) {
+      $('missed').textContent = '每一題都打到了，太厲害了！';
+    } else {
+      $('missed').textContent = '這次都是打錯地鼠，先看清楚單字再下手。';
+    }
+
+    show('over');
+  }
+
+  function show(id){
+    ['start','play','over'].forEach(function(s){
+      $(s).classList.toggle('on', s === id);
+    });
+  }
+
+  function startGame(){
+    clearTimers();
+    S = { lv:1, score:0, lives:3, combo:0, bestCombo:0,
+          asked:0, correct:0, missedWords:[], answered:false, over:false, lastWord:null };
+    updateHUD();
+    $('combo').classList.remove('on');
+    show('play');
+    later(round, 300);
+  }
+
+  function refreshBest(){
+    var b = 0;
+    try { b = localStorage.getItem('wam_best_' + diff) || 0; } catch (e) {}
+    $('best').textContent = b > 0 ? '這個難度的最高分：' + b + ' 分' : '';
+  }
+
+  // ---- 事件 ----
+  Array.prototype.forEach.call(document.querySelectorAll('.diff'), function(el){
+    el.addEventListener('click', function(){
+      document.querySelectorAll('.diff').forEach(function(d){ d.classList.remove('sel'); });
+      el.classList.add('sel');
+      diff = el.dataset.diff;
+      refreshBest();
+    });
+  });
+  $('go').addEventListener('click', startGame);
+  $('again').addEventListener('click', startGame);
+  $('home').addEventListener('click', function(){ clearTimers(); show('start'); refreshBest(); });
+  $('say').addEventListener('click', function(){ if (S && S.lastWord) speak(S.lastWord.word); });
+
+  refreshBest();
+})();
+</script>
+</body>
+</html>
