@@ -1,4 +1,5 @@
-import type { LevelData, WaveSpec } from '@/core/types'
+import type { Layout, LevelData, WaveSpec } from '@/core/types'
+import { FOCUS_MAX, FOCUS_STEP, TOWERS } from './towers'
 import { LAYOUTS, type LayoutName } from './layouts'
 
 /**
@@ -13,17 +14,82 @@ import { LAYOUTS, type LayoutName } from './layouts'
  */
 
 /**
- * 波次。難度旋鈕集中在這裡，調數字就好。
- * d 是關卡序號（1~14），i 是第幾波（0 起算）。
+ * 一條路有多長。路的長度就是「每題有多少秒可以想」，是最有效的難度旋鈕。
  */
-function waves(count: number, d: number): WaveSpec[] {
+function pathLength(pts: { x: number; y: number }[]): number {
+  let L = 0
+  for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y)
+  return L
+}
+
+/**
+ * 這張佈局「一次齊射打得出多少傷害」。
+ *
+ * 不能寫死。同樣八個塔位，兩條路的圖大部分路段有三座塔打得到，
+ * 三條路的圖塔被拉開，通常只有兩座打得到——血量寫死的話，
+ * 三條路的關卡就會變成完全打不動。所以沿著路取樣，算涵蓋到的塔數中位數。
+ */
+function volleyOf(layout: Layout): number {
+  const counts: number[] = []
+  for (const pts of layout.paths) {
+    const len = pathLength(pts)
+    for (let d = len * 0.1; d < len * 0.95; d += 20) {
+      const p = pointAtDist(pts, d)
+      let n = 0
+      for (const s of layout.slots) {
+        if (Math.hypot(s.x - p.x, s.y - 20 - (p.y - 22)) <= TOWERS.archery.range) n++
+      }
+      counts.push(n)
+    }
+  }
+  counts.sort((a, b) => a - b)
+  const median = counts[Math.floor(counts.length / 2)] || 1
+  const focus = 1 + FOCUS_STEP * Math.min(FOCUS_MAX, Math.max(0, median - 1))
+  return Math.max(TOWERS.archery.damage, Math.round(median * TOWERS.archery.damage * focus))
+}
+
+function pointAtDist(pts: { x: number; y: number }[], dist: number): { x: number; y: number } {
+  for (let i = 1; i < pts.length; i++) {
+    const seg = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y)
+    if (dist <= seg) {
+      const t = seg ? dist / seg : 0
+      return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t }
+    }
+    dist -= seg
+  }
+  return pts[pts.length - 1]
+}
+
+/**
+ * 難度＝**每分鐘要答對幾題**，其他數字都是從這個目標回推的。
+ *
+ * 這是第二次試玩「難度感覺不到變化」的正解。當時的做法是把血量往上加，
+ * 但三座塔集火一次剛好 76 傷害＝第五波的血量，所以每一波都是答對一次就死，
+ * 血量成長整個被集火加成吃光，實際負荷從 7 秒一題只變成 5.6 秒一題。
+ *
+ * 現在反過來算：
+ *   1. 訂這一關每分鐘要答對幾題（第 1 關 12 題，第 14 關 25 題）
+ *   2. 訂一隻怪要答對幾次才會死，血量直接等於那麼多次齊射
+ *   3. 出怪間隔＝餵飽那個答題速率所需的間隔
+ *   4. 速度＝路的長度除以「希望怪在畫面上待幾秒」
+ *
+ * 驗證用 tools/test/play-td.mjs，不是手感。
+ */
+function waves(waveCount: number, d: number, pathLen: number, volley: number): WaveSpec[] {
+  const rate = 11 + d                                   // 目標：每分鐘答對幾題
+  const hits = d <= 4 ? 1 : d <= 9 ? 2 : 3              // 一隻怪要答對幾次才會死
+  const gap = (60 / rate) * hits                        // 出怪間隔
+  const onScreen = Math.max(14, 24 - d * 0.6)           // 怪在畫面上待幾秒
+  const speed = Math.round(pathLen / onScreen)
+
   const out: WaveSpec[] = []
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < waveCount; i++) {
+    const waveSeconds = 24 + d * 1.5 + i * 4
     out.push({
-      count: 3 + i + Math.floor(d / 4),
-      hp: 18 + d * 6 + i * (8 + d),
-      speed: 26 + d * 1.5 + i * 2,
-      gap: Math.max(1.5, 3.2 - d * 0.1),
+      count: Math.max(3, Math.min(10, Math.round(waveSeconds / gap))),
+      hp: Math.round(volley * hits * 0.95 + i * volley * 0.08),
+      speed,
+      gap: +gap.toFixed(1),
       art: i % 2 ? 'goblinPurple' : 'goblinRed',
     })
   }
@@ -68,6 +134,10 @@ function tilesetFor(no: number): string {
 
 export const LEVELS: LevelData[] = SEEDS.map((s, i) => {
   const no = i + 1
+  const layout = LAYOUTS[s.layout]
+  // 用最短的一條路算，怪走最短那條時也要有合理的時間
+  const pathLen = Math.min(...layout.paths.map(pathLength))
+  const volley = volleyOf(layout)
   return {
     id: `td-${String(no).padStart(2, '0')}`,
     no,
@@ -77,13 +147,14 @@ export const LEVELS: LevelData[] = SEEDS.map((s, i) => {
     maxWordLevel: 3,
     isBoss: !!s.boss,
     skin: { tileset: s.tileset ?? tilesetFor(no) },
-    layout: LAYOUTS[s.layout],
+    layout,
     rules: {
       castleHp: s.boss ? 15 : 20,
       startCoins: 120 + Math.floor(no / 3) * 20,
-      waves: waves(s.waveCount, no),
+      waves: waves(s.waveCount, no, pathLen, volley),
       boss: s.boss
-        ? { hp: 220 + no * 40, speed: 22 + no, art: 'goblinPurple', scale: 1.6 }
+        // 魔王要六次齊射才倒，單塔絕對打不動，一定要集火
+        ? { hp: volley * 6, speed: Math.round(pathLen / 26), art: 'goblinPurple', scale: 1.6 }
         : undefined,
     },
   }

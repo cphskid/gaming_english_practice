@@ -57,10 +57,12 @@ const out = await page.evaluate(async ({ accuracy }) => {
     }
 
     if (S.target) {
-      // 出題漏洞檢查：場上可點的怪少於兩隻時不該出題
+      // 出題漏洞檢查：出題的時候，還沒走進畫面的怪不可以被抽中，
+      // 因為牠的字牌根本還沒畫出來
       const ready = S.enemies.filter((e) => e.entered)
       log.spamTries++
-      if (ready.length < 2 && S.enemies.length > 1) log.spamWins++
+      if (!S.target.entered) log.spamWins++
+      if (ready.length < 2) log.soloAsks = (log.soloAsks ?? 0) + 1
 
       const wrong = Math.random() > accuracy
       const pick = wrong

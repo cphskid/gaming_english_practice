@@ -15,6 +15,11 @@ const PRESS = 0.22
 const ENTER_X = 40
 /** 答完一題到下一題之間的冷卻，避免連點穿題 */
 const ANSWER_COOLDOWN = 0.3
+/**
+ * 場上只剩一隻可點的怪時，等這麼久還是要出題。
+ * 不等的話那隻怪永遠沒有人打得到，會直接走到城堡——高手打太快就會踩到。
+ */
+const SOLO_GRACE = 1.2
 
 interface Enemy {
   word: Word
@@ -130,6 +135,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     target: null as Enemy | null,
     askedAt: 0,
     cooldown: 0,
+    idle: 0,
     correct: 0,
     asked: 0,
     combo: 0,
@@ -221,16 +227,20 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   /**
-   * 出題。只從「完全走進畫面的怪」裡選，而且至少要有兩隻可選，
-   * 否則就等——不然場上只有一隻時，點哪裡都會對。
+   * 出題。只從「完全走進畫面的怪」裡選，而且原則上要有兩隻以上可選——
+   * 場上只有一隻時點哪裡都會對，那就不是在讀字了。
+   *
+   * 但不能無限等：等超過 SOLO_GRACE 還是只有一隻，就照樣出題，
+   * 否則那隻怪沒有人打得到，會白白走到城堡。
    */
   function pickQuestion() {
     const ready = S.enemies.filter((e) => e.entered)
-    const last = S.spawnQueue.length === 0 && S.enemies.length === 1
-    if (ready.length < 2 && !(last && ready.length === 1)) {
+    if (!ready.length) { S.target = null; return syncQuiz() }
+    if (ready.length < 2 && S.idle < SOLO_GRACE) {
       S.target = null
       return syncQuiz()
     }
+    S.idle = 0
     S.target = ready[(Math.random() * ready.length) | 0]
     S.asked++
     S.askedAt = performance.now()
@@ -401,7 +411,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         }
       }
 
-      if (!S.target) pickQuestion()
+      if (!S.target) { S.idle += dt; pickQuestion() }
+      else S.idle = 0
 
       if (S.hp <= 0) return finish(false)
       if (!S.spawnQueue.length && !S.enemies.length) {
