@@ -1,5 +1,6 @@
 import { newCharacter, studentId } from '@/core/character'
-import type { AnswerEvent, Character, LevelProgress, Student } from '@/core/types'
+import { WordStat } from '@/core/wordStat'
+import type { AnswerEvent, Character, LevelProgress, Student, WordStatEntry } from '@/core/types'
 import type { Repository } from './repository'
 
 /**
@@ -92,6 +93,11 @@ export class LocalRepository implements Repository {
 
   async loadEvents(id: string): Promise<AnswerEvent[]> {
     return read<AnswerEvent[]>(k.events(id), [])
+  }
+
+  async loadWordStats(id: string): Promise<WordStatEntry[]> {
+    // 本地就是把事件跑一遍，沒有快取——資料量小，不值得多存一份會走鐘的東西
+    return WordStat.from(read<AnswerEvent[]>(k.events(id), [])).entries()
   }
 
   async loadClassEvents(classCode: string): Promise<AnswerEvent[]> {

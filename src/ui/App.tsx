@@ -36,16 +36,16 @@ export function App() {
   const join = useCallback(async (classCode: string, nickname: string) => {
     audio.unlock() // iOS 的第一次播放一定要綁在使用者的某一下點擊
     const s = await repo.join(classCode, nickname)
-    const [c, p, events, open] = await Promise.all([
+    const [c, p, stats, open] = await Promise.all([
       repo.loadCharacter(s.id),
       repo.loadProgress(s.id),
-      repo.loadEvents(s.id),
+      repo.loadWordStats(s.id),
       repo.loadTeacherOpen(s.classCode),
     ])
     setStudent(s)
     setCharacter(c)
     setProgress(new Map(p.map((x) => [x.levelId, x])))
-    setStat(WordStat.from(events))
+    setStat(WordStat.fromEntries(stats))
     setTeacherOpen(new Set(open))
     setScreen('select')
   }, [])
@@ -80,7 +80,7 @@ export function App() {
 
     // 事件先寫，其他一切都是從事件算出來的
     await repo.appendEvents(r.events)
-    const nextStat = WordStat.from([...(await repo.loadEvents(student.id))])
+    const nextStat = WordStat.fromEntries(await repo.loadWordStats(student.id))
 
     const coins = me.coins + r.bonusCoins
     const nextChar: Character = {
@@ -99,7 +99,10 @@ export function App() {
     await repo.saveProgress(student.id, nextProgress)
 
     setStat(nextStat)
-    setCharacter(nextChar)
+    // 金幣以資料庫為準再讀一次回來。接了後端之後真正算數的是伺服器，
+    // nextChar 只是為了讓數字立刻跳出來給小朋友看；兩邊算式一致（有對帳測試），
+    // 萬一哪天漂移了，這一行會讓它立刻現形，而不是默默越差越多。
+    setCharacter(await repo.loadCharacter(student.id))
     setProgress((m) => new Map(m).set(playing.level.id, nextProgress))
     setResult({ r, coins, exp: me.exp })
     setScreen('result')
@@ -116,7 +119,7 @@ export function App() {
     const me = r.scores[0]
 
     await repo.appendEvents(r.events)
-    const nextStat = WordStat.from(await repo.loadEvents(student.id))
+    const nextStat = WordStat.fromEntries(await repo.loadWordStats(student.id))
     const nextChar: Character = {
       ...character,
       coins: character.coins + me.coins,
@@ -125,7 +128,7 @@ export function App() {
     await repo.saveCharacter(nextChar)
 
     setStat(nextStat)
-    setCharacter(nextChar)
+    setCharacter(await repo.loadCharacter(student.id))
     setPlaying(null)
     setScreen('select')
   }, [playing, student, character])

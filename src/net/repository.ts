@@ -1,4 +1,4 @@
-import type { AnswerEvent, Character, LevelProgress, Student } from '@/core/types'
+import type { AnswerEvent, Character, LevelProgress, Student, WordStatEntry } from '@/core/types'
 
 /**
  * 唯一知道資料存在哪裡的介面。core 只認這份契約，不知道 Supabase 存在。
@@ -23,6 +23,13 @@ export interface Repository {
    */
   appendEvents(events: AnswerEvent[]): Promise<void>
   loadEvents(studentId: string): Promise<AnswerEvent[]>
+
+  /**
+   * 掌握度。本地版是把事件跑一遍算出來的，所以跟 loadEvents 等價；
+   * 接了後端之後改成直接讀資料庫算好的那張表，不然一個學生一年好幾萬列，
+   * 每次登入都撈回來跑一遍，學校的平板會卡住。
+   */
+  loadWordStats(studentId: string): Promise<WordStatEntry[]>
 
   /** 老師報表用：整個班的事件 */
   loadClassEvents(classCode: string): Promise<AnswerEvent[]>

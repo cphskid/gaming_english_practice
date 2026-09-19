@@ -16,6 +16,18 @@ export class WordStat {
     return s
   }
 
+  /**
+   * 後端已經算好的版本。
+   * 本地版是把事件跑一遍算出來的，但接了後端之後一個學生一年有好幾萬列，
+   * 每次登入都撈回來跑一遍太傻——所以資料庫那邊把同一份結果存成一張表。
+   * 算法改了就重跑 rebuild_word_stats()，事件永遠是真相。
+   */
+  static fromEntries(entries: WordStatEntry[]): WordStat {
+    const s = new WordStat()
+    for (const e of entries) s.map.set(key(e.wordId, e.skill), { ...e })
+    return s
+  }
+
   apply(e: AnswerEvent): void {
     const k = key(e.wordId, e.skill)
     const cur: WordStatEntry = this.map.get(k) ?? {

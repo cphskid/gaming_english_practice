@@ -2,3 +2,9 @@ node_modules/
 dist/
 .DS_Store
 *.local
+
+# 金鑰不進 repo
+.env
+
+# tsc 的快取，不進 repo
+*.tsbuildinfo
