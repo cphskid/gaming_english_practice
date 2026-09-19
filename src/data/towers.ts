@@ -31,3 +31,18 @@ export const FOCUS_MAX = 3
 export function refundOf(cost: number, foughtAWave: boolean): number {
   return foughtAWave ? Math.floor(cost / 2) : cost
 }
+
+/**
+ * 戰場水晶的收入。
+ *
+ * **水晶跟角色金幣是兩條完全分開的線**：水晶只活在這一場裡，結束就歸零，
+ * 拿來蓋塔；角色金幣跨場累積，拿來買道具和裝飾品，由 core/economy 計算。
+ * 所以遊戲可以自己管水晶，這不違反「遊戲不准碰金幣怎麼算」那條規矩。
+ *
+ * 答對給得比殺怪多，是故意的：我們要獎勵的是讀字，不是運氣好剛好補到最後一刀。
+ */
+export const CRYSTAL = {
+  perCorrect: 3,
+  perKill: 5,
+  perWave: 10,
+}

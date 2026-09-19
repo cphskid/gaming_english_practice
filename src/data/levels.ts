@@ -13,13 +13,34 @@ import { LAYOUTS, type LayoutName } from './layouts'
  * 小主題一定要合併，否則五波怪會讓同一個字出現四五次，變成背答案。門檻是一關至少 14 字。
  */
 
-/**
- * 一條路有多長。路的長度就是「每題有多少秒可以想」，是最有效的難度旋鈕。
- */
-function pathLength(pts: { x: number; y: number }[]): number {
+type Pt = { x: number; y: number }
+
+/** 一條路的總長，含畫面外那一段（怪實際要走的距離）。 */
+function pathLength(pts: Pt[]): number {
   let L = 0
   for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y)
   return L
+}
+
+/**
+ * 沿著路取樣，只留下在畫面內的點。
+ *
+ * 路的起點刻意拉到畫面外很遠（讓開場的怪排得開），但**畫面外那一段不能算進難度**：
+ * 那裡沒有塔打得到，玩家也看不到，算進去會把速度和塔位涵蓋率都算錯。
+ */
+function visiblePoints(pts: Pt[], step = 8): Pt[] {
+  const out: Pt[] = []
+  const len = pathLength(pts)
+  for (let d = 0; d < len; d += step) {
+    const p = pointAtDist(pts, d)
+    if (p.x >= 0) out.push(p)
+  }
+  return out
+}
+
+/** 路在畫面內有多長。這才是「每題有多少秒可以想」，是最有效的難度旋鈕。 */
+function visibleLength(pts: Pt[], step = 8): number {
+  return visiblePoints(pts, step).length * step
 }
 
 /**
@@ -32,9 +53,9 @@ function pathLength(pts: { x: number; y: number }[]): number {
 function volleyOf(layout: Layout): number {
   const counts: number[] = []
   for (const pts of layout.paths) {
-    const len = pathLength(pts)
-    for (let d = len * 0.1; d < len * 0.95; d += 20) {
-      const p = pointAtDist(pts, d)
+    // 只看畫面內的路段，畫面外沒有塔打得到，算進去會把傷害低估
+    const pv = visiblePoints(pts, 20)
+    for (const p of pv) {
       let n = 0
       for (const s of layout.slots) {
         if (Math.hypot(s.x - p.x, s.y - 20 - (p.y - 22)) <= TOWERS.archery.range) n++
@@ -136,7 +157,8 @@ export const LEVELS: LevelData[] = SEEDS.map((s, i) => {
   const no = i + 1
   const layout = LAYOUTS[s.layout]
   // 用最短的一條路算，怪走最短那條時也要有合理的時間
-  const pathLen = Math.min(...layout.paths.map(pathLength))
+  // 速度用「畫面內的長度」回推，怪在畫面上待多久才是玩家真正感受到的時間
+  const pathLen = Math.min(...layout.paths.map((p) => visibleLength(p)))
   const volley = volleyOf(layout)
   return {
     id: `td-${String(no).padStart(2, '0')}`,

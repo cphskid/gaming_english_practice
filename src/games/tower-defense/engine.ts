@@ -1,4 +1,4 @@
-import { FOCUS_MAX, FOCUS_STEP, TOWERS, refundOf } from '@/data/towers'
+import { CRYSTAL, FOCUS_MAX, FOCUS_STEP, TOWERS, refundOf } from '@/data/towers'
 import type { GameContext, GameHandle, LevelData, Point, Word } from '@/core/types'
 import { loadArt } from './art'
 
@@ -17,9 +17,13 @@ const ENTER_X = 40
 const ANSWER_COOLDOWN = 0.3
 /**
  * 場上只剩一隻可點的怪時，等這麼久還是要出題。
- * 不等的話那隻怪永遠沒有人打得到，會直接走到城堡——高手打太快就會踩到。
+ * 不等的話那隻怪永遠沒有人打得到，會直接走到城堡。
+ * 真正的解法是下面那條「少於兩隻就提前放下一隻」，這裡只是整波最後一隻的保險，
+ * 所以時間要短，不然玩家會眼睜睜看著怪走卻不能打。
  */
-const SOLO_GRACE = 1.2
+const SOLO_GRACE = 0.4
+/** 開場那一小隊怪彼此隔多遠，免得疊在同一格 */
+const LINE_SPACING = 95
 
 interface Enemy {
   word: Word
@@ -74,7 +78,7 @@ function pointAt(pts: Point[], dist: number): Point {
 const SHELL = `
 <div class="td-hud">
   <span class="td-stat td-hp">❤️ 20</span>
-  <span class="td-stat td-coin">🪙 0</span>
+  <span class="td-stat td-coin">💎 0</span>
   <span class="td-wave">第 1 波</span>
   <div class="td-quiz">
     <span class="td-qemoji">🛡️</span>
@@ -121,12 +125,13 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   let terrain: HTMLCanvasElement | null = null
   let raf = 0
   let dead = false
+  let paused = false
 
   const S = {
     phase: 'build' as 'build' | 'battle' | 'done',
     wave: 1,
     hp: rules.castleHp,
-    coins: rules.startCoins,
+    crystals: rules.startCoins,
     towers: [] as Tower[],
     enemies: [] as Enemy[],
     shots: [] as Shot[],
@@ -168,6 +173,17 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     } catch { /* 念不出來就算了 */ }
   }
 
+  /**
+   * 水晶入帳。水晶只活在這一場裡，結束就歸零，跟角色金幣是兩條線。
+   * 角色金幣由 core 從答題事件算，遊戲碰不到。
+   */
+  function gainCrystals(n: number, x: number, y: number) {
+    S.crystals += n
+    S.pops.push({ x, y, text: '+' + n + ' 💎', color: '#8fd8ff', life: 1 })
+    ctx.audio.play('coin')
+    syncUI()
+  }
+
   /** 拿一個目前畫面上還沒出現的字，避免兩隻怪同名沒辦法分辨 */
   function freshWord(): Word | null {
     const onScreen = new Set(S.enemies.map((e) => e.word.id))
@@ -204,21 +220,33 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     S.spawnTimer = 0
     S.phase = 'battle'
     S.selected = null
-    // 開頭一次放三隻，場上才有得選；只有一隻的話點哪裡都對
-    for (let i = 0; i < 3; i++) spawnNext()
+    // 開頭一次放三隻，場上才有得選；只有一隻的話點哪裡都對。
+    // 每一條路各自算前導距離，同一條路上的才不會疊在一起。
+    const lead = new Map<number, number>()
+    for (let i = 0; i < 3; i++) {
+      const path = S.spawnQueue[0]?.path ?? 0
+      const n = lead.get(path) ?? 0
+      lead.set(path, n + 1)
+      spawnNext(Math.max(0, (2 - n) * LINE_SPACING))
+    }
     ctx.audio.play('wave-start')
     if (!S.hinted) { S.hinted = true; toast('點怪物、或牠腳下的字牌，都算點到') }
     syncUI()
   }
 
-  function spawnNext() {
+  /**
+   * 放一隻怪出來。`headStart` 是牠已經先走了多遠——開場一次放一小隊時，
+   * 每隻的前導距離不同，牠們才會排成一列走進來，而不是全部疊在起點同一格上
+   * （疊在一起會看起來像一隻怪掛了兩三個字牌）。
+   */
+  function spawnNext(headStart = 0) {
     const s = S.spawnQueue.shift()
     if (!s) return
     const word = freshWord()
     if (!word) return
-    const p = pointAt(PATHS[s.path], 0)
+    const p = pointAt(PATHS[s.path], headStart)
     S.enemies.push({
-      word, path: s.path, dist: 0, hp: s.hp, maxHp: s.hp, speed: s.speed,
+      word, path: s.path, dist: headStart, hp: s.hp, maxHp: s.hp, speed: s.speed,
       art: s.art, scale: s.scale, boss: s.boss,
       frame: Math.random() * 7, blocked: false,
       px: 0, pw: 0, tier: 0, press: 0, good: 0, bad: 0, shake: 0,
@@ -263,6 +291,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       e.good = 0.45
       buzz(14)
       ctx.audio.play('answer-correct')
+      gainCrystals(CRYSTAL.perCorrect, e.x, e.y - 58)
       S.rings.push({ x: e.x, y: e.y - 20, r: 16, max: 56, life: 0.42, color: '#ffe08a' })
       volley(e)
       speak(e.word.word)
@@ -304,7 +333,11 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     S.pops.push({ x: e.x + 18, y: e.y - 40, text: '-' + total, color: '#fff', life: 0.9 })
     if (hits.length > 1)
       S.pops.push({ x: e.x + 18, y: e.y - 22, text: '集火 ×' + mult.toFixed(1), color: '#ffd05a', life: 1 })
-    if (e.hp <= 0) { ctx.audio.play('enemy-die'); killEnemy(e) }
+    if (e.hp <= 0) {
+      ctx.audio.play('enemy-die')
+      gainCrystals(e.boss ? CRYSTAL.perKill * 5 : CRYSTAL.perKill, e.x, e.y - 70)
+      killEnemy(e)
+    }
     else ctx.audio.play('enemy-hit')
     pickQuestion()
   }
@@ -327,8 +360,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     }
     S.selected = null
     const spec = TOWERS[S.picked]
-    if (S.coins < spec.cost) return toast('銅幣不夠，還差 ' + (spec.cost - S.coins) + ' 枚')
-    S.coins -= spec.cost
+    if (S.crystals < spec.cost) return toast('水晶不夠，還差 ' + (spec.cost - S.crystals) + ' 顆')
+    S.crystals -= spec.cost
     const t: Tower = { slot: idx, kind: S.picked, soldier: null, builtAtWave: S.wave }
     if (S.picked === 'barracks') t.soldier = makeSoldier(idx)
     S.towers.push(t)
@@ -343,11 +376,11 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     const t = S.towers[i]
     // 這一波還沒開打全額退，打過仗的退一半。小朋友需要能安心亂試。
     const back = refundOf(TOWERS[t.kind].cost, t.builtAtWave < S.wave)
-    S.coins += back
+    S.crystals += back
     S.towers.splice(i, 1)
     S.selected = null
     ctx.audio.play('tower-sell')
-    toast('拆掉了，退回 ' + back + ' 枚')
+    toast('拆掉了，退回 ' + back + ' 顆水晶')
     syncUI()
   }
 
@@ -372,7 +405,13 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
 
     if (S.phase === 'battle') {
       S.spawnTimer -= dt
-      if (S.spawnQueue.length && S.spawnTimer <= 0) { spawnNext(); S.spawnTimer = S.spawnGap }
+      // 場上少於兩隻就提前把下一隻放出來。整波的怪數不變，所以難度不變，
+      // 但玩家不會再遇到「只剩一隻卻不能打，只能看著牠走」的空窗。
+      const alive = S.enemies.length
+      if (S.spawnQueue.length && (S.spawnTimer <= 0 || alive < 2)) {
+        spawnNext()
+        S.spawnTimer = alive < 2 ? Math.min(S.spawnGap, 0.8) : S.spawnGap
+      }
 
       const soldiers = S.towers.map((t) => t.soldier).filter((s): s is Soldier => !!s && s.hp > 0)
 
@@ -420,6 +459,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         S.wave++
         S.phase = 'build'
         S.target = null
+        gainCrystals(CRYSTAL.perWave, layout.castle.x - 60, layout.castle.y - 100)
         syncUI(); syncQuiz()
       }
     }
@@ -694,7 +734,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   // ---------------------------------------------------------------- UI
   function syncUI() {
     elHp.textContent = '❤️ ' + Math.max(0, S.hp)
-    elCoin.textContent = '🪙 ' + S.coins
+    elCoin.textContent = '💎 ' + S.crystals
     elWave.textContent = `第 ${S.wave} / ${rules.waves.length} 波`
     const build = S.phase === 'build'
     elTray.hidden = !build
@@ -704,7 +744,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     elSell.hidden = !sel
     if (sel) {
       const back = refundOf(TOWERS[sel.kind].cost, sel.builtAtWave < S.wave)
-      elSell.textContent = `拆除 ${TOWERS[sel.kind].name}（退 ${back}）`
+      elSell.textContent = `拆除 ${TOWERS[sel.kind].name}（退 ${back} 💎）`
     }
   }
 
@@ -743,7 +783,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   function onPointerDown(ev: PointerEvent) {
-    if (S.phase === 'done') return
+    if (S.phase === 'done' || paused) return
     ctx.audio.unlock()
     const r = cv.getBoundingClientRect()
     const x = ((ev.clientX - r.left) * W) / r.width
@@ -783,7 +823,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     if (dead) return
     const dt = Math.min(0.05, (now - last) / 1000)
     last = now
-    if (S.phase !== 'done') update(dt)
+    if (S.phase !== 'done' && !paused) update(dt)
     draw()
     raf = requestAnimationFrame(loop)
   }
@@ -802,6 +842,11 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   raf = requestAnimationFrame(loop)
 
   return {
+    setPaused(on: boolean) {
+      paused = on
+      // 暫停期間時間會一直走，恢復時把 last 拉回來，不然會一口氣補一大格
+      last = performance.now()
+    },
     destroy() {
       dead = true
       cancelAnimationFrame(raf)

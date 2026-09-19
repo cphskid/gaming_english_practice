@@ -33,11 +33,11 @@ const out = await page.evaluate(async ({ accuracy }) => {
   const log = { spamWins: 0, spamTries: 0, waves: [], errors: [] }
 
   // 先蓋四座塔
-  for (let i = 0; i < 4 && S.coins >= 40; i++) td.tapSlot(i)
-  const coinsBeforeSell = S.coins
+  for (let i = 0; i < 4 && S.crystals >= 40; i++) td.tapSlot(i)
+  const coinsBeforeSell = S.crystals
   td.tapSlot(0)                    // 選取
   td.sellSelected()                // 拆掉，這一波還沒打應該全額退
-  log.refund = S.coins - coinsBeforeSell
+  log.refund = S.crystals - coinsBeforeSell
   td.tapSlot(0)                    // 蓋回來
 
   td.startWave()
@@ -50,7 +50,7 @@ const out = await page.evaluate(async ({ accuracy }) => {
   while (S.phase !== 'done' && Date.now() - t0 < 180000) {
     if (S.phase === 'build') {
       // 真人會把每一波賺到的錢再投進去蓋塔，機器人也要，不然難度會被高估
-      for (let i = 0; i < td.SLOTS.length && S.coins >= 40; i++) {
+      for (let i = 0; i < td.SLOTS.length && S.crystals >= 40; i++) {
         if (!S.towers.some((t) => t.slot === i)) td.tapSlot(i)
       }
       td.startWave(); await sleep(50); continue
@@ -79,7 +79,7 @@ const out = await page.evaluate(async ({ accuracy }) => {
   }
 
   log.waves.push({ wave: lastWave, seconds: +((Date.now() - waveStart) / 1000).toFixed(1), correct: waveCorrect })
-  log.final = { phase: S.phase, hp: S.hp, wave: S.wave, correct: S.correct, asked: S.asked, coins: S.coins }
+  log.final = { phase: S.phase, hp: S.hp, wave: S.wave, correct: S.correct, asked: S.asked, coins: S.crystals }
   return log
 }, { accuracy: ACCURACY })
 

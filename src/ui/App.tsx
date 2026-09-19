@@ -105,6 +105,31 @@ export function App() {
     setScreen('result')
   }, [playing, student, character, progress])
 
+  /**
+   * 中途離開。已經答過的題目照樣寫進紀錄——學生真的答了那些題，
+   * wordStat 和老師報表要看得到；金幣也照給，因為金幣本來就只從答對來。
+   * 但不算通關：沒有星星、沒有首次通關獎勵。
+   */
+  const leave = useCallback(async () => {
+    if (!playing || !student || !character) return
+    const r = playing.session.finish({ win: false, survival: 0, detail: '中途離開' })
+    const me = r.scores[0]
+
+    await repo.appendEvents(r.events)
+    const nextStat = WordStat.from(await repo.loadEvents(student.id))
+    const nextChar: Character = {
+      ...character,
+      coins: character.coins + me.coins,
+      exp: character.exp + me.exp,
+    }
+    await repo.saveCharacter(nextChar)
+
+    setStat(nextStat)
+    setCharacter(nextChar)
+    setPlaying(null)
+    setScreen('select')
+  }, [playing, student, character])
+
   const toggleOpen = useCallback((levelId: string) => {
     if (!student) return
     setTeacherOpen((prev) => {
@@ -141,6 +166,7 @@ export function App() {
           game={towerDefense} level={playing.level} session={playing.session}
           studentId={student.id} nextQuestion={nextQuestion}
           onFinish={(o) => void finish(o)}
+          onLeave={() => void leave()}
         />
       )}
 

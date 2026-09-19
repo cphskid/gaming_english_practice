@@ -165,6 +165,11 @@ export interface GameOutcome {
 export interface GameHandle {
   /** 離開畫面時要叫，停掉 requestAnimationFrame 與事件監聽 */
   destroy(): void
+  /**
+   * 暫停／繼續。容器要跳確認框或設定選單時用——
+   * 不暫停的話小朋友在讀「確定要離開嗎」的時候怪還在走，會莫名其妙掉血。
+   */
+  setPaused?(on: boolean): void
 }
 
 export interface GameModule {
