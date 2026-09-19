@@ -1,18 +1,43 @@
 # Supabase
 
-## 要做什麼
+## 現況：已經接上去了（2026-09-19 實測通過）
 
-1. 在 Supabase 後台 → SQL Editor，把 `schema.sql` **整份**貼上去按 Run。
-2. 同樣的地方，把 `seed.sql` 整份貼上去按 Run（300 字題庫與 14 關）。
-3. Authentication → Providers，把 **Anonymous sign-ins** 打開（學生用匿名登入進場）。
-4. 前端需要兩個值，放在 `.env`：
+Chuck 的專案 `bxrppdsbhuhjluprohkf` 已經設定完成，**不用再手動貼 SQL**：
+
+- `schema.sql` 與 `seed.sql` 都跑過了（300 字題庫、14 關）。
+- Authentication 的 **Anonymous sign-ins 已開啟**。
+- 匿名登入速率上限從預設的 30/小時**調高到 200/小時**。一個班 30 個人同時進場會直接撞到 30 那個預設值，第一次全班上線就會有人進不來。
+
+前端要的兩個值放在 `.env`：
 
 ```
 VITE_SUPABASE_URL=https://<你的專案>.supabase.co
 VITE_SUPABASE_KEY=sb_publishable_...
 ```
 
-兩份 SQL 都可以重複執行，不會洗掉學生資料。
+## 線上實測結果（打真的 Supabase，不是本機模擬）
+
+通過：進場、換裝置用同樣暱稱接回同一個存檔、答題寫入、金幣由資料庫計算、同字重複答對金幣遞減、掌握度統計、首次通關獎勵（沒練過拿不到／練過拿得到／重玩不再給）、四位數密碼保護、老師報表與開放關卡、排行榜。
+
+擋下來：學生直接改金幣、直接塞答題紀錄、直接改星星、自己開班、呼叫老師專用的函式。
+
+瀏覽器跑完整一場第 1 關：88 題三星通關，**前端顯示的金幣與資料庫算出來的完全一致**，兩套金幣算式沒有漂移。
+
+## 之後要改 schema 怎麼做
+
+這個開發環境**連不到 Postgres 的 5432 埠**（只有 HTTPS 出得去），所以 `psql`、連線字串、Supabase CLI 的 `db push` 全部走不通。唯一的路是 Management API：
+
+```
+curl -X POST "https://api.supabase.com/v1/projects/<專案 ref>/database/query" \
+  -H "Authorization: Bearer $SUPABASE_PAT" -H "Content-Type: application/json" \
+  -d '{"query": "select 1"}'
+```
+
+需要一把 Personal Access Token（`sbp_` 開頭，在 https://supabase.com/dashboard/account/tokens 產生）。**那把 token 綁的是整個帳號，權限比 service_role 還大，不進 repo，用完就去撤銷。**
+
+## 還沒做的：老師登入畫面
+
+資料庫這邊老師是真的 email 帳號，`create_class` 也擋掉了匿名帳號。**但前端目前沒有老師登入的畫面**，選關頁面上那顆「老師」按鈕誰都能按，而且沒有任何地方可以開班級。整班上線前一定要補這一塊。
 
 ## 千萬不要
 
