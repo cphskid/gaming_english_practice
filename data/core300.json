@@ -1,0 +1,2735 @@
+{
+  "meta": {
+    "name": "國小核心 300 字",
+    "level": "core300",
+    "count": 300,
+    "spell_count": 180,
+    "source": "十二年國民基本教育課程綱要 國民中小學暨普通型高級中等學校 語文領域－英語文，附錄五 參考字彙表（表一 基本1,200字／表三 依主題分類）",
+    "basis": "課綱規定國小畢業時口語至少會應用 300 個字詞，其中至少 180 個會拼寫。spell=true 標示建議納入拼寫練習的字。",
+    "themes": [
+      "adjectives",
+      "animals",
+      "body",
+      "clothing",
+      "colors",
+      "family",
+      "feelings",
+      "food",
+      "house",
+      "jobs",
+      "numbers",
+      "places",
+      "school",
+      "sports",
+      "tableware",
+      "time",
+      "transportation",
+      "verbs",
+      "weather",
+      "wh-words"
+    ],
+    "spell_rule": "每個主題取較短、較常用的字，合計 180 字，對應課綱「至少 180 個字詞會拼寫」。"
+  },
+  "words": [
+    {
+      "id": 1,
+      "word": "zero",
+      "pos": "num.",
+      "zh": "零",
+      "theme": "numbers",
+      "emoji": "0️⃣",
+      "spell": true
+    },
+    {
+      "id": 2,
+      "word": "one",
+      "pos": "num.",
+      "zh": "一",
+      "theme": "numbers",
+      "emoji": "1️⃣",
+      "spell": true
+    },
+    {
+      "id": 3,
+      "word": "two",
+      "pos": "num.",
+      "zh": "二",
+      "theme": "numbers",
+      "emoji": "2️⃣",
+      "spell": true
+    },
+    {
+      "id": 4,
+      "word": "three",
+      "pos": "num.",
+      "zh": "三",
+      "theme": "numbers",
+      "emoji": "3️⃣",
+      "spell": true
+    },
+    {
+      "id": 5,
+      "word": "four",
+      "pos": "num.",
+      "zh": "四",
+      "theme": "numbers",
+      "emoji": "4️⃣",
+      "spell": true
+    },
+    {
+      "id": 6,
+      "word": "five",
+      "pos": "num.",
+      "zh": "五",
+      "theme": "numbers",
+      "emoji": "5️⃣",
+      "spell": true
+    },
+    {
+      "id": 7,
+      "word": "six",
+      "pos": "num.",
+      "zh": "六",
+      "theme": "numbers",
+      "emoji": "6️⃣",
+      "spell": true
+    },
+    {
+      "id": 8,
+      "word": "seven",
+      "pos": "num.",
+      "zh": "七",
+      "theme": "numbers",
+      "emoji": "7️⃣",
+      "spell": true
+    },
+    {
+      "id": 9,
+      "word": "eight",
+      "pos": "num.",
+      "zh": "八",
+      "theme": "numbers",
+      "emoji": "8️⃣",
+      "spell": true
+    },
+    {
+      "id": 10,
+      "word": "nine",
+      "pos": "num.",
+      "zh": "九",
+      "theme": "numbers",
+      "emoji": "9️⃣",
+      "spell": true
+    },
+    {
+      "id": 11,
+      "word": "ten",
+      "pos": "num.",
+      "zh": "十",
+      "theme": "numbers",
+      "emoji": "🔟",
+      "spell": true
+    },
+    {
+      "id": 12,
+      "word": "eleven",
+      "pos": "num.",
+      "zh": "十一",
+      "theme": "numbers",
+      "emoji": "🔢",
+      "spell": true
+    },
+    {
+      "id": 13,
+      "word": "twelve",
+      "pos": "num.",
+      "zh": "十二",
+      "theme": "numbers",
+      "emoji": "🔢",
+      "spell": true
+    },
+    {
+      "id": 14,
+      "word": "thirteen",
+      "pos": "num.",
+      "zh": "十三",
+      "theme": "numbers",
+      "emoji": "🔢",
+      "spell": false
+    },
+    {
+      "id": 15,
+      "word": "fourteen",
+      "pos": "num.",
+      "zh": "十四",
+      "theme": "numbers",
+      "emoji": "🔢",
+      "spell": false
+    },
+    {
+      "id": 16,
+      "word": "fifteen",
+      "pos": "num.",
+      "zh": "十五",
+      "theme": "numbers",
+      "emoji": "🔢",
+      "spell": false
+    },
+    {
+      "id": 17,
+      "word": "sixteen",
+      "pos": "num.",
+      "zh": "十六",
+      "theme": "numbers",
+      "emoji": "🔢",
+      "spell": false
+    },
+    {
+      "id": 18,
+      "word": "seventeen",
+      "pos": "num.",
+      "zh": "十七",
+      "theme": "numbers",
+      "emoji": "🔢",
+      "spell": false
+    },
+    {
+      "id": 19,
+      "word": "eighteen",
+      "pos": "num.",
+      "zh": "十八",
+      "theme": "numbers",
+      "emoji": "🔢",
+      "spell": false
+    },
+    {
+      "id": 20,
+      "word": "nineteen",
+      "pos": "num.",
+      "zh": "十九",
+      "theme": "numbers",
+      "emoji": "🔢",
+      "spell": false
+    },
+    {
+      "id": 21,
+      "word": "twenty",
+      "pos": "num.",
+      "zh": "二十",
+      "theme": "numbers",
+      "emoji": "🔢",
+      "spell": false
+    },
+    {
+      "id": 22,
+      "word": "red",
+      "pos": "adj.",
+      "zh": "紅色的",
+      "theme": "colors",
+      "emoji": "🔴",
+      "spell": true
+    },
+    {
+      "id": 23,
+      "word": "blue",
+      "pos": "adj.",
+      "zh": "藍色的",
+      "theme": "colors",
+      "emoji": "🔵",
+      "spell": true
+    },
+    {
+      "id": 24,
+      "word": "yellow",
+      "pos": "adj.",
+      "zh": "黃色的",
+      "theme": "colors",
+      "emoji": "🟡",
+      "spell": true
+    },
+    {
+      "id": 25,
+      "word": "green",
+      "pos": "adj.",
+      "zh": "綠色的",
+      "theme": "colors",
+      "emoji": "🟢",
+      "spell": true
+    },
+    {
+      "id": 26,
+      "word": "black",
+      "pos": "adj.",
+      "zh": "黑色的",
+      "theme": "colors",
+      "emoji": "⚫",
+      "spell": true
+    },
+    {
+      "id": 27,
+      "word": "white",
+      "pos": "adj.",
+      "zh": "白色的",
+      "theme": "colors",
+      "emoji": "⚪",
+      "spell": true
+    },
+    {
+      "id": 28,
+      "word": "orange",
+      "pos": "adj.",
+      "zh": "橘色的",
+      "theme": "colors",
+      "emoji": "🟠",
+      "spell": true
+    },
+    {
+      "id": 29,
+      "word": "purple",
+      "pos": "adj.",
+      "zh": "紫色的",
+      "theme": "colors",
+      "emoji": "🟣",
+      "spell": true
+    },
+    {
+      "id": 30,
+      "word": "brown",
+      "pos": "adj.",
+      "zh": "咖啡色的",
+      "theme": "colors",
+      "emoji": "🟤",
+      "spell": true
+    },
+    {
+      "id": 31,
+      "word": "pink",
+      "pos": "adj.",
+      "zh": "粉紅色的",
+      "theme": "colors",
+      "emoji": "🌸",
+      "spell": true
+    },
+    {
+      "id": 32,
+      "word": "animal",
+      "pos": "n.",
+      "zh": "動物",
+      "theme": "animals",
+      "emoji": "🐾",
+      "spell": false
+    },
+    {
+      "id": 33,
+      "word": "dog",
+      "pos": "n.",
+      "zh": "狗",
+      "theme": "animals",
+      "emoji": "🐶",
+      "spell": true
+    },
+    {
+      "id": 34,
+      "word": "cat",
+      "pos": "n.",
+      "zh": "貓",
+      "theme": "animals",
+      "emoji": "🐱",
+      "spell": true
+    },
+    {
+      "id": 35,
+      "word": "bird",
+      "pos": "n.",
+      "zh": "鳥",
+      "theme": "animals",
+      "emoji": "🐦",
+      "spell": true
+    },
+    {
+      "id": 36,
+      "word": "fish",
+      "pos": "n.",
+      "zh": "魚",
+      "theme": "animals",
+      "emoji": "🐟",
+      "spell": true
+    },
+    {
+      "id": 37,
+      "word": "pig",
+      "pos": "n.",
+      "zh": "豬",
+      "theme": "animals",
+      "emoji": "🐷",
+      "spell": true
+    },
+    {
+      "id": 38,
+      "word": "cow",
+      "pos": "n.",
+      "zh": "牛",
+      "theme": "animals",
+      "emoji": "🐮",
+      "spell": true
+    },
+    {
+      "id": 39,
+      "word": "horse",
+      "pos": "n.",
+      "zh": "馬",
+      "theme": "animals",
+      "emoji": "🐴",
+      "spell": true
+    },
+    {
+      "id": 40,
+      "word": "sheep",
+      "pos": "n.",
+      "zh": "綿羊",
+      "theme": "animals",
+      "emoji": "🐑",
+      "spell": false
+    },
+    {
+      "id": 41,
+      "word": "duck",
+      "pos": "n.",
+      "zh": "鴨子",
+      "theme": "animals",
+      "emoji": "🦆",
+      "spell": true
+    },
+    {
+      "id": 42,
+      "word": "chicken",
+      "pos": "n.",
+      "zh": "雞",
+      "theme": "animals",
+      "emoji": "🐔",
+      "spell": false
+    },
+    {
+      "id": 43,
+      "word": "rabbit",
+      "pos": "n.",
+      "zh": "兔子",
+      "theme": "animals",
+      "emoji": "🐰",
+      "spell": false
+    },
+    {
+      "id": 44,
+      "word": "mouse",
+      "pos": "n.",
+      "zh": "老鼠",
+      "theme": "animals",
+      "emoji": "🐭",
+      "spell": false
+    },
+    {
+      "id": 45,
+      "word": "bear",
+      "pos": "n.",
+      "zh": "熊",
+      "theme": "animals",
+      "emoji": "🐻",
+      "spell": true
+    },
+    {
+      "id": 46,
+      "word": "lion",
+      "pos": "n.",
+      "zh": "獅子",
+      "theme": "animals",
+      "emoji": "🦁",
+      "spell": true
+    },
+    {
+      "id": 47,
+      "word": "tiger",
+      "pos": "n.",
+      "zh": "老虎",
+      "theme": "animals",
+      "emoji": "🐯",
+      "spell": false
+    },
+    {
+      "id": 48,
+      "word": "elephant",
+      "pos": "n.",
+      "zh": "大象",
+      "theme": "animals",
+      "emoji": "🐘",
+      "spell": false
+    },
+    {
+      "id": 49,
+      "word": "monkey",
+      "pos": "n.",
+      "zh": "猴子",
+      "theme": "animals",
+      "emoji": "🐵",
+      "spell": false
+    },
+    {
+      "id": 50,
+      "word": "frog",
+      "pos": "n.",
+      "zh": "青蛙",
+      "theme": "animals",
+      "emoji": "🐸",
+      "spell": true
+    },
+    {
+      "id": 51,
+      "word": "snake",
+      "pos": "n.",
+      "zh": "蛇",
+      "theme": "animals",
+      "emoji": "🐍",
+      "spell": false
+    },
+    {
+      "id": 52,
+      "word": "turtle",
+      "pos": "n.",
+      "zh": "烏龜",
+      "theme": "animals",
+      "emoji": "🐢",
+      "spell": false
+    },
+    {
+      "id": 53,
+      "word": "bee",
+      "pos": "n.",
+      "zh": "蜜蜂",
+      "theme": "animals",
+      "emoji": "🐝",
+      "spell": true
+    },
+    {
+      "id": 54,
+      "word": "ant",
+      "pos": "n.",
+      "zh": "螞蟻",
+      "theme": "animals",
+      "emoji": "🐜",
+      "spell": true
+    },
+    {
+      "id": 55,
+      "word": "butterfly",
+      "pos": "n.",
+      "zh": "蝴蝶",
+      "theme": "animals",
+      "emoji": "🦋",
+      "spell": false
+    },
+    {
+      "id": 56,
+      "word": "body",
+      "pos": "n.",
+      "zh": "身體",
+      "theme": "body",
+      "emoji": "🧍",
+      "spell": true
+    },
+    {
+      "id": 57,
+      "word": "head",
+      "pos": "n.",
+      "zh": "頭",
+      "theme": "body",
+      "emoji": "🙂",
+      "spell": true
+    },
+    {
+      "id": 58,
+      "word": "face",
+      "pos": "n.",
+      "zh": "臉",
+      "theme": "body",
+      "emoji": "😀",
+      "spell": true
+    },
+    {
+      "id": 59,
+      "word": "hair",
+      "pos": "n.",
+      "zh": "頭髮",
+      "theme": "body",
+      "emoji": "💇",
+      "spell": true
+    },
+    {
+      "id": 60,
+      "word": "eye",
+      "pos": "n.",
+      "zh": "眼睛",
+      "theme": "body",
+      "emoji": "👁️",
+      "spell": true
+    },
+    {
+      "id": 61,
+      "word": "ear",
+      "pos": "n.",
+      "zh": "耳朵",
+      "theme": "body",
+      "emoji": "👂",
+      "spell": true
+    },
+    {
+      "id": 62,
+      "word": "nose",
+      "pos": "n.",
+      "zh": "鼻子",
+      "theme": "body",
+      "emoji": "👃",
+      "spell": false
+    },
+    {
+      "id": 63,
+      "word": "mouth",
+      "pos": "n.",
+      "zh": "嘴巴",
+      "theme": "body",
+      "emoji": "👄",
+      "spell": false
+    },
+    {
+      "id": 64,
+      "word": "tooth",
+      "pos": "n.",
+      "zh": "牙齒",
+      "theme": "body",
+      "emoji": "🦷",
+      "spell": false
+    },
+    {
+      "id": 65,
+      "word": "hand",
+      "pos": "n.",
+      "zh": "手",
+      "theme": "body",
+      "emoji": "✋",
+      "spell": true
+    },
+    {
+      "id": 66,
+      "word": "arm",
+      "pos": "n.",
+      "zh": "手臂",
+      "theme": "body",
+      "emoji": "💪",
+      "spell": true
+    },
+    {
+      "id": 67,
+      "word": "finger",
+      "pos": "n.",
+      "zh": "手指",
+      "theme": "body",
+      "emoji": "👆",
+      "spell": false
+    },
+    {
+      "id": 68,
+      "word": "leg",
+      "pos": "n.",
+      "zh": "腿",
+      "theme": "body",
+      "emoji": "🦵",
+      "spell": true
+    },
+    {
+      "id": 69,
+      "word": "foot",
+      "pos": "n.",
+      "zh": "腳",
+      "theme": "body",
+      "emoji": "🦶",
+      "spell": true
+    },
+    {
+      "id": 70,
+      "word": "knee",
+      "pos": "n.",
+      "zh": "膝蓋",
+      "theme": "body",
+      "emoji": "🦵",
+      "spell": true
+    },
+    {
+      "id": 71,
+      "word": "family",
+      "pos": "n.",
+      "zh": "家庭",
+      "theme": "family",
+      "emoji": "👨‍👩‍👧",
+      "spell": true
+    },
+    {
+      "id": 72,
+      "word": "father",
+      "pos": "n.",
+      "zh": "爸爸",
+      "theme": "family",
+      "emoji": "👨",
+      "spell": true
+    },
+    {
+      "id": 73,
+      "word": "mother",
+      "pos": "n.",
+      "zh": "媽媽",
+      "theme": "family",
+      "emoji": "👩",
+      "spell": true
+    },
+    {
+      "id": 74,
+      "word": "brother",
+      "pos": "n.",
+      "zh": "兄弟",
+      "theme": "family",
+      "emoji": "👦",
+      "spell": true
+    },
+    {
+      "id": 75,
+      "word": "sister",
+      "pos": "n.",
+      "zh": "姊妹",
+      "theme": "family",
+      "emoji": "👧",
+      "spell": true
+    },
+    {
+      "id": 76,
+      "word": "grandfather",
+      "pos": "n.",
+      "zh": "祖父",
+      "theme": "family",
+      "emoji": "👴",
+      "spell": false
+    },
+    {
+      "id": 77,
+      "word": "grandmother",
+      "pos": "n.",
+      "zh": "祖母",
+      "theme": "family",
+      "emoji": "👵",
+      "spell": false
+    },
+    {
+      "id": 78,
+      "word": "son",
+      "pos": "n.",
+      "zh": "兒子",
+      "theme": "family",
+      "emoji": "👦",
+      "spell": true
+    },
+    {
+      "id": 79,
+      "word": "daughter",
+      "pos": "n.",
+      "zh": "女兒",
+      "theme": "family",
+      "emoji": "👧",
+      "spell": false
+    },
+    {
+      "id": 80,
+      "word": "uncle",
+      "pos": "n.",
+      "zh": "叔叔；舅舅",
+      "theme": "family",
+      "emoji": "🧔",
+      "spell": true
+    },
+    {
+      "id": 81,
+      "word": "aunt",
+      "pos": "n.",
+      "zh": "阿姨；姑姑",
+      "theme": "family",
+      "emoji": "👩",
+      "spell": true
+    },
+    {
+      "id": 82,
+      "word": "food",
+      "pos": "n.",
+      "zh": "食物",
+      "theme": "food",
+      "emoji": "🍽️",
+      "spell": true
+    },
+    {
+      "id": 83,
+      "word": "fruit",
+      "pos": "n.",
+      "zh": "水果",
+      "theme": "food",
+      "emoji": "🍇",
+      "spell": true
+    },
+    {
+      "id": 84,
+      "word": "apple",
+      "pos": "n.",
+      "zh": "蘋果",
+      "theme": "food",
+      "emoji": "🍎",
+      "spell": true
+    },
+    {
+      "id": 85,
+      "word": "banana",
+      "pos": "n.",
+      "zh": "香蕉",
+      "theme": "food",
+      "emoji": "🍌",
+      "spell": false
+    },
+    {
+      "id": 86,
+      "word": "grape",
+      "pos": "n.",
+      "zh": "葡萄",
+      "theme": "food",
+      "emoji": "🍇",
+      "spell": true
+    },
+    {
+      "id": 87,
+      "word": "strawberry",
+      "pos": "n.",
+      "zh": "草莓",
+      "theme": "food",
+      "emoji": "🍓",
+      "spell": false
+    },
+    {
+      "id": 88,
+      "word": "watermelon",
+      "pos": "n.",
+      "zh": "西瓜",
+      "theme": "food",
+      "emoji": "🍉",
+      "spell": false
+    },
+    {
+      "id": 89,
+      "word": "tomato",
+      "pos": "n.",
+      "zh": "番茄",
+      "theme": "food",
+      "emoji": "🍅",
+      "spell": false
+    },
+    {
+      "id": 90,
+      "word": "vegetable",
+      "pos": "n.",
+      "zh": "蔬菜",
+      "theme": "food",
+      "emoji": "🥬",
+      "spell": false
+    },
+    {
+      "id": 91,
+      "word": "rice",
+      "pos": "n.",
+      "zh": "米飯",
+      "theme": "food",
+      "emoji": "🍚",
+      "spell": true
+    },
+    {
+      "id": 92,
+      "word": "bread",
+      "pos": "n.",
+      "zh": "麵包",
+      "theme": "food",
+      "emoji": "🍞",
+      "spell": true
+    },
+    {
+      "id": 93,
+      "word": "noodle",
+      "pos": "n.",
+      "zh": "麵條",
+      "theme": "food",
+      "emoji": "🍜",
+      "spell": false
+    },
+    {
+      "id": 94,
+      "word": "egg",
+      "pos": "n.",
+      "zh": "蛋",
+      "theme": "food",
+      "emoji": "🥚",
+      "spell": true
+    },
+    {
+      "id": 95,
+      "word": "soup",
+      "pos": "n.",
+      "zh": "湯",
+      "theme": "food",
+      "emoji": "🍲",
+      "spell": true
+    },
+    {
+      "id": 96,
+      "word": "pizza",
+      "pos": "n.",
+      "zh": "披薩",
+      "theme": "food",
+      "emoji": "🍕",
+      "spell": false
+    },
+    {
+      "id": 97,
+      "word": "hamburger",
+      "pos": "n.",
+      "zh": "漢堡",
+      "theme": "food",
+      "emoji": "🍔",
+      "spell": false
+    },
+    {
+      "id": 98,
+      "word": "cake",
+      "pos": "n.",
+      "zh": "蛋糕",
+      "theme": "food",
+      "emoji": "🍰",
+      "spell": true
+    },
+    {
+      "id": 99,
+      "word": "candy",
+      "pos": "n.",
+      "zh": "糖果",
+      "theme": "food",
+      "emoji": "🍬",
+      "spell": true
+    },
+    {
+      "id": 100,
+      "word": "cookie",
+      "pos": "n.",
+      "zh": "餅乾",
+      "theme": "food",
+      "emoji": "🍪",
+      "spell": false
+    },
+    {
+      "id": 101,
+      "word": "chocolate",
+      "pos": "n.",
+      "zh": "巧克力",
+      "theme": "food",
+      "emoji": "🍫",
+      "spell": false
+    },
+    {
+      "id": 102,
+      "word": "ice cream",
+      "pos": "n.",
+      "zh": "冰淇淋",
+      "theme": "food",
+      "emoji": "🍦",
+      "spell": false
+    },
+    {
+      "id": 103,
+      "word": "milk",
+      "pos": "n.",
+      "zh": "牛奶",
+      "theme": "food",
+      "emoji": "🥛",
+      "spell": true
+    },
+    {
+      "id": 104,
+      "word": "water",
+      "pos": "n.",
+      "zh": "水",
+      "theme": "food",
+      "emoji": "💧",
+      "spell": false
+    },
+    {
+      "id": 105,
+      "word": "juice",
+      "pos": "n.",
+      "zh": "果汁",
+      "theme": "food",
+      "emoji": "🧃",
+      "spell": true
+    },
+    {
+      "id": 106,
+      "word": "tea",
+      "pos": "n.",
+      "zh": "茶",
+      "theme": "food",
+      "emoji": "🍵",
+      "spell": true
+    },
+    {
+      "id": 107,
+      "word": "breakfast",
+      "pos": "n.",
+      "zh": "早餐",
+      "theme": "food",
+      "emoji": "🌅",
+      "spell": false
+    },
+    {
+      "id": 108,
+      "word": "lunch",
+      "pos": "n.",
+      "zh": "午餐",
+      "theme": "food",
+      "emoji": "🍱",
+      "spell": true
+    },
+    {
+      "id": 109,
+      "word": "dinner",
+      "pos": "n.",
+      "zh": "晚餐",
+      "theme": "food",
+      "emoji": "🍽️",
+      "spell": false
+    },
+    {
+      "id": 110,
+      "word": "bowl",
+      "pos": "n.",
+      "zh": "碗",
+      "theme": "tableware",
+      "emoji": "🥣",
+      "spell": true
+    },
+    {
+      "id": 111,
+      "word": "cup",
+      "pos": "n.",
+      "zh": "杯子",
+      "theme": "tableware",
+      "emoji": "🥤",
+      "spell": true
+    },
+    {
+      "id": 112,
+      "word": "plate",
+      "pos": "n.",
+      "zh": "盤子",
+      "theme": "tableware",
+      "emoji": "🍽️",
+      "spell": true
+    },
+    {
+      "id": 113,
+      "word": "spoon",
+      "pos": "n.",
+      "zh": "湯匙",
+      "theme": "tableware",
+      "emoji": "🥄",
+      "spell": false
+    },
+    {
+      "id": 114,
+      "word": "fork",
+      "pos": "n.",
+      "zh": "叉子",
+      "theme": "tableware",
+      "emoji": "🍴",
+      "spell": true
+    },
+    {
+      "id": 115,
+      "word": "chopsticks",
+      "pos": "n.",
+      "zh": "筷子",
+      "theme": "tableware",
+      "emoji": "🥢",
+      "spell": false
+    },
+    {
+      "id": 116,
+      "word": "school",
+      "pos": "n.",
+      "zh": "學校",
+      "theme": "school",
+      "emoji": "🏫",
+      "spell": false
+    },
+    {
+      "id": 117,
+      "word": "classroom",
+      "pos": "n.",
+      "zh": "教室",
+      "theme": "school",
+      "emoji": "🪑",
+      "spell": false
+    },
+    {
+      "id": 118,
+      "word": "library",
+      "pos": "n.",
+      "zh": "圖書館",
+      "theme": "school",
+      "emoji": "📚",
+      "spell": false
+    },
+    {
+      "id": 119,
+      "word": "playground",
+      "pos": "n.",
+      "zh": "操場",
+      "theme": "school",
+      "emoji": "🛝",
+      "spell": false
+    },
+    {
+      "id": 120,
+      "word": "teacher",
+      "pos": "n.",
+      "zh": "老師",
+      "theme": "school",
+      "emoji": "👩‍🏫",
+      "spell": false
+    },
+    {
+      "id": 121,
+      "word": "student",
+      "pos": "n.",
+      "zh": "學生",
+      "theme": "school",
+      "emoji": "🧑‍🎓",
+      "spell": false
+    },
+    {
+      "id": 122,
+      "word": "classmate",
+      "pos": "n.",
+      "zh": "同學",
+      "theme": "school",
+      "emoji": "👫",
+      "spell": false
+    },
+    {
+      "id": 123,
+      "word": "friend",
+      "pos": "n.",
+      "zh": "朋友",
+      "theme": "school",
+      "emoji": "🧑‍🤝‍🧑",
+      "spell": true
+    },
+    {
+      "id": 124,
+      "word": "book",
+      "pos": "n.",
+      "zh": "書",
+      "theme": "school",
+      "emoji": "📖",
+      "spell": true
+    },
+    {
+      "id": 125,
+      "word": "pen",
+      "pos": "n.",
+      "zh": "原子筆",
+      "theme": "school",
+      "emoji": "🖊️",
+      "spell": true
+    },
+    {
+      "id": 126,
+      "word": "pencil",
+      "pos": "n.",
+      "zh": "鉛筆",
+      "theme": "school",
+      "emoji": "✏️",
+      "spell": false
+    },
+    {
+      "id": 127,
+      "word": "eraser",
+      "pos": "n.",
+      "zh": "橡皮擦",
+      "theme": "school",
+      "emoji": "🧽",
+      "spell": true
+    },
+    {
+      "id": 128,
+      "word": "ruler",
+      "pos": "n.",
+      "zh": "尺",
+      "theme": "school",
+      "emoji": "📏",
+      "spell": true
+    },
+    {
+      "id": 129,
+      "word": "bag",
+      "pos": "n.",
+      "zh": "書包",
+      "theme": "school",
+      "emoji": "🎒",
+      "spell": true
+    },
+    {
+      "id": 130,
+      "word": "desk",
+      "pos": "n.",
+      "zh": "書桌",
+      "theme": "school",
+      "emoji": "🪑",
+      "spell": true
+    },
+    {
+      "id": 131,
+      "word": "homework",
+      "pos": "n.",
+      "zh": "家庭作業",
+      "theme": "school",
+      "emoji": "📝",
+      "spell": false
+    },
+    {
+      "id": 132,
+      "word": "test",
+      "pos": "n.",
+      "zh": "測驗",
+      "theme": "school",
+      "emoji": "📋",
+      "spell": true
+    },
+    {
+      "id": 133,
+      "word": "English",
+      "pos": "n.",
+      "zh": "英文",
+      "theme": "school",
+      "emoji": "🔤",
+      "spell": false
+    },
+    {
+      "id": 134,
+      "word": "math",
+      "pos": "n.",
+      "zh": "數學",
+      "theme": "school",
+      "emoji": "➗",
+      "spell": true
+    },
+    {
+      "id": 135,
+      "word": "music",
+      "pos": "n.",
+      "zh": "音樂",
+      "theme": "school",
+      "emoji": "🎵",
+      "spell": true
+    },
+    {
+      "id": 136,
+      "word": "art",
+      "pos": "n.",
+      "zh": "美術",
+      "theme": "school",
+      "emoji": "🎨",
+      "spell": true
+    },
+    {
+      "id": 137,
+      "word": "science",
+      "pos": "n.",
+      "zh": "自然科學",
+      "theme": "school",
+      "emoji": "🔬",
+      "spell": false
+    },
+    {
+      "id": 138,
+      "word": "Monday",
+      "pos": "n.",
+      "zh": "星期一",
+      "theme": "time",
+      "emoji": "📅",
+      "spell": true
+    },
+    {
+      "id": 139,
+      "word": "Tuesday",
+      "pos": "n.",
+      "zh": "星期二",
+      "theme": "time",
+      "emoji": "📅",
+      "spell": false
+    },
+    {
+      "id": 140,
+      "word": "Wednesday",
+      "pos": "n.",
+      "zh": "星期三",
+      "theme": "time",
+      "emoji": "📅",
+      "spell": false
+    },
+    {
+      "id": 141,
+      "word": "Thursday",
+      "pos": "n.",
+      "zh": "星期四",
+      "theme": "time",
+      "emoji": "📅",
+      "spell": false
+    },
+    {
+      "id": 142,
+      "word": "Friday",
+      "pos": "n.",
+      "zh": "星期五",
+      "theme": "time",
+      "emoji": "📅",
+      "spell": true
+    },
+    {
+      "id": 143,
+      "word": "Saturday",
+      "pos": "n.",
+      "zh": "星期六",
+      "theme": "time",
+      "emoji": "📅",
+      "spell": false
+    },
+    {
+      "id": 144,
+      "word": "Sunday",
+      "pos": "n.",
+      "zh": "星期日",
+      "theme": "time",
+      "emoji": "📅",
+      "spell": false
+    },
+    {
+      "id": 145,
+      "word": "January",
+      "pos": "n.",
+      "zh": "一月",
+      "theme": "time",
+      "emoji": "🗓️",
+      "spell": false
+    },
+    {
+      "id": 146,
+      "word": "February",
+      "pos": "n.",
+      "zh": "二月",
+      "theme": "time",
+      "emoji": "🗓️",
+      "spell": false
+    },
+    {
+      "id": 147,
+      "word": "March",
+      "pos": "n.",
+      "zh": "三月",
+      "theme": "time",
+      "emoji": "🗓️",
+      "spell": true
+    },
+    {
+      "id": 148,
+      "word": "April",
+      "pos": "n.",
+      "zh": "四月",
+      "theme": "time",
+      "emoji": "🗓️",
+      "spell": true
+    },
+    {
+      "id": 149,
+      "word": "May",
+      "pos": "n.",
+      "zh": "五月",
+      "theme": "time",
+      "emoji": "🗓️",
+      "spell": true
+    },
+    {
+      "id": 150,
+      "word": "June",
+      "pos": "n.",
+      "zh": "六月",
+      "theme": "time",
+      "emoji": "🗓️",
+      "spell": true
+    },
+    {
+      "id": 151,
+      "word": "July",
+      "pos": "n.",
+      "zh": "七月",
+      "theme": "time",
+      "emoji": "🗓️",
+      "spell": true
+    },
+    {
+      "id": 152,
+      "word": "August",
+      "pos": "n.",
+      "zh": "八月",
+      "theme": "time",
+      "emoji": "🗓️",
+      "spell": true
+    },
+    {
+      "id": 153,
+      "word": "September",
+      "pos": "n.",
+      "zh": "九月",
+      "theme": "time",
+      "emoji": "🗓️",
+      "spell": false
+    },
+    {
+      "id": 154,
+      "word": "October",
+      "pos": "n.",
+      "zh": "十月",
+      "theme": "time",
+      "emoji": "🗓️",
+      "spell": false
+    },
+    {
+      "id": 155,
+      "word": "November",
+      "pos": "n.",
+      "zh": "十一月",
+      "theme": "time",
+      "emoji": "🗓️",
+      "spell": false
+    },
+    {
+      "id": 156,
+      "word": "December",
+      "pos": "n.",
+      "zh": "十二月",
+      "theme": "time",
+      "emoji": "🗓️",
+      "spell": false
+    },
+    {
+      "id": 157,
+      "word": "spring",
+      "pos": "n.",
+      "zh": "春天",
+      "theme": "time",
+      "emoji": "🌸",
+      "spell": false
+    },
+    {
+      "id": 158,
+      "word": "summer",
+      "pos": "n.",
+      "zh": "夏天",
+      "theme": "time",
+      "emoji": "☀️",
+      "spell": false
+    },
+    {
+      "id": 159,
+      "word": "autumn",
+      "pos": "n.",
+      "zh": "秋天",
+      "theme": "time",
+      "emoji": "🍁",
+      "spell": true
+    },
+    {
+      "id": 160,
+      "word": "winter",
+      "pos": "n.",
+      "zh": "冬天",
+      "theme": "time",
+      "emoji": "❄️",
+      "spell": false
+    },
+    {
+      "id": 161,
+      "word": "morning",
+      "pos": "n.",
+      "zh": "早上",
+      "theme": "time",
+      "emoji": "🌅",
+      "spell": false
+    },
+    {
+      "id": 162,
+      "word": "afternoon",
+      "pos": "n.",
+      "zh": "下午",
+      "theme": "time",
+      "emoji": "🌇",
+      "spell": false
+    },
+    {
+      "id": 163,
+      "word": "night",
+      "pos": "n.",
+      "zh": "晚上",
+      "theme": "time",
+      "emoji": "🌙",
+      "spell": true
+    },
+    {
+      "id": 164,
+      "word": "clothes",
+      "pos": "n.",
+      "zh": "衣服",
+      "theme": "clothing",
+      "emoji": "👕",
+      "spell": false
+    },
+    {
+      "id": 165,
+      "word": "shirt",
+      "pos": "n.",
+      "zh": "襯衫",
+      "theme": "clothing",
+      "emoji": "👔",
+      "spell": true
+    },
+    {
+      "id": 166,
+      "word": "T-shirt",
+      "pos": "n.",
+      "zh": "T恤",
+      "theme": "clothing",
+      "emoji": "👕",
+      "spell": false
+    },
+    {
+      "id": 167,
+      "word": "coat",
+      "pos": "n.",
+      "zh": "外套",
+      "theme": "clothing",
+      "emoji": "🧥",
+      "spell": true
+    },
+    {
+      "id": 168,
+      "word": "jacket",
+      "pos": "n.",
+      "zh": "夾克",
+      "theme": "clothing",
+      "emoji": "🧥",
+      "spell": false
+    },
+    {
+      "id": 169,
+      "word": "dress",
+      "pos": "n.",
+      "zh": "洋裝",
+      "theme": "clothing",
+      "emoji": "👗",
+      "spell": true
+    },
+    {
+      "id": 170,
+      "word": "skirt",
+      "pos": "n.",
+      "zh": "裙子",
+      "theme": "clothing",
+      "emoji": "👗",
+      "spell": true
+    },
+    {
+      "id": 171,
+      "word": "pants",
+      "pos": "n.",
+      "zh": "長褲",
+      "theme": "clothing",
+      "emoji": "👖",
+      "spell": true
+    },
+    {
+      "id": 172,
+      "word": "shorts",
+      "pos": "n.",
+      "zh": "短褲",
+      "theme": "clothing",
+      "emoji": "🩳",
+      "spell": false
+    },
+    {
+      "id": 173,
+      "word": "socks",
+      "pos": "n.",
+      "zh": "襪子",
+      "theme": "clothing",
+      "emoji": "🧦",
+      "spell": false
+    },
+    {
+      "id": 174,
+      "word": "shoes",
+      "pos": "n.",
+      "zh": "鞋子",
+      "theme": "clothing",
+      "emoji": "👟",
+      "spell": true
+    },
+    {
+      "id": 175,
+      "word": "hat",
+      "pos": "n.",
+      "zh": "帽子",
+      "theme": "clothing",
+      "emoji": "👒",
+      "spell": true
+    },
+    {
+      "id": 176,
+      "word": "cap",
+      "pos": "n.",
+      "zh": "鴨舌帽",
+      "theme": "clothing",
+      "emoji": "🧢",
+      "spell": true
+    },
+    {
+      "id": 177,
+      "word": "umbrella",
+      "pos": "n.",
+      "zh": "雨傘",
+      "theme": "clothing",
+      "emoji": "☂️",
+      "spell": false
+    },
+    {
+      "id": 178,
+      "word": "weather",
+      "pos": "n.",
+      "zh": "天氣",
+      "theme": "weather",
+      "emoji": "🌤️",
+      "spell": false
+    },
+    {
+      "id": 179,
+      "word": "sunny",
+      "pos": "adj.",
+      "zh": "晴朗的",
+      "theme": "weather",
+      "emoji": "☀️",
+      "spell": false
+    },
+    {
+      "id": 180,
+      "word": "rainy",
+      "pos": "adj.",
+      "zh": "下雨的",
+      "theme": "weather",
+      "emoji": "🌧️",
+      "spell": false
+    },
+    {
+      "id": 181,
+      "word": "cloudy",
+      "pos": "adj.",
+      "zh": "多雲的",
+      "theme": "weather",
+      "emoji": "☁️",
+      "spell": false
+    },
+    {
+      "id": 182,
+      "word": "windy",
+      "pos": "adj.",
+      "zh": "有風的",
+      "theme": "weather",
+      "emoji": "💨",
+      "spell": false
+    },
+    {
+      "id": 183,
+      "word": "hot",
+      "pos": "adj.",
+      "zh": "熱的",
+      "theme": "weather",
+      "emoji": "🥵",
+      "spell": true
+    },
+    {
+      "id": 184,
+      "word": "cold",
+      "pos": "adj.",
+      "zh": "冷的",
+      "theme": "weather",
+      "emoji": "🥶",
+      "spell": true
+    },
+    {
+      "id": 185,
+      "word": "warm",
+      "pos": "adj.",
+      "zh": "溫暖的",
+      "theme": "weather",
+      "emoji": "🌡️",
+      "spell": true
+    },
+    {
+      "id": 186,
+      "word": "rain",
+      "pos": "n.",
+      "zh": "雨",
+      "theme": "weather",
+      "emoji": "🌧️",
+      "spell": true
+    },
+    {
+      "id": 187,
+      "word": "snow",
+      "pos": "n.",
+      "zh": "雪",
+      "theme": "weather",
+      "emoji": "❄️",
+      "spell": true
+    },
+    {
+      "id": 188,
+      "word": "wind",
+      "pos": "n.",
+      "zh": "風",
+      "theme": "weather",
+      "emoji": "💨",
+      "spell": true
+    },
+    {
+      "id": 189,
+      "word": "cloud",
+      "pos": "n.",
+      "zh": "雲",
+      "theme": "weather",
+      "emoji": "☁️",
+      "spell": false
+    },
+    {
+      "id": 190,
+      "word": "sun",
+      "pos": "n.",
+      "zh": "太陽",
+      "theme": "weather",
+      "emoji": "☀️",
+      "spell": true
+    },
+    {
+      "id": 191,
+      "word": "moon",
+      "pos": "n.",
+      "zh": "月亮",
+      "theme": "weather",
+      "emoji": "🌙",
+      "spell": true
+    },
+    {
+      "id": 192,
+      "word": "star",
+      "pos": "n.",
+      "zh": "星星",
+      "theme": "weather",
+      "emoji": "⭐",
+      "spell": true
+    },
+    {
+      "id": 193,
+      "word": "rainbow",
+      "pos": "n.",
+      "zh": "彩虹",
+      "theme": "weather",
+      "emoji": "🌈",
+      "spell": false
+    },
+    {
+      "id": 194,
+      "word": "bus",
+      "pos": "n.",
+      "zh": "公車",
+      "theme": "transportation",
+      "emoji": "🚌",
+      "spell": true
+    },
+    {
+      "id": 195,
+      "word": "car",
+      "pos": "n.",
+      "zh": "汽車",
+      "theme": "transportation",
+      "emoji": "🚗",
+      "spell": true
+    },
+    {
+      "id": 196,
+      "word": "train",
+      "pos": "n.",
+      "zh": "火車",
+      "theme": "transportation",
+      "emoji": "🚆",
+      "spell": true
+    },
+    {
+      "id": 197,
+      "word": "taxi",
+      "pos": "n.",
+      "zh": "計程車",
+      "theme": "transportation",
+      "emoji": "🚕",
+      "spell": true
+    },
+    {
+      "id": 198,
+      "word": "bicycle",
+      "pos": "n.",
+      "zh": "腳踏車",
+      "theme": "transportation",
+      "emoji": "🚲",
+      "spell": false
+    },
+    {
+      "id": 199,
+      "word": "motorcycle",
+      "pos": "n.",
+      "zh": "機車",
+      "theme": "transportation",
+      "emoji": "🏍️",
+      "spell": false
+    },
+    {
+      "id": 200,
+      "word": "airplane",
+      "pos": "n.",
+      "zh": "飛機",
+      "theme": "transportation",
+      "emoji": "✈️",
+      "spell": false
+    },
+    {
+      "id": 201,
+      "word": "boat",
+      "pos": "n.",
+      "zh": "小船",
+      "theme": "transportation",
+      "emoji": "🛶",
+      "spell": true
+    },
+    {
+      "id": 202,
+      "word": "truck",
+      "pos": "n.",
+      "zh": "卡車",
+      "theme": "transportation",
+      "emoji": "🚚",
+      "spell": true
+    },
+    {
+      "id": 203,
+      "word": "station",
+      "pos": "n.",
+      "zh": "車站",
+      "theme": "transportation",
+      "emoji": "🚉",
+      "spell": false
+    },
+    {
+      "id": 204,
+      "word": "airport",
+      "pos": "n.",
+      "zh": "機場",
+      "theme": "transportation",
+      "emoji": "🛫",
+      "spell": false
+    },
+    {
+      "id": 205,
+      "word": "home",
+      "pos": "n.",
+      "zh": "家",
+      "theme": "places",
+      "emoji": "🏠",
+      "spell": true
+    },
+    {
+      "id": 206,
+      "word": "park",
+      "pos": "n.",
+      "zh": "公園",
+      "theme": "places",
+      "emoji": "🏞️",
+      "spell": true
+    },
+    {
+      "id": 207,
+      "word": "zoo",
+      "pos": "n.",
+      "zh": "動物園",
+      "theme": "places",
+      "emoji": "🦓",
+      "spell": true
+    },
+    {
+      "id": 208,
+      "word": "store",
+      "pos": "n.",
+      "zh": "商店",
+      "theme": "places",
+      "emoji": "🏪",
+      "spell": false
+    },
+    {
+      "id": 209,
+      "word": "market",
+      "pos": "n.",
+      "zh": "市場",
+      "theme": "places",
+      "emoji": "🏬",
+      "spell": false
+    },
+    {
+      "id": 210,
+      "word": "supermarket",
+      "pos": "n.",
+      "zh": "超級市場",
+      "theme": "places",
+      "emoji": "🛒",
+      "spell": false
+    },
+    {
+      "id": 211,
+      "word": "bank",
+      "pos": "n.",
+      "zh": "銀行",
+      "theme": "places",
+      "emoji": "🏦",
+      "spell": true
+    },
+    {
+      "id": 212,
+      "word": "hospital",
+      "pos": "n.",
+      "zh": "醫院",
+      "theme": "places",
+      "emoji": "🏥",
+      "spell": false
+    },
+    {
+      "id": 213,
+      "word": "restaurant",
+      "pos": "n.",
+      "zh": "餐廳",
+      "theme": "places",
+      "emoji": "🍴",
+      "spell": false
+    },
+    {
+      "id": 214,
+      "word": "post office",
+      "pos": "n.",
+      "zh": "郵局",
+      "theme": "places",
+      "emoji": "📮",
+      "spell": false
+    },
+    {
+      "id": 215,
+      "word": "bookstore",
+      "pos": "n.",
+      "zh": "書店",
+      "theme": "places",
+      "emoji": "📚",
+      "spell": false
+    },
+    {
+      "id": 216,
+      "word": "beach",
+      "pos": "n.",
+      "zh": "海灘",
+      "theme": "places",
+      "emoji": "🏖️",
+      "spell": true
+    },
+    {
+      "id": 217,
+      "word": "farm",
+      "pos": "n.",
+      "zh": "農場",
+      "theme": "places",
+      "emoji": "🚜",
+      "spell": true
+    },
+    {
+      "id": 218,
+      "word": "city",
+      "pos": "n.",
+      "zh": "城市",
+      "theme": "places",
+      "emoji": "🏙️",
+      "spell": true
+    },
+    {
+      "id": 219,
+      "word": "house",
+      "pos": "n.",
+      "zh": "房子",
+      "theme": "house",
+      "emoji": "🏡",
+      "spell": true
+    },
+    {
+      "id": 220,
+      "word": "door",
+      "pos": "n.",
+      "zh": "門",
+      "theme": "house",
+      "emoji": "🚪",
+      "spell": true
+    },
+    {
+      "id": 221,
+      "word": "window",
+      "pos": "n.",
+      "zh": "窗戶",
+      "theme": "house",
+      "emoji": "🪟",
+      "spell": false
+    },
+    {
+      "id": 222,
+      "word": "room",
+      "pos": "n.",
+      "zh": "房間",
+      "theme": "house",
+      "emoji": "🛋️",
+      "spell": true
+    },
+    {
+      "id": 223,
+      "word": "bedroom",
+      "pos": "n.",
+      "zh": "臥室",
+      "theme": "house",
+      "emoji": "🛏️",
+      "spell": false
+    },
+    {
+      "id": 224,
+      "word": "bathroom",
+      "pos": "n.",
+      "zh": "浴室",
+      "theme": "house",
+      "emoji": "🛁",
+      "spell": false
+    },
+    {
+      "id": 225,
+      "word": "kitchen",
+      "pos": "n.",
+      "zh": "廚房",
+      "theme": "house",
+      "emoji": "🍳",
+      "spell": false
+    },
+    {
+      "id": 226,
+      "word": "bed",
+      "pos": "n.",
+      "zh": "床",
+      "theme": "house",
+      "emoji": "🛏️",
+      "spell": true
+    },
+    {
+      "id": 227,
+      "word": "chair",
+      "pos": "n.",
+      "zh": "椅子",
+      "theme": "house",
+      "emoji": "🪑",
+      "spell": true
+    },
+    {
+      "id": 228,
+      "word": "table",
+      "pos": "n.",
+      "zh": "桌子",
+      "theme": "house",
+      "emoji": "🪑",
+      "spell": true
+    },
+    {
+      "id": 229,
+      "word": "key",
+      "pos": "n.",
+      "zh": "鑰匙",
+      "theme": "house",
+      "emoji": "🔑",
+      "spell": true
+    },
+    {
+      "id": 230,
+      "word": "baseball",
+      "pos": "n.",
+      "zh": "棒球",
+      "theme": "sports",
+      "emoji": "⚾",
+      "spell": false
+    },
+    {
+      "id": 231,
+      "word": "basketball",
+      "pos": "n.",
+      "zh": "籃球",
+      "theme": "sports",
+      "emoji": "🏀",
+      "spell": false
+    },
+    {
+      "id": 232,
+      "word": "soccer",
+      "pos": "n.",
+      "zh": "足球",
+      "theme": "sports",
+      "emoji": "⚽",
+      "spell": true
+    },
+    {
+      "id": 233,
+      "word": "badminton",
+      "pos": "n.",
+      "zh": "羽毛球",
+      "theme": "sports",
+      "emoji": "🏸",
+      "spell": false
+    },
+    {
+      "id": 234,
+      "word": "swim",
+      "pos": "n.",
+      "zh": "游泳",
+      "theme": "sports",
+      "emoji": "🏊",
+      "spell": true
+    },
+    {
+      "id": 235,
+      "word": "run",
+      "pos": "n.",
+      "zh": "跑步",
+      "theme": "sports",
+      "emoji": "🏃",
+      "spell": true
+    },
+    {
+      "id": 236,
+      "word": "game",
+      "pos": "n.",
+      "zh": "遊戲；比賽",
+      "theme": "sports",
+      "emoji": "🎮",
+      "spell": true
+    },
+    {
+      "id": 237,
+      "word": "dance",
+      "pos": "n.",
+      "zh": "跳舞",
+      "theme": "sports",
+      "emoji": "💃",
+      "spell": true
+    },
+    {
+      "id": 238,
+      "word": "doctor",
+      "pos": "n.",
+      "zh": "醫生",
+      "theme": "jobs",
+      "emoji": "👨‍⚕️",
+      "spell": true
+    },
+    {
+      "id": 239,
+      "word": "nurse",
+      "pos": "n.",
+      "zh": "護理師",
+      "theme": "jobs",
+      "emoji": "👩‍⚕️",
+      "spell": true
+    },
+    {
+      "id": 240,
+      "word": "farmer",
+      "pos": "n.",
+      "zh": "農夫",
+      "theme": "jobs",
+      "emoji": "👨‍🌾",
+      "spell": false
+    },
+    {
+      "id": 241,
+      "word": "cook",
+      "pos": "n.",
+      "zh": "廚師",
+      "theme": "jobs",
+      "emoji": "👨‍🍳",
+      "spell": true
+    },
+    {
+      "id": 242,
+      "word": "driver",
+      "pos": "n.",
+      "zh": "司機",
+      "theme": "jobs",
+      "emoji": "🚗",
+      "spell": false
+    },
+    {
+      "id": 243,
+      "word": "police",
+      "pos": "n.",
+      "zh": "警察",
+      "theme": "jobs",
+      "emoji": "👮",
+      "spell": false
+    },
+    {
+      "id": 244,
+      "word": "singer",
+      "pos": "n.",
+      "zh": "歌手",
+      "theme": "jobs",
+      "emoji": "🎤",
+      "spell": false
+    },
+    {
+      "id": 245,
+      "word": "worker",
+      "pos": "n.",
+      "zh": "工人",
+      "theme": "jobs",
+      "emoji": "👷",
+      "spell": false
+    },
+    {
+      "id": 246,
+      "word": "clerk",
+      "pos": "n.",
+      "zh": "店員",
+      "theme": "jobs",
+      "emoji": "🧑‍💼",
+      "spell": true
+    },
+    {
+      "id": 247,
+      "word": "happy",
+      "pos": "adj.",
+      "zh": "快樂的",
+      "theme": "feelings",
+      "emoji": "😄",
+      "spell": true
+    },
+    {
+      "id": 248,
+      "word": "sad",
+      "pos": "adj.",
+      "zh": "難過的",
+      "theme": "feelings",
+      "emoji": "😢",
+      "spell": true
+    },
+    {
+      "id": 249,
+      "word": "angry",
+      "pos": "adj.",
+      "zh": "生氣的",
+      "theme": "feelings",
+      "emoji": "😠",
+      "spell": true
+    },
+    {
+      "id": 250,
+      "word": "afraid",
+      "pos": "adj.",
+      "zh": "害怕的",
+      "theme": "feelings",
+      "emoji": "😨",
+      "spell": false
+    },
+    {
+      "id": 251,
+      "word": "tired",
+      "pos": "adj.",
+      "zh": "疲倦的",
+      "theme": "feelings",
+      "emoji": "😴",
+      "spell": true
+    },
+    {
+      "id": 252,
+      "word": "excited",
+      "pos": "adj.",
+      "zh": "興奮的",
+      "theme": "feelings",
+      "emoji": "🤩",
+      "spell": false
+    },
+    {
+      "id": 253,
+      "word": "bored",
+      "pos": "adj.",
+      "zh": "無聊的",
+      "theme": "feelings",
+      "emoji": "😑",
+      "spell": true
+    },
+    {
+      "id": 254,
+      "word": "hungry",
+      "pos": "adj.",
+      "zh": "飢餓的",
+      "theme": "feelings",
+      "emoji": "🍽️",
+      "spell": false
+    },
+    {
+      "id": 255,
+      "word": "thirsty",
+      "pos": "adj.",
+      "zh": "口渴的",
+      "theme": "feelings",
+      "emoji": "🥤",
+      "spell": false
+    },
+    {
+      "id": 256,
+      "word": "sick",
+      "pos": "adj.",
+      "zh": "生病的",
+      "theme": "feelings",
+      "emoji": "🤒",
+      "spell": true
+    },
+    {
+      "id": 257,
+      "word": "kind",
+      "pos": "adj.",
+      "zh": "親切的",
+      "theme": "feelings",
+      "emoji": "🤗",
+      "spell": true
+    },
+    {
+      "id": 258,
+      "word": "eat",
+      "pos": "v.",
+      "zh": "吃",
+      "theme": "verbs",
+      "emoji": "🍽️",
+      "spell": true
+    },
+    {
+      "id": 259,
+      "word": "drink",
+      "pos": "v.",
+      "zh": "喝",
+      "theme": "verbs",
+      "emoji": "🥤",
+      "spell": false
+    },
+    {
+      "id": 260,
+      "word": "sleep",
+      "pos": "v.",
+      "zh": "睡覺",
+      "theme": "verbs",
+      "emoji": "😴",
+      "spell": false
+    },
+    {
+      "id": 261,
+      "word": "walk",
+      "pos": "v.",
+      "zh": "走路",
+      "theme": "verbs",
+      "emoji": "🚶",
+      "spell": true
+    },
+    {
+      "id": 262,
+      "word": "jump",
+      "pos": "v.",
+      "zh": "跳",
+      "theme": "verbs",
+      "emoji": "🤸",
+      "spell": true
+    },
+    {
+      "id": 263,
+      "word": "sing",
+      "pos": "v.",
+      "zh": "唱歌",
+      "theme": "verbs",
+      "emoji": "🎤",
+      "spell": true
+    },
+    {
+      "id": 264,
+      "word": "read",
+      "pos": "v.",
+      "zh": "閱讀",
+      "theme": "verbs",
+      "emoji": "📖",
+      "spell": true
+    },
+    {
+      "id": 265,
+      "word": "write",
+      "pos": "v.",
+      "zh": "寫",
+      "theme": "verbs",
+      "emoji": "✍️",
+      "spell": false
+    },
+    {
+      "id": 266,
+      "word": "draw",
+      "pos": "v.",
+      "zh": "畫",
+      "theme": "verbs",
+      "emoji": "🎨",
+      "spell": true
+    },
+    {
+      "id": 267,
+      "word": "play",
+      "pos": "v.",
+      "zh": "玩",
+      "theme": "verbs",
+      "emoji": "🎮",
+      "spell": true
+    },
+    {
+      "id": 268,
+      "word": "go",
+      "pos": "v.",
+      "zh": "去",
+      "theme": "verbs",
+      "emoji": "➡️",
+      "spell": true
+    },
+    {
+      "id": 269,
+      "word": "come",
+      "pos": "v.",
+      "zh": "來",
+      "theme": "verbs",
+      "emoji": "⬅️",
+      "spell": true
+    },
+    {
+      "id": 270,
+      "word": "look",
+      "pos": "v.",
+      "zh": "看",
+      "theme": "verbs",
+      "emoji": "👀",
+      "spell": true
+    },
+    {
+      "id": 271,
+      "word": "listen",
+      "pos": "v.",
+      "zh": "聽",
+      "theme": "verbs",
+      "emoji": "👂",
+      "spell": false
+    },
+    {
+      "id": 272,
+      "word": "speak",
+      "pos": "v.",
+      "zh": "說",
+      "theme": "verbs",
+      "emoji": "🗣️",
+      "spell": false
+    },
+    {
+      "id": 273,
+      "word": "learn",
+      "pos": "v.",
+      "zh": "學習",
+      "theme": "verbs",
+      "emoji": "🧠",
+      "spell": false
+    },
+    {
+      "id": 274,
+      "word": "teach",
+      "pos": "v.",
+      "zh": "教",
+      "theme": "verbs",
+      "emoji": "👩‍🏫",
+      "spell": false
+    },
+    {
+      "id": 275,
+      "word": "help",
+      "pos": "v.",
+      "zh": "幫助",
+      "theme": "verbs",
+      "emoji": "🤝",
+      "spell": true
+    },
+    {
+      "id": 276,
+      "word": "open",
+      "pos": "v.",
+      "zh": "打開",
+      "theme": "verbs",
+      "emoji": "🔓",
+      "spell": true
+    },
+    {
+      "id": 277,
+      "word": "close",
+      "pos": "v.",
+      "zh": "關上",
+      "theme": "verbs",
+      "emoji": "🔒",
+      "spell": true
+    },
+    {
+      "id": 278,
+      "word": "buy",
+      "pos": "v.",
+      "zh": "買",
+      "theme": "verbs",
+      "emoji": "🛍️",
+      "spell": true
+    },
+    {
+      "id": 279,
+      "word": "give",
+      "pos": "v.",
+      "zh": "給",
+      "theme": "verbs",
+      "emoji": "🎁",
+      "spell": true
+    },
+    {
+      "id": 280,
+      "word": "make",
+      "pos": "v.",
+      "zh": "製作",
+      "theme": "verbs",
+      "emoji": "🔨",
+      "spell": true
+    },
+    {
+      "id": 281,
+      "word": "like",
+      "pos": "v.",
+      "zh": "喜歡",
+      "theme": "verbs",
+      "emoji": "👍",
+      "spell": true
+    },
+    {
+      "id": 282,
+      "word": "love",
+      "pos": "v.",
+      "zh": "愛",
+      "theme": "verbs",
+      "emoji": "❤️",
+      "spell": true
+    },
+    {
+      "id": 283,
+      "word": "big",
+      "pos": "adj.",
+      "zh": "大的",
+      "theme": "adjectives",
+      "emoji": "🐘",
+      "spell": true
+    },
+    {
+      "id": 284,
+      "word": "small",
+      "pos": "adj.",
+      "zh": "小的",
+      "theme": "adjectives",
+      "emoji": "🐜",
+      "spell": false
+    },
+    {
+      "id": 285,
+      "word": "long",
+      "pos": "adj.",
+      "zh": "長的",
+      "theme": "adjectives",
+      "emoji": "📏",
+      "spell": true
+    },
+    {
+      "id": 286,
+      "word": "short",
+      "pos": "adj.",
+      "zh": "短的；矮的",
+      "theme": "adjectives",
+      "emoji": "📐",
+      "spell": false
+    },
+    {
+      "id": 287,
+      "word": "tall",
+      "pos": "adj.",
+      "zh": "高的",
+      "theme": "adjectives",
+      "emoji": "🦒",
+      "spell": true
+    },
+    {
+      "id": 288,
+      "word": "new",
+      "pos": "adj.",
+      "zh": "新的",
+      "theme": "adjectives",
+      "emoji": "✨",
+      "spell": true
+    },
+    {
+      "id": 289,
+      "word": "old",
+      "pos": "adj.",
+      "zh": "舊的；老的",
+      "theme": "adjectives",
+      "emoji": "👴",
+      "spell": true
+    },
+    {
+      "id": 290,
+      "word": "good",
+      "pos": "adj.",
+      "zh": "好的",
+      "theme": "adjectives",
+      "emoji": "👍",
+      "spell": true
+    },
+    {
+      "id": 291,
+      "word": "bad",
+      "pos": "adj.",
+      "zh": "壞的",
+      "theme": "adjectives",
+      "emoji": "👎",
+      "spell": true
+    },
+    {
+      "id": 292,
+      "word": "fast",
+      "pos": "adj.",
+      "zh": "快的",
+      "theme": "adjectives",
+      "emoji": "⚡",
+      "spell": true
+    },
+    {
+      "id": 293,
+      "word": "slow",
+      "pos": "adj.",
+      "zh": "慢的",
+      "theme": "adjectives",
+      "emoji": "🐌",
+      "spell": true
+    },
+    {
+      "id": 294,
+      "word": "beautiful",
+      "pos": "adj.",
+      "zh": "美麗的",
+      "theme": "adjectives",
+      "emoji": "🌺",
+      "spell": false
+    },
+    {
+      "id": 295,
+      "word": "what",
+      "pos": "pron.",
+      "zh": "什麼",
+      "theme": "wh-words",
+      "emoji": "❓",
+      "spell": true
+    },
+    {
+      "id": 296,
+      "word": "who",
+      "pos": "pron.",
+      "zh": "誰",
+      "theme": "wh-words",
+      "emoji": "❓",
+      "spell": true
+    },
+    {
+      "id": 297,
+      "word": "where",
+      "pos": "pron.",
+      "zh": "哪裡",
+      "theme": "wh-words",
+      "emoji": "📍",
+      "spell": true
+    },
+    {
+      "id": 298,
+      "word": "when",
+      "pos": "pron.",
+      "zh": "什麼時候",
+      "theme": "wh-words",
+      "emoji": "🕐",
+      "spell": true
+    },
+    {
+      "id": 299,
+      "word": "why",
+      "pos": "pron.",
+      "zh": "為什麼",
+      "theme": "wh-words",
+      "emoji": "❓",
+      "spell": true
+    },
+    {
+      "id": 300,
+      "word": "how",
+      "pos": "pron.",
+      "zh": "如何",
+      "theme": "wh-words",
+      "emoji": "❓",
+      "spell": true
+    }
+  ]
+}
