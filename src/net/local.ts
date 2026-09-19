@@ -1,7 +1,9 @@
 import { newCharacter, studentId } from '@/core/character'
 import { WordStat } from '@/core/wordStat'
-import type { AnswerEvent, Character, LevelProgress, Student, WordStatEntry } from '@/core/types'
-import type { Repository } from './repository'
+import type {
+  AnswerEvent, Character, ClassRoom, LevelProgress, Staff, Student, TeacherRow, WordStatEntry,
+} from '@/core/types'
+import type { ClassRosterRow, Repository } from './repository'
 
 /**
  * localStorage 版。**存的是最終的事件形狀**，所以之後換成 Supabase
@@ -19,6 +21,11 @@ const k = {
   events: (id: string) => `${NS}.events.${id}`,
   roster: (code: string) => `${NS}.roster.${code}`,
   teacherOpen: (code: string) => `${NS}.teacherOpen.${code}`,
+  byLogin: (login: string) => `${NS}.login.${login}`,
+  password: (id: string) => `${NS}.pw.${id}`,
+  session: `${NS}.session`,
+  classes: `${NS}.classes`,
+  staff: `${NS}.staff`,
 }
 
 function read<T>(key: string, fallback: T): T {
@@ -38,23 +45,97 @@ function write(key: string, value: unknown): void {
   }
 }
 
-export class LocalRepository implements Repository {
-  async join(classCode: string, nickname: string): Promise<Student> {
-    const code = classCode.trim().toUpperCase()
-    const id = studentId(code, nickname)
-    const student: Student = { id, classCode: code, nickname: nickname.trim(), role: 'student' }
-    write(k.student(id), student)
+/**
+ * 本地版的密碼「雜湊」。
+ *
+ * **這不是安全機制，也沒打算是。** 本地版整份資料就攤在使用者自己的瀏覽器裡，
+ * 打開開發者工具就看得到，再怎麼雜湊都沒有意義。它存在的唯一理由是讓本地版
+ * 跟 Supabase 版走同一條流程（註冊、登入、改密碼會動到同一個欄位），
+ * 這樣拿本地版測到的行為才算數。真正的密碼安全在資料庫那邊（bcrypt + RLS）。
+ */
+const scramble = (v: string): string => btoa(unescape(encodeURIComponent('gep:' + v)))
 
-    const roster = read<string[]>(k.roster(code), [])
-    if (!roster.includes(id)) write(k.roster(code), [...roster, id])
+export class LocalRepository implements Repository {
+  // ---------------------------------------------------------------- 學生帳號
+  private remember(student: Student): Student {
+    write(k.student(student.id), student)
+    write(k.byLogin(student.loginId), student.id)
+    write(k.session, student.id)
+    if (student.classCode) {
+      const roster = read<string[]>(k.roster(student.classCode), [])
+      if (!roster.includes(student.id)) write(k.roster(student.classCode), [...roster, student.id])
+    }
     return student
+  }
+
+  async register(
+    loginId: string, password: string, nickname: string, classCode: string,
+  ): Promise<Student> {
+    const login = loginId.trim().toLowerCase()
+    const code = classCode.trim().toUpperCase()
+    if (read<string | null>(k.byLogin(login), null)) throw new Error('這個帳號已經有人用了，換一個')
+
+    const id = studentId(code, login)
+    write(k.password(id), scramble(password.toLowerCase()))
+    return this.remember({ id, loginId: login, classCode: code, nickname: nickname.trim(), role: 'student' })
+  }
+
+  async login(
+    loginId: string, password: string,
+  ): Promise<{ student: Student | null; error: string | null }> {
+    const login = loginId.trim().toLowerCase()
+    const id = read<string | null>(k.byLogin(login), null)
+    if (!id) return { student: null, error: '帳號或密碼不對' }
+    if (read<string | null>(k.password(id), null) !== scramble(password.toLowerCase())) {
+      return { student: null, error: '帳號或密碼不對' }
+    }
+    const student = read<Student | null>(k.student(id), null)
+    if (!student) return { student: null, error: '帳號或密碼不對' }
+    return { student: this.remember(student), error: null }
+  }
+
+  async currentStudent(): Promise<Student | null> {
+    const id = read<string | null>(k.session, null)
+    return id ? read<Student | null>(k.student(id), null) : null
+  }
+
+  async logout(): Promise<void> {
+    write(k.session, null)
+  }
+
+  async setPassword(oldPassword: string, newPassword: string): Promise<void> {
+    const id = read<string | null>(k.session, null)
+    if (!id) throw new Error('請先登入')
+    if (read<string | null>(k.password(id), null) !== scramble(oldPassword.toLowerCase())) {
+      throw new Error('舊密碼不對')
+    }
+    write(k.password(id), scramble(newPassword.toLowerCase()))
+  }
+
+  async setNickname(nickname: string): Promise<string> {
+    const id = read<string | null>(k.session, null)
+    const student = id ? read<Student | null>(k.student(id), null) : null
+    if (!student) throw new Error('請先登入')
+    const next = nickname.trim()
+    write(k.student(id!), { ...student, nickname: next })
+    return next
+  }
+
+  async joinClass(classCode: string): Promise<string> {
+    const id = read<string | null>(k.session, null)
+    const student = id ? read<Student | null>(k.student(id), null) : null
+    if (!student) throw new Error('請先登入')
+    const code = classCode.trim().toUpperCase()
+    this.remember({ ...student, classCode: code })
+    return code
   }
 
   async loadCharacter(id: string): Promise<Character> {
     const existing = read<Character | null>(k.character(id), null)
     if (existing) return existing
     const student = read<Student | null>(k.student(id), null)
-    const fresh = newCharacter(student ?? { id, classCode: '', nickname: '', role: 'student' })
+    const fresh = newCharacter(
+      student ?? { id, loginId: '', classCode: null, nickname: '', role: 'student' })
     write(k.character(id), fresh)
     return fresh
   }
@@ -111,5 +192,117 @@ export class LocalRepository implements Repository {
 
   async setTeacherOpen(classCode: string, levelIds: string[]): Promise<void> {
     write(k.teacherOpen(classCode.trim().toUpperCase()), levelIds)
+  }
+
+  // ------------------------------------------------------------ 老師與管理員
+  //
+  // 本地版沒有別人，所以這裡不做權限，只做「東西存得起來、讀得回來」。
+  // 權限是資料庫的事，測權限要跑 ./tools/test/db.sh，不是拿本地版測。
+
+  private staffRecord(): Staff {
+    return read<Staff>(k.staff, {
+      userId: 'local-staff', email: 'local@local', displayName: '老師', isAdmin: true,
+    })
+  }
+
+  async staffSignUp(email: string, _password: string, displayName: string): Promise<Staff> {
+    const staff: Staff = { userId: 'local-staff', email, displayName, isAdmin: true }
+    write(k.staff, staff)
+    return staff
+  }
+
+  async staffLogin(email: string, _password: string): Promise<Staff> {
+    const staff = { ...this.staffRecord(), email }
+    write(k.staff, staff)
+    return staff
+  }
+
+  async currentStaff(): Promise<Staff | null> {
+    return read<Staff | null>(k.staff, null)
+  }
+
+  async staffLogout(): Promise<void> {
+    write(k.staff, null)
+  }
+
+  async listClasses(): Promise<ClassRoom[]> {
+    return read<ClassRoom[]>(k.classes, [])
+  }
+
+  async createClass(code: string, name: string): Promise<ClassRoom> {
+    const room: ClassRoom = { code: code.trim().toUpperCase(), name: name.trim(), open: true }
+    const all = read<ClassRoom[]>(k.classes, []).filter((c) => c.code !== room.code)
+    write(k.classes, [...all, room])
+    return room
+  }
+
+  async setClassOpen(code: string, open: boolean): Promise<boolean> {
+    const all = read<ClassRoom[]>(k.classes, [])
+    write(k.classes, all.map((c) => (c.code === code ? { ...c, open } : c)))
+    return open
+  }
+
+  async regenerateClassCode(code: string): Promise<string> {
+    return code
+  }
+
+  async loadClassRoster(classCode: string): Promise<ClassRosterRow[]> {
+    const roster = read<string[]>(k.roster(classCode.trim().toUpperCase()), [])
+    return roster.map((id) => {
+      const s = read<Student | null>(k.student(id), null)
+      const c = read<Character | null>(k.character(id), null)
+      const p = read<LevelProgress[]>(k.progress(id), [])
+      return {
+        studentId: id,
+        nickname: s?.nickname ?? '?',
+        coins: c?.coins ?? 0,
+        exp: c?.exp ?? 0,
+        stars: p.reduce((n, x) => n + x.stars, 0),
+        answers: read<AnswerEvent[]>(k.events(id), []).length,
+      }
+    })
+  }
+
+  async addStudent(
+    classCode: string, loginId: string, password: string, nickname: string,
+  ): Promise<void> {
+    await this.register(loginId, password, nickname, classCode)
+  }
+
+  async removeStudent(studentId_: string): Promise<void> {
+    const s = read<Student | null>(k.student(studentId_), null)
+    if (s?.classCode) {
+      const roster = read<string[]>(k.roster(s.classCode), [])
+      write(k.roster(s.classCode), roster.filter((x) => x !== studentId_))
+    }
+  }
+
+  async resetStudentPassword(studentId_: string, password: string): Promise<void> {
+    write(k.password(studentId_), scramble(password.toLowerCase()))
+  }
+
+  async claimFirstAdmin(): Promise<void> {
+    write(k.staff, { ...this.staffRecord(), isAdmin: true })
+  }
+
+  async inviteTeacher(email: string): Promise<string> {
+    return email
+  }
+
+  async listTeachers(): Promise<TeacherRow[]> {
+    const s = read<Staff | null>(k.staff, null)
+    if (!s) return []
+    return [{
+      userId: s.userId, displayName: s.displayName, isAdmin: s.isAdmin, active: true,
+      classes: read<ClassRoom[]>(k.classes, []).length, students: 0,
+    }]
+  }
+
+  async listInvites(): Promise<{ email: string; used: boolean }[]> {
+    return []
+  }
+
+  async setTeacherActive(): Promise<void> {
+    // 本地版只有一個人，沒有要停用誰
   }
 }

@@ -1,8 +1,9 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type {
-  AnswerEvent, Character, Job, LevelProgress, Skill, Student, WordStatEntry,
+  AnswerEvent, Character, ClassRoom, Job, LevelProgress, Skill, Staff, Student,
+  TeacherRow, WordStatEntry,
 } from '@/core/types'
-import type { Repository } from './repository'
+import type { ClassRosterRow, Repository } from './repository'
 
 /**
  * Supabase 版。
@@ -12,8 +13,13 @@ import type { Repository } from './repository'
  * 所以金幣、經驗、首次通關獎勵全部由資料庫算，這裡只是把事件送過去。
  * 資料表與權限規則在 supabase/schema.sql，改之前先跑 ./tools/test/db.sh。
  *
- * 學生用匿名登入。匿名帳號是「這台裝置」，不是「這個人」——
- * 是誰由班級代碼＋暱稱決定，所以換一台平板還是同一個存檔。
+ * **學生的匿名帳號是「這台裝置」，不是「這個人」。**
+ * 是誰由學生自己註冊的帳號密碼決定（register_student / login_student），
+ * 驗過之後資料庫把這台裝置綁到那個學生身上，所以換一台平板還是同一個存檔。
+ *
+ * 學生刻意不走 Supabase 的 email 註冊：那條路每註冊一個就寄一封確認信，
+ * 內建寄信額度小到一整班同時註冊就會被擋（實測連五個就 429）。
+ * 老師與管理員人少，就用真的 email 帳號，這樣他們自己救得回密碼。
  */
 
 /** 資料庫回來的一列，欄位名是 snake_case */
@@ -64,18 +70,94 @@ export class SupabaseRepository implements Repository {
     fail('匿名登入失敗（後台的 Anonymous sign-ins 打開了嗎）', error)
   }
 
-  async join(classCode: string, nickname: string): Promise<Student> {
+  /** 資料庫回來的學生一列 */
+  private static student(row: {
+    student_id: string; login_id: string; nickname: string; class_code: string | null
+  }): Student {
+    return {
+      id: row.student_id, loginId: row.login_id,
+      nickname: row.nickname, classCode: row.class_code, role: 'student',
+    }
+  }
+
+  async register(
+    loginId: string, password: string, nickname: string, classCode: string,
+  ): Promise<Student> {
     await this.ensureSession()
-    const { data, error } = await this.db.rpc('join_class', {
-      p_code: classCode.trim().toUpperCase(),
+    const { data, error } = await this.db.rpc('register_student', {
+      p_login_id: loginId.trim().toLowerCase(),
+      p_password: password,
       p_nickname: nickname.trim(),
-      // 暱稱密碼先不開，見 supabase/README.md
-      p_pin: null,
+      p_class_code: classCode.trim().toUpperCase(),
     })
-    fail('進場失敗', error)
-    const row = (data as { student_id: string; class_code: string; nickname: string }[] | null)?.[0]
-    if (!row) throw new Error('進場失敗：伺服器沒有回傳學生資料')
-    return { id: row.student_id, classCode: row.class_code, nickname: row.nickname, role: 'student' }
+    fail('註冊失敗', error)
+    const row = (data as Parameters<typeof SupabaseRepository.student>[0][] | null)?.[0]
+    if (!row) throw new Error('註冊失敗：伺服器沒有回傳學生資料')
+    return SupabaseRepository.student(row)
+  }
+
+  /**
+   * 登入。**失敗回 error 字串而不是丟例外**，因為後端要在密碼打錯時記下次數，
+   * 而在 Postgres 裡丟例外會把同一筆交易的 update 一起回滾，鎖定就不會生效。
+   * 這裡只是忠實地把那個 error 帶上來。
+   */
+  async login(
+    loginId: string, password: string,
+  ): Promise<{ student: Student | null; error: string | null }> {
+    await this.ensureSession()
+    const { data, error } = await this.db.rpc('login_student', {
+      p_login_id: loginId.trim().toLowerCase(),
+      p_password: password,
+    })
+    fail('登入失敗', error)
+    const row = (data as (Parameters<typeof SupabaseRepository.student>[0] & {
+      error: string | null
+    })[] | null)?.[0]
+    if (!row) return { student: null, error: '登入失敗：伺服器沒有回應' }
+    if (row.error) return { student: null, error: row.error }
+    return { student: SupabaseRepository.student(row), error: null }
+  }
+
+  /** 這台裝置上次是誰。匿名 session 存在瀏覽器裡，所以重開還記得。 */
+  async currentStudent(): Promise<Student | null> {
+    const { data: sess } = await this.db.auth.getSession()
+    if (!sess.session) return null
+    const { data, error } = await this.db.rpc('current_student_id')
+    if (error || !data) return null
+    const { data: rows } = await this.db
+      .from('students').select('id, nickname, class_code').eq('id', data as string).maybeSingle()
+    const r = rows as { id: string; nickname: string; class_code: string | null } | null
+    if (!r) return null
+    // login_id 是不給讀的欄位（同班同學不能互相看帳號），所以這裡填空字串；
+    // 畫面上要顯示的是暱稱，登入帳號只有登入那一刻用得到。
+    return { id: r.id, loginId: '', nickname: r.nickname, classCode: r.class_code, role: 'student' }
+  }
+
+  async logout(): Promise<void> {
+    await this.db.auth.signOut()
+  }
+
+  async setPassword(oldPassword: string, newPassword: string): Promise<void> {
+    const { error } = await this.db.rpc('student_set_password', {
+      p_old: oldPassword, p_new: newPassword,
+    })
+    fail('改密碼失敗', error)
+  }
+
+  async setNickname(nickname: string): Promise<string> {
+    const { data, error } = await this.db.rpc('student_set_nickname', {
+      p_nickname: nickname.trim(),
+    })
+    fail('改暱稱失敗', error)
+    return (data as string) ?? nickname.trim()
+  }
+
+  async joinClass(classCode: string): Promise<string> {
+    const { data, error } = await this.db.rpc('student_join_class', {
+      p_class_code: classCode.trim().toUpperCase(),
+    })
+    fail('加入班級失敗', error)
+    return (data as string) ?? classCode.trim().toUpperCase()
   }
 
   async loadCharacter(studentId: string): Promise<Character> {
@@ -214,6 +296,174 @@ export class SupabaseRepository implements Repository {
       p_level_ids: levelIds,
     })
     fail('設定開放關卡失敗', error)
+  }
+
+  // ------------------------------------------------------------ 老師與管理員
+  //
+  // 老師用真的 email 帳號，跟學生完全分開。理由是老師需要自己救得回密碼，
+  // 而學生的密碼是由老師或管理員重設的。
+
+  private async staffOf(userId: string, email: string): Promise<Staff> {
+    const { data } = await this.db
+      .from('teachers').select('display_name, is_admin').eq('user_id', userId).maybeSingle()
+    const r = data as { display_name: string; is_admin: boolean } | null
+    return {
+      userId, email,
+      displayName: r?.display_name ?? '老師',
+      isAdmin: r?.is_admin ?? false,
+    }
+  }
+
+  async staffSignUp(email: string, password: string, displayName: string): Promise<Staff> {
+    const { data, error } = await this.db.auth.signUp({ email: email.trim(), password })
+    fail('註冊失敗', error)
+    const user = data.user
+    if (!user) throw new Error('註冊失敗：伺服器沒有回傳帳號')
+    if (!data.session) {
+      throw new Error('帳號建好了，請到信箱收確認信，點完連結再回來登入')
+    }
+    // 名單上有這個 email 才變得成老師。不在名單上這裡就會丟出錯誤。
+    const { error: claimErr } = await this.db.rpc('claim_teacher', { p_display_name: displayName })
+    fail('這個 email 還不能當老師', claimErr)
+    return this.staffOf(user.id, user.email ?? email)
+  }
+
+  async staffLogin(email: string, password: string): Promise<Staff> {
+    const { data, error } = await this.db.auth.signInWithPassword({
+      email: email.trim(), password,
+    })
+    fail('登入失敗', error)
+    const user = data.user
+    if (!user) throw new Error('登入失敗')
+    // 第一次登入時如果還沒認領過老師身分，這裡補認領；已經是老師就直接回來。
+    await this.db.rpc('claim_teacher', { p_display_name: null })
+    return this.staffOf(user.id, user.email ?? email)
+  }
+
+  async currentStaff(): Promise<Staff | null> {
+    const { data } = await this.db.auth.getSession()
+    const user = data.session?.user
+    if (!user || user.is_anonymous) return null
+    return this.staffOf(user.id, user.email ?? '')
+  }
+
+  async staffLogout(): Promise<void> {
+    await this.db.auth.signOut()
+  }
+
+  async listClasses(): Promise<ClassRoom[]> {
+    const { data, error } = await this.db
+      .from('classes').select('code, name, open').order('created_at')
+    fail('讀取班級失敗', error)
+    return ((data as ClassRoom[] | null) ?? []).map((r) => ({
+      code: r.code, name: r.name, open: r.open,
+    }))
+  }
+
+  async createClass(code: string, name: string): Promise<ClassRoom> {
+    const { data, error } = await this.db.rpc('create_class', {
+      p_code: code.trim().toUpperCase(), p_name: name.trim(),
+    })
+    fail('開班失敗', error)
+    const row = (data as { code: string; name: string }[] | null)?.[0]
+    if (!row) throw new Error('開班失敗：伺服器沒有回應')
+    return { code: row.code, name: row.name, open: true }
+  }
+
+  async setClassOpen(code: string, open: boolean): Promise<boolean> {
+    const { data, error } = await this.db.rpc('class_set_open', {
+      p_code: code.trim().toUpperCase(), p_open: open,
+    })
+    fail('設定失敗', error)
+    return (data as boolean) ?? open
+  }
+
+  async regenerateClassCode(code: string): Promise<string> {
+    const { data, error } = await this.db.rpc('class_regenerate_code', {
+      p_code: code.trim().toUpperCase(),
+    })
+    fail('換代碼失敗', error)
+    return data as string
+  }
+
+  async loadClassRoster(classCode: string): Promise<ClassRosterRow[]> {
+    const { data, error } = await this.db.rpc('class_overview', {
+      p_code: classCode.trim().toUpperCase(),
+    })
+    fail('讀取班級名單失敗', error)
+    type Row = {
+      student_id: string; nickname: string; coins: number; exp: number
+      stars: number; answered: number
+    }
+    return ((data as Row[] | null) ?? []).map((r) => ({
+      studentId: r.student_id, nickname: r.nickname,
+      coins: r.coins, exp: r.exp, stars: Number(r.stars), answers: Number(r.answered),
+    }))
+  }
+
+  async addStudent(
+    classCode: string, loginId: string, password: string, nickname: string,
+  ): Promise<void> {
+    const { error } = await this.db.rpc('teacher_add_student', {
+      p_code: classCode.trim().toUpperCase(),
+      p_login_id: loginId.trim().toLowerCase(),
+      p_password: password,
+      p_nickname: nickname.trim(),
+    })
+    fail('加入學生失敗', error)
+  }
+
+  async removeStudent(studentId: string): Promise<void> {
+    const { error } = await this.db.rpc('teacher_remove_student', { p_student: studentId })
+    fail('移除學生失敗', error)
+  }
+
+  async resetStudentPassword(studentId: string, password: string): Promise<void> {
+    const { error } = await this.db.rpc('teacher_reset_student_password', {
+      p_student: studentId, p_password: password,
+    })
+    fail('重設密碼失敗', error)
+  }
+
+  async claimFirstAdmin(): Promise<void> {
+    const { error } = await this.db.rpc('claim_first_admin')
+    fail('認領管理員失敗', error)
+  }
+
+  async inviteTeacher(email: string): Promise<string> {
+    const { data, error } = await this.db.rpc('admin_invite_teacher', {
+      p_email: email.trim().toLowerCase(),
+    })
+    fail('發邀請失敗', error)
+    return data as string
+  }
+
+  async listTeachers(): Promise<TeacherRow[]> {
+    const { data, error } = await this.db.rpc('admin_list_teachers')
+    fail('讀取老師名單失敗', error)
+    type Row = {
+      user_id: string; display_name: string; is_admin: boolean; active: boolean
+      classes: number; students: number
+    }
+    return ((data as Row[] | null) ?? []).map((r) => ({
+      userId: r.user_id, displayName: r.display_name, isAdmin: r.is_admin,
+      active: r.active, classes: Number(r.classes), students: Number(r.students),
+    }))
+  }
+
+  async listInvites(): Promise<{ email: string; used: boolean }[]> {
+    const { data, error } = await this.db.rpc('admin_list_invites')
+    fail('讀取邀請名單失敗', error)
+    return ((data as { email: string; used_at: string | null }[] | null) ?? []).map((r) => ({
+      email: r.email, used: r.used_at !== null,
+    }))
+  }
+
+  async setTeacherActive(userId: string, active: boolean): Promise<void> {
+    const { error } = await this.db.rpc('admin_set_teacher_active', {
+      p_user: userId, p_active: active,
+    })
+    fail('設定失敗', error)
   }
 }
 

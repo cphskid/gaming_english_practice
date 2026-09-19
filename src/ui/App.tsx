@@ -1,20 +1,26 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Quiz } from '@/core/quiz'
 import { Session, type SessionResult } from '@/core/session'
 import { WordStat } from '@/core/wordStat'
 import { mergeProgress } from '@/core/progress'
-import type { Character, GameOutcome, LevelData, LevelProgress, Student } from '@/core/types'
+import type {
+  Character, GameOutcome, LevelData, LevelProgress, Staff, Student,
+} from '@/core/types'
 import { WORDS_BY_ID, wordsOfThemes } from '@/data/words'
 import { towerDefense } from '@/games'
 import { repo } from '@/net'
 import { audio } from '@/audio'
 import { Login } from './Login'
+import { StaffAuth } from './StaffAuth'
 import { LevelSelect } from './LevelSelect'
 import { GameHost } from './GameHost'
 import { Result } from './Result'
 import { Teacher } from './Teacher'
+import { Admin } from './Admin'
+import { Settings } from './Settings'
 
-type Screen = 'login' | 'select' | 'play' | 'result' | 'teacher'
+type Screen =
+  | 'login' | 'staff' | 'select' | 'play' | 'result' | 'teacher' | 'admin' | 'settings'
 
 interface Playing {
   level: LevelData
@@ -32,15 +38,15 @@ export function App() {
   const [playing, setPlaying] = useState<Playing | null>(null)
   const [result, setResult] = useState<{ r: SessionResult; coins: number; exp: number } | null>(null)
   const [rotateOff, setRotateOff] = useState(false)
+  const [staff, setStaff] = useState<Staff | null>(null)
 
-  const join = useCallback(async (classCode: string, nickname: string) => {
-    audio.unlock() // iOS 的第一次播放一定要綁在使用者的某一下點擊
-    const s = await repo.join(classCode, nickname)
+  /** 載入一位學生的全部東西並進到選關畫面。登入、註冊、換班都走這裡。 */
+  const enter = useCallback(async (s: Student) => {
     const [c, p, stats, open] = await Promise.all([
       repo.loadCharacter(s.id),
       repo.loadProgress(s.id),
       repo.loadWordStats(s.id),
-      repo.loadTeacherOpen(s.classCode),
+      s.classCode ? repo.loadTeacherOpen(s.classCode) : Promise.resolve([]),
     ])
     setStudent(s)
     setCharacter(c)
@@ -48,6 +54,47 @@ export function App() {
     setStat(WordStat.fromEntries(stats))
     setTeacherOpen(new Set(open))
     setScreen('select')
+  }, [])
+
+  /**
+   * 開機時接回上次的身分。
+   * 學生的 session 存在瀏覽器裡，所以小朋友不用每節課重打一次密碼。
+   */
+  useEffect(() => {
+    void (async () => {
+      const s = await repo.currentStudent()
+      if (s) { await enter(s); return }
+      const t = await repo.currentStaff()
+      if (t) { setStaff(t); setScreen('teacher') }
+    })()
+  }, [enter])
+
+  const login = useCallback(async (loginId: string, password: string) => {
+    audio.unlock() // iOS 的第一次播放一定要綁在使用者的某一下點擊
+    const { student: s, error } = await repo.login(loginId, password)
+    if (error || !s) return error ?? '登入失敗'
+    await enter(s)
+    return null
+  }, [enter])
+
+  const register = useCallback(async (
+    loginId: string, password: string, nickname: string, classCode: string,
+  ) => {
+    audio.unlock()
+    try {
+      await enter(await repo.register(loginId, password, nickname, classCode))
+      return null
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e)
+    }
+  }, [enter])
+
+  const logout = useCallback(async () => {
+    await repo.logout()
+    await repo.staffLogout()
+    setStudent(null); setCharacter(null); setStaff(null)
+    setProgress(new Map()); setTeacherOpen(new Set()); setStat(new WordStat())
+    setScreen('login')
   }, [])
 
   const startLevel = useCallback((level: LevelData) => {
@@ -133,17 +180,6 @@ export function App() {
     setScreen('select')
   }, [playing, student, character])
 
-  const toggleOpen = useCallback((levelId: string) => {
-    if (!student) return
-    setTeacherOpen((prev) => {
-      const next = new Set(prev)
-      if (next.has(levelId)) next.delete(levelId)
-      else next.add(levelId)
-      void repo.setTeacherOpen(student.classCode, [...next])
-      return next
-    })
-  }, [student])
-
   const nextQuestion = useCallback(() => playing?.quiz.next() ?? null, [playing])
 
   return (
@@ -154,13 +190,42 @@ export function App() {
         <div style={{ color: '#a8b89a', fontSize: 13 }}>（點一下這裡可以直接開始）</div>
       </div>
 
-      {screen === 'login' && <Login onJoin={(c, n) => void join(c, n)} />}
+      {screen === 'login' && (
+        <Login onLogin={login} onRegister={register} onStaff={() => setScreen('staff')} />
+      )}
+
+      {screen === 'staff' && (
+        <StaffAuth
+          onLogin={async (em, pw) => {
+            try { setStaff(await repo.staffLogin(em, pw)); setScreen('teacher'); return null }
+            catch (e) { return e instanceof Error ? e.message : String(e) }
+          }}
+          onSignUp={async (em, pw, dn) => {
+            try { setStaff(await repo.staffSignUp(em, pw, dn)); setScreen('teacher'); return null }
+            catch (e) { return e instanceof Error ? e.message : String(e) }
+          }}
+          onClaimFirstAdmin={async () => {
+            try { await repo.claimFirstAdmin(); return null }
+            catch (e) { return e instanceof Error ? e.message : String(e) }
+          }}
+          onBack={() => setScreen('login')}
+        />
+      )}
 
       {screen === 'select' && student && character && (
         <LevelSelect
           student={student} character={character} progress={progress}
           teacherOpen={teacherOpen} onPlay={startLevel}
-          onTeacher={() => setScreen('teacher')}
+          onSettings={() => setScreen('settings')}
+        />
+      )}
+
+      {screen === 'settings' && student && (
+        <Settings
+          student={student}
+          onChanged={(s) => { setStudent(s); void enter(s) }}
+          onBack={() => setScreen('select')}
+          onLogout={() => void logout()}
         />
       )}
 
@@ -181,11 +246,17 @@ export function App() {
         />
       )}
 
-      {screen === 'teacher' && student && (
+      {screen === 'teacher' && staff && (
         <Teacher
-          classCode={student.classCode} teacherOpen={teacherOpen}
-          onToggleOpen={toggleOpen} onBack={() => setScreen('select')}
+          staff={staff}
+          onAdmin={() => setScreen('admin')}
+          onBack={() => setScreen(student ? 'select' : 'login')}
+          onLogout={() => void logout()}
         />
+      )}
+
+      {screen === 'admin' && staff?.isAdmin && (
+        <Admin onBack={() => setScreen('teacher')} />
       )}
     </>
   )

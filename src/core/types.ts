@@ -209,9 +209,37 @@ export type Role = 'student' | 'teacher'
 /** 學生只有班級代碼與暱稱，不收真實姓名與 email。 */
 export interface Student {
   id: string
-  classCode: string
+  /** 登入用的帳號，全站唯一。跟 nickname 是兩回事：nickname 可以改、可以跟別班的人重複。 */
+  loginId: string
+  /** 現在在哪一班。null＝還沒加入任何班級（例如朋友的小孩）。 */
+  classCode: string | null
   nickname: string
   role: Role
+}
+
+/** 老師或管理員。跟 Student 是兩種不同的身分，走不同的登入方式。 */
+export interface Staff {
+  userId: string
+  email: string
+  displayName: string
+  isAdmin: boolean
+}
+
+/** 老師看到的一個班。 */
+export interface ClassRoom {
+  code: string
+  name: string
+  open: boolean
+}
+
+/** 管理員看到的一位老師。 */
+export interface TeacherRow {
+  userId: string
+  displayName: string
+  isAdmin: boolean
+  active: boolean
+  classes: number
+  students: number
 }
 
 export type Job = 'knight' | 'mage'

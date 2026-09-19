@@ -4,14 +4,14 @@ import { expIntoLevel, isUnlocked, levelFromExp } from '@/core/progress'
 import type { Character, LevelData, LevelProgress, Student } from '@/core/types'
 
 export function LevelSelect({
-  student, character, progress, teacherOpen, onPlay, onTeacher,
+  student, character, progress, teacherOpen, onPlay, onSettings,
 }: {
   student: Student
   character: Character
   progress: Map<string, LevelProgress>
   teacherOpen: Set<string>
   onPlay: (level: LevelData) => void
-  onTeacher: () => void
+  onSettings: () => void
 }) {
   const cleared = new Set([...progress.values()].filter((p) => p.clearedAt).map((p) => p.levelId))
   const lv = levelFromExp(character.exp)
@@ -24,7 +24,7 @@ export function LevelSelect({
         <span className="stat">Lv.{lv}　{into}/{need} exp</span>
         <span className="spacer" />
         <span className="stat">🪙 {character.coins}</span>
-        <button className="btn ghost" onClick={onTeacher}>老師</button>
+        <button className="btn ghost" onClick={onSettings}>設定</button>
       </div>
 
       <div className="levels">

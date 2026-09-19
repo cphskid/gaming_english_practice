@@ -5,6 +5,8 @@ import { chromium } from 'playwright'
 const BASE = process.argv[2] || 'http://localhost:5173'
 const LEVEL = Number(process.argv[3] || 1)
 const ACCURACY = Number(process.argv[4] || 1)   // 模擬小朋友的正確率
+// 接了 Supabase 之後班級是資料庫裡真的存在的東西，所以要能指定
+const CLASS = process.env.TD_CLASS || 'TEST1'
 
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' })
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
@@ -12,16 +14,24 @@ const errors = []
 page.on('pageerror', (e) => errors.push(String(e)))
 
 // 老師開放全部關卡，測試才進得去後面的關
-await page.addInitScript(() => {
+await page.addInitScript((code) => {
   const ids = Array.from({ length: 14 }, (_, i) => `td-${String(i + 1).padStart(2, '0')}`)
-  try { localStorage.setItem('gep.v1.teacherOpen.TEST1', JSON.stringify(ids)) } catch {}
-})
+  try {
+    localStorage.setItem(`gep.v1.teacherOpen.${code}`, JSON.stringify(ids))
+    localStorage.setItem('gep.v1.classes', JSON.stringify([{ code, name: '測試班', open: true }]))
+  } catch {}
+}, CLASS)
 
 await page.goto(BASE)
-await page.fill('#cls', 'TEST1')
+// 每次都是乾淨的瀏覽器，所以走註冊。帳號帶亂數，重跑才不會撞到上一次的。
+const BOT = 'bot' + Math.random().toString(36).slice(2, 8)
+await page.click('.tabs button:nth-child(2)')
+await page.fill('#cls', CLASS)
+await page.fill('#lid', BOT)
+await page.fill('#pw', 'robot42')
 await page.fill('#nick', '機器人')
 await page.click('button[type=submit]')
-await page.waitForSelector('.levels')
+await page.waitForSelector('.levels', { timeout: 20000 })
 await page.locator('.lv').nth(LEVEL - 1).click()
 await page.waitForSelector('.td-cv')
 await page.waitForTimeout(700)
