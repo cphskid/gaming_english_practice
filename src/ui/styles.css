@@ -1,0 +1,109 @@
+:root{
+  --sea:#20425f; --bg:#16232e; --panel:#3d2f24; --panel2:#4f3d2e; --line:#6b533d;
+  --ink:#f3ecd8; --muted:#a8b89a; --gold:#f2b229; --blood:#c9453d; --leaf:#6fbf4a; --sky:#4a7fd4;
+  --font:"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body,#root{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);overflow:hidden;user-select:none}
+button{font-family:inherit}
+
+.screen{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:18px;padding:24px 20px;overflow-y:auto}
+.screen h1{font-size:28px;margin:0;text-align:center}
+.screen p.lede{margin:0;color:var(--muted);font-size:14px;text-align:center;max-width:36ch;line-height:1.8}
+
+.panel{background:var(--panel);border:3px solid var(--line);border-radius:14px}
+.btn{border:none;border-radius:10px;padding:11px 22px;font-size:16px;font-weight:800;color:#fff;
+  background:var(--leaf);cursor:pointer;box-shadow:0 3px 0 #4c8a33}
+.btn:active{transform:translateY(2px);box-shadow:0 1px 0 #4c8a33}
+.btn:disabled{opacity:.45;box-shadow:none}
+.btn.ghost{background:transparent;border:2px solid var(--line);color:var(--ink);box-shadow:none;font-weight:600}
+
+.form{display:flex;flex-direction:column;gap:12px;width:100%;max-width:320px;padding:20px}
+.form label{font-size:13px;color:var(--muted)}
+.form input{width:100%;padding:11px 13px;font-size:17px;border-radius:9px;border:2px solid var(--line);
+  background:#2b2118;color:var(--ink);font-family:inherit}
+.form input:focus{outline:2px solid var(--gold);outline-offset:1px}
+
+/* 選關 */
+.topbar{display:flex;align-items:center;gap:12px;width:100%;max-width:880px;flex:none}
+.topbar .who{font-weight:800}
+.topbar .spacer{flex:1}
+.topbar .stat{font-size:14px;color:var(--gold);font-weight:700}
+.levels{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:11px;
+  width:100%;max-width:880px}
+.lv{position:relative;text-align:left;padding:12px 13px;border-radius:12px;cursor:pointer;
+  background:var(--panel2);border:2px solid var(--line);color:inherit}
+.lv:disabled{opacity:.4;cursor:not-allowed}
+.lv.boss{border-color:var(--blood)}
+.lv .no{font-size:11px;color:var(--muted)}
+.lv .nm{font-size:16px;font-weight:800;margin-top:2px}
+.lv .th{font-size:11.5px;color:var(--muted);margin-top:4px}
+.lv .st{margin-top:7px;font-size:13px;letter-spacing:2px}
+.lv .lock{position:absolute;top:10px;right:11px;font-size:14px}
+
+/* 遊戲 */
+.play{height:100%;display:flex;flex-direction:column;padding:6px;gap:6px}
+.td-hud{display:flex;align-items:center;gap:10px;padding:5px 10px;flex:none;
+  background:var(--panel);border:3px solid var(--line);border-radius:12px}
+.td-stat{font-weight:800;font-size:15px;white-space:nowrap}
+.td-hp{color:var(--blood)} .td-coin{color:var(--gold)}
+.td-wave{color:var(--muted);font-size:13px;white-space:nowrap}
+.td-quiz{flex:1;display:flex;align-items:center;justify-content:center;gap:9px;min-width:0}
+.td-qemoji{font-size:26px;line-height:1;flex:none}
+.td-qzh{font-size:21px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.td-qhint{font-size:12px;color:var(--muted);white-space:nowrap;flex:none}
+.td-say{border:none;background:var(--sky);color:#fff;border-radius:9px;width:38px;height:34px;
+  font-size:17px;cursor:pointer;flex:none}
+.td-say:disabled{opacity:.35}
+.td-stage{flex:1;position:relative;display:flex;align-items:center;justify-content:center;min-height:0;
+  background:var(--sea);border-radius:10px}
+.td-cv{max-width:100%;max-height:100%;image-rendering:pixelated;border-radius:10px;
+  touch-action:manipulation;display:block}
+.td-tray{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);display:flex;
+  align-items:stretch;gap:8px;padding:7px;z-index:3;max-width:96%;flex-wrap:wrap;justify-content:center;
+  background:var(--panel);border:3px solid var(--line);border-radius:12px}
+.td-tray[hidden]{display:none}
+.td-card{background:var(--panel2);border:2px solid var(--line);border-radius:9px;padding:6px 9px;
+  cursor:pointer;text-align:left;color:inherit;white-space:nowrap}
+.td-card.td-sel{border-color:var(--gold);background:#5d4832}
+.td-card b{display:block;font-size:14px}
+.td-card span{font-size:11px;color:var(--muted);display:block;margin-top:1px}
+.td-card i{font-style:normal;color:var(--gold);font-weight:700}
+.td-btn{border:none;border-radius:10px;padding:8px 18px;font-size:15px;font-weight:800;color:#fff;
+  background:var(--leaf);cursor:pointer;box-shadow:0 3px 0 #4c8a33}
+.td-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #4c8a33}
+.td-sell{background:var(--blood);box-shadow:0 3px 0 #8d302a}
+.td-sell:active{box-shadow:0 1px 0 #8d302a}
+.td-toast{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(18,28,16,.92);
+  padding:6px 15px;border-radius:99px;font-size:13px;font-weight:700;opacity:0;transition:.25s;
+  pointer-events:none;z-index:4;white-space:nowrap}
+.td-toast.on{opacity:1}
+
+/* 結算 */
+.result{max-width:420px;width:100%;padding:24px;text-align:center;display:flex;
+  flex-direction:column;gap:14px;align-items:center}
+.result .stars{font-size:38px;letter-spacing:6px}
+.result .rows{width:100%;display:flex;flex-direction:column;gap:7px;font-size:14.5px}
+.result .row{display:flex;justify-content:space-between;padding:7px 12px;background:#2b2118;border-radius:8px}
+.result .row b{color:var(--gold)}
+
+/* 老師 */
+.teacher{width:100%;max-width:720px;display:flex;flex-direction:column;gap:14px}
+.teacher h2{margin:0;font-size:19px}
+.miss{display:flex;flex-direction:column;gap:6px}
+.miss .m{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#2b2118;border-radius:8px;font-size:14px}
+.miss .m .w{font-weight:800;min-width:96px}
+.miss .m .zh{color:var(--muted);flex:1}
+.miss .m .n{color:var(--blood);font-weight:800}
+.open{display:flex;flex-wrap:wrap;gap:7px}
+.open button{padding:6px 11px;border-radius:8px;border:2px solid var(--line);background:#2b2118;
+  color:var(--ink);font-size:12.5px;cursor:pointer}
+.open button.on{border-color:var(--gold);background:#5d4832;font-weight:700}
+
+.rotate{position:fixed;inset:0;z-index:20;display:none;flex-direction:column;align-items:center;
+  justify-content:center;gap:12px;text-align:center;padding:30px;font-size:16px;line-height:1.8;
+  background:rgba(18,28,16,.94);cursor:pointer}
+@media (orientation:portrait) and (max-width:820px){ .rotate:not(.off){display:flex} }
+@media (prefers-reduced-motion:reduce){ .btn:active,.td-btn:active{transform:none} .td-toast{transition-duration:.01ms} }
