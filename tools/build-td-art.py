@@ -1,7 +1,8 @@
 """把 Tiny Swords 素材裁切、縮放並轉成 data URI，產生 games/tower-defense/art.js。
 
-素材原圖每格 192×192，遊戲裡只畫到 64 上下，所以先縮小可以讓
-產出的檔案小一個數量級。需要換素材或調大小時重跑這支就好。
+單位與建築的原圖每格 192×192，遊戲裡只畫到 64 上下，所以先縮小可以讓
+產出的檔案小一個數量級。地形圖塊維持原生 64 像素不縮放，因為地圖就是
+以 64 為一格鋪出來的。需要換素材或調大小時重跑這支就好。
 
     python3 tools/build-td-art.py
 """
@@ -20,6 +21,12 @@ def to_data_uri(im):
 
 def main():
     art = {}
+
+    # 地形圖塊整張帶走，切格的事交給遊戲裡的 autotile 處理。
+    # 576×384 = 9×6 格，左上 4×4 是「草地接水」，中間 4×4 是「高地草皮」，
+    # 右下兩列是高地的石壁。
+    art['tiles'] = to_data_uri(Image.open(B + 'free-pack/Terrain/Tileset/Tilemap_color1.png'))
+    art['water'] = to_data_uri(Image.open(B + 'free-pack/Terrain/Tileset/Water Background color.png'))
 
     # 哥布林走路：Torch 圖表第 0 列是面向右的 7 格循環
     for name, path in [
@@ -44,6 +51,18 @@ def main():
     # 軍營派出的士兵，取待機動畫第一格
     w = Image.open(B + 'free-pack/Units/Blue Units/Warrior/Warrior_Idle.png')
     art['warrior'] = to_data_uri(w.crop((0, 0, 192, 192)).resize((64, 64), Image.LANCZOS))
+
+    # 裝飾：樹取搖擺動畫第一格，石頭本來就是單張 64×64
+    for name, path, box in [
+        ('tree1', 'free-pack/Terrain/Resources/Wood/Trees/Tree1.png', (0, 0, 192, 256)),
+        ('tree2', 'free-pack/Terrain/Resources/Wood/Trees/Tree3.png', (0, 0, 192, 192)),
+    ]:
+        im = Image.open(B + path).crop(box)
+        im = im.crop(im.getbbox())          # 去掉四周透明留白，才能用底部對齊放進地圖
+        art[name] = to_data_uri(im.resize((im.width // 2, im.height // 2), Image.LANCZOS))
+    for i in (1, 2, 3, 4):
+        rk = Image.open(B + 'free-pack/Terrain/Decorations/Rocks/Rock%d.png' % i)
+        art['rock' + str(i)] = to_data_uri(rk.crop(rk.getbbox()))
 
     with open(OUT, 'w') as f:
         f.write('// 由 assets/tiny-swords 裁切縮放產生，見 tools/build-td-art.py\n')
