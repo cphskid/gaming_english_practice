@@ -2,9 +2,11 @@ import { LEVELS, LEVEL_IDS } from '@/data/levels'
 import { THEME_NAME } from '@/data/words'
 import { expIntoLevel, isUnlocked, levelFromExp } from '@/core/progress'
 import type { Character, LevelData, LevelProgress, Student } from '@/core/types'
+import { avatarSrc } from '@/data/jobs'
+import { JOB_NAME } from '@/core/character'
 
 export function LevelSelect({
-  student, character, progress, teacherOpen, onPlay, onSettings,
+  student, character, progress, teacherOpen, onPlay, onSettings, onShop,
 }: {
   student: Student
   character: Character
@@ -12,6 +14,7 @@ export function LevelSelect({
   teacherOpen: Set<string>
   onPlay: (level: LevelData) => void
   onSettings: () => void
+  onShop: () => void
 }) {
   const cleared = new Set([...progress.values()].filter((p) => p.clearedAt).map((p) => p.levelId))
   const lv = levelFromExp(character.exp)
@@ -20,10 +23,12 @@ export function LevelSelect({
   return (
     <div className="screen">
       <div className="topbar">
+        <img className="mug" src={avatarSrc(character.avatar)} alt="" />
         <span className="who">{student.nickname}</span>
-        <span className="stat">Lv.{lv}　{into}/{need} exp</span>
+        <span className="stat">{JOB_NAME[character.job]}　Lv.{lv}　{into}/{need} exp</span>
         <span className="spacer" />
         <span className="stat">🪙 {character.coins}</span>
+        <button className="btn ghost" onClick={onShop}>商店</button>
         <button className="btn ghost" onClick={onSettings}>設定</button>
       </div>
 

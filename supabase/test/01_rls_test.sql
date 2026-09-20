@@ -270,6 +270,58 @@ begin
   perform test_denied($q$ insert into public.classes (code, name, owner) values ('RLS3','偷開的班', auth.uid()) $q$, '直接開班');
 end $$;
 
+\echo '── 商店：價格、等級門檻、餘額都由資料庫說了算'
+do $$
+declare v_id uuid; v_before int; v_after int; v_items jsonb;
+begin
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  select public.current_student_id() into v_id;
+
+  -- 價格不能由客戶端決定：函式只收 id，連價格參數都沒有
+  perform test_denied($q$ select public.buy_item('沒這個東西') $q$, '買不存在的東西');
+
+  -- 等級門檻。剛註冊的人 exp=0 是一級，買不起要三級的東西
+  perform test_ok(public.level_of(0) = 1, '0 經驗是 1 級');
+  perform test_ok(public.level_of(120) = 2, '120 經驗是 2 級');
+  perform test_denied($q$ select public.buy_item('crystal-40') $q$, '等級不夠還想買');
+
+  -- 買得起的：錢要扣對，東西要進背包
+  select coins into v_before from public.characters where student_id = v_id;
+  perform public.buy_item('slow-30');
+  select coins, items into v_after, v_items from public.characters where student_id = v_id;
+  perform test_ok(v_after = v_before - 60, '買完金幣扣掉正確的價錢');
+  perform test_ok((v_items ->> 'slow-30')::int = 1, '東西進背包了');
+
+  -- 錢不夠要被擋（披風 180，剛剛買完剩不到）
+  perform test_denied($q$ select public.buy_item('cape-red') $q$, '錢不夠還想買');
+
+  -- 補一點錢進去（用 security definer 的輔助函式，學生自己是改不動的），
+  -- 才測得到後面穿脫裝飾品那幾條
+  perform test_force(format('update public.characters set coins = 500 where student_id = %L', v_id));
+  perform public.buy_item('cape-red');
+
+  -- 消耗品用一次就沒了，第二次要被擋
+  perform public.consume_item('slow-30');
+  perform test_denied($q$ select public.consume_item('slow-30') $q$, '道具用完了還想用');
+
+  -- 裝飾品：買過的才穿得上，消耗品不能穿
+  perform public.equip_item('cape-red', true);
+  perform test_ok((select equipped from public.characters where student_id = v_id) ? 'cape-red', '披風穿上了');
+  perform public.equip_item('cape-red', false);
+  perform test_ok(not ((select equipped from public.characters where student_id = v_id) ? 'cape-red'), '披風脫下來了');
+  perform test_denied($q$ select public.equip_item('hat-crown', true) $q$, '穿沒買過的東西');
+  perform test_denied($q$ select public.equip_item('slow-30', true) $q$, '把消耗品穿在身上');
+
+  -- 頭像只認素材包裡真的有的那 25 張
+  perform public.set_avatar('Avatars_07');
+  perform test_ok((select avatar from public.characters where student_id = v_id) = 'Avatars_07', '頭像選好了');
+  perform test_denied($q$ select public.set_avatar('Avatars_99') $q$, '選不存在的頭像');
+  perform test_denied($q$ select public.set_avatar('<script>') $q$, '頭像欄位塞奇怪的字串');
+
+  -- 背包也不能直接改
+  perform test_denied(format($q$ update public.characters set items = '{"hat-crown":99}'::jsonb where student_id = %L $q$, v_id), '直接改背包');
+end $$;
+
 \echo '── 密碼雜湊不能被別人讀走（RLS 管列不管欄，靠的是欄位層級的 grant）'
 select test_as('a0000000-0000-0000-0000-000000000012', true);
 select test_denied($$ select pw_hash from public.students where login_id = 'rlsming' $$, '讀別人的密碼雜湊');

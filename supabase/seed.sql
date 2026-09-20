@@ -327,4 +327,15 @@ insert into public.levels (id, no, name) values
   ('td-14', 14, '最終試煉')
 on conflict (id) do update set no = excluded.no, name = excluded.name;
 
+-- 商店品項。**這一段是 tools/gen-shop-seed.mjs 從 src/data/shop.ts 產生的，不要手改。**
+-- 價格放在資料庫是因為客戶端送來的價格不能信。
+insert into public.shop_items (id, price, kind, unlock_level) values
+  ('slow-30', 60, 'consumable', 1),
+  ('heal-5', 80, 'consumable', 2),
+  ('crystal-40', 120, 'consumable', 3),
+  ('hat-crown', 200, 'cosmetic', 2),
+  ('cape-red', 180, 'cosmetic', 1)
+on conflict (id) do update
+  set price = excluded.price, kind = excluded.kind, unlock_level = excluded.unlock_level;
+
 commit;

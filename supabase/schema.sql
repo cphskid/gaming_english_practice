@@ -140,6 +140,19 @@ create table if not exists public.characters (
   updated_at timestamptz not null default now()
 );
 
+-- 舊的存檔沒有 avatar，補上。空字串＝還沒創角，登入後會被帶去創角畫面。
+alter table public.characters add column if not exists avatar text not null default '';
+
+-- 商店品項。**價格一定要放在資料庫這邊**，不能信客戶端送來的數字，
+-- 不然改一下網頁就能用 1 塊錢買走全部東西。
+-- 內容由 seed.sql 從 src/data/shop.ts 灌進來，那邊是唯一的來源。
+create table if not exists public.shop_items (
+  id           text primary key,
+  price        int  not null check (price > 0),
+  kind         text not null check (kind in ('consumable','cosmetic')),
+  unlock_level int  not null default 1 check (unlock_level >= 1)
+);
+
 -- -----------------------------------------------------------------------------
 -- 5. 答題事件 —— 整個系統的地基
 -- -----------------------------------------------------------------------------
@@ -207,6 +220,7 @@ alter table public.classes        enable row level security;
 alter table public.students       enable row level security;
 alter table public.student_links  enable row level security;
 alter table public.characters     enable row level security;
+alter table public.shop_items     enable row level security;
 alter table public.answer_events  enable row level security;
 alter table public.word_stats     enable row level security;
 alter table public.level_progress enable row level security;
@@ -214,7 +228,7 @@ alter table public.teacher_open   enable row level security;
 
 -- 沒寫 policy 的動作一律擋掉。寫入全部走 RPC，所以這裡只開讀。
 revoke all on all tables in schema public from anon, authenticated;
-grant select on public.words, public.levels to anon, authenticated;
+grant select on public.words, public.levels, public.shop_items to anon, authenticated;
 -- **students 只給得出這三欄。**
 -- 同學之間要看得到彼此的暱稱（排行榜要用），但這張表現在還放著密碼雜湊、
 -- 登入帳號和鎖定狀態。整張表 grant 出去的話，一個小朋友就能把全班的
@@ -330,6 +344,10 @@ create policy student_links_self on public.student_links for select to authentic
 
 -- 角色存檔只有自己跟老師看得到。排行榜走底下的 class_leaderboard()，
 -- 不讓同學直接翻彼此的背包。
+-- 價目表本來就是要給大家看的，跟題庫、關卡同一類。
+drop policy if exists shop_items_read on public.shop_items;
+create policy shop_items_read on public.shop_items for select to anon, authenticated using (true);
+
 drop policy if exists characters_read on public.characters;
 create policy characters_read on public.characters for select to authenticated
   using (public.owns_student(student_id));
@@ -789,6 +807,111 @@ begin
 end;
 $$;
 
+-- 等級只負責解鎖，公式跟 src/core/progress.ts 的 levelFromExp 一樣。
+-- **改一邊要改另一邊**，跟金幣算式一樣的老問題，所以對帳測試把它一起測了。
+create or replace function public.level_of(p_exp int)
+returns int language sql immutable as $$ select (p_exp / 120) + 1 $$;
+
+create or replace function public.set_avatar(p_avatar text)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_student uuid := public.current_student_id();
+begin
+  if v_student is null then raise exception '還沒加入班級'; end if;
+  -- 只認 Avatars_01 ~ Avatars_25，不然什麼字串都塞得進來
+  if p_avatar !~ '^Avatars_(0[1-9]|1[0-9]|2[0-5])$' then
+    raise exception '沒有這張頭像';
+  end if;
+  update public.characters set avatar = p_avatar, updated_at = now()
+   where student_id = v_student;
+end;
+$$;
+
+/*
+  買東西。**價格、等級門檻、餘額全部在這裡查**，客戶端只送品項 id。
+  金幣本來就只有 RPC 動得了（見上面 characters 的註解），買東西是唯一會扣錢的地方。
+*/
+create or replace function public.buy_item(p_item text)
+returns table (coins int, items jsonb)
+language plpgsql security definer set search_path = public, pg_temp as $$
+#variable_conflict use_column
+declare
+  v_student uuid := public.current_student_id();
+  v_price int; v_unlock int; v_coins int; v_exp int;
+begin
+  if v_student is null then raise exception '還沒加入班級'; end if;
+  select i.price, i.unlock_level into v_price, v_unlock
+    from public.shop_items i where i.id = p_item;
+  if v_price is null then raise exception '商店裡沒有這個東西'; end if;
+
+  select c.coins, c.exp into v_coins, v_exp
+    from public.characters c where c.student_id = v_student for update;
+  if public.level_of(v_exp) < v_unlock then
+    raise exception '等級不夠，要 % 級才買得到', v_unlock;
+  end if;
+  if v_coins < v_price then raise exception '金幣不夠，還差 % 枚', v_price - v_coins; end if;
+
+  update public.characters c
+     set coins = c.coins - v_price,
+         items = jsonb_set(c.items, array[p_item],
+                           to_jsonb(coalesce((c.items ->> p_item)::int, 0) + 1), true),
+         updated_at = now()
+   where c.student_id = v_student;
+
+  return query select c.coins, c.items from public.characters c where c.student_id = v_student;
+end;
+$$;
+
+/* 穿脫裝飾品。沒有買過就穿不了，而且消耗品不能穿在身上。 */
+create or replace function public.equip_item(p_item text, p_on boolean)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_student uuid := public.current_student_id();
+  v_kind text; v_have int; v_equipped jsonb;
+begin
+  if v_student is null then raise exception '還沒加入班級'; end if;
+  select i.kind into v_kind from public.shop_items i where i.id = p_item;
+  if v_kind is null then raise exception '沒有這個東西'; end if;
+  if v_kind <> 'cosmetic' then raise exception '這個不是穿戴的東西'; end if;
+
+  select coalesce((c.items ->> p_item)::int, 0) into v_have
+    from public.characters c where c.student_id = v_student;
+  if p_on and v_have <= 0 then raise exception '你還沒有這個東西'; end if;
+
+  update public.characters c
+     set equipped = case when p_on
+           then (select jsonb_agg(distinct e)
+                   from jsonb_array_elements_text(c.equipped || to_jsonb(p_item)) e)
+           else coalesce((select jsonb_agg(e)
+                   from jsonb_array_elements_text(c.equipped) e
+                  where e <> p_item), '[]'::jsonb) end,
+         updated_at = now()
+   where c.student_id = v_student
+  returning c.equipped into v_equipped;
+  return coalesce(v_equipped, '[]'::jsonb);
+end;
+$$;
+
+/* 用掉一個消耗品。數量不夠就擋下來，不然按快一點就能無限用。 */
+create or replace function public.consume_item(p_item text)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_student uuid := public.current_student_id();
+  v_have int; v_items jsonb;
+begin
+  if v_student is null then raise exception '還沒加入班級'; end if;
+  select coalesce((c.items ->> p_item)::int, 0) into v_have
+    from public.characters c where c.student_id = v_student for update;
+  if v_have <= 0 then raise exception '你沒有這個道具了'; end if;
+
+  update public.characters c
+     set items = jsonb_set(c.items, array[p_item], to_jsonb(v_have - 1), true),
+         updated_at = now()
+   where c.student_id = v_student
+  returning c.items into v_items;
+  return v_items;
+end;
+$$;
+
 -- 同班排行榜。只給暱稱與分數，不給背包內容。
 create or replace function public.class_leaderboard(p_code text default null)
 returns table (nickname text, coins int, exp int, stars int)
@@ -1142,6 +1265,11 @@ grant execute on function
   public.submit_answers(jsonb),
   public.save_progress(text, int, int, boolean),
   public.set_job(text),
+  public.set_avatar(text),
+  public.buy_item(text),
+  public.equip_item(text, boolean),
+  public.consume_item(text),
+  public.level_of(int),
   public.class_leaderboard(text),
   public.current_student_id(),
   public.current_class_code(),

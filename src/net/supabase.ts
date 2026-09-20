@@ -24,7 +24,7 @@ import type { ClassRosterRow, Repository } from './repository'
 
 /** 資料庫回來的一列，欄位名是 snake_case */
 interface CharacterRow {
-  job: Job; exp: number; coins: number
+  job: Job; avatar: string | null; exp: number; coins: number
   items: Record<string, number> | null
   equipped: string[] | null
 }
@@ -163,7 +163,7 @@ export class SupabaseRepository implements Repository {
   async loadCharacter(studentId: string): Promise<Character> {
     const { data, error } = await this.db
       .from('characters')
-      .select('job, exp, coins, items, equipped')
+      .select('job, avatar, exp, coins, items, equipped')
       .eq('student_id', studentId)
       .maybeSingle()
     fail('讀取角色失敗', error)
@@ -173,6 +173,7 @@ export class SupabaseRepository implements Repository {
     return {
       studentId,
       job: row.job,
+      avatar: row.avatar ?? '',
       exp: row.exp,
       coins: row.coins,
       items: row.items ?? {},
@@ -185,11 +186,36 @@ export class SupabaseRepository implements Repository {
    *
    * 金幣與經驗故意沒有寫入路徑——資料表沒給 update 權限，就算這裡想寫也寫不進去。
    * 它們是 appendEvents 與 saveProgress 的副作用，由資料庫自己算。
-   * 道具要等商店做好，會是另一支 RPC（買的時候扣錢，不是前端說我有什麼就有什麼）。
+   * 道具也一樣：買的時候由 buy_item 扣錢，不是前端說我有什麼就有什麼。
    */
   async saveCharacter(c: Character): Promise<void> {
     const { error } = await this.db.rpc('set_job', { p_job: c.job })
     fail('存角色失敗', error)
+  }
+
+  async setAvatar(avatar: string): Promise<void> {
+    const { error } = await this.db.rpc('set_avatar', { p_avatar: avatar })
+    fail('存頭像失敗', error)
+  }
+
+  async buyItem(itemId: string): Promise<{ coins: number; items: Record<string, number> }> {
+    const { data, error } = await this.db.rpc('buy_item', { p_item: itemId })
+    fail('買不成', error)
+    const row = (data as { coins: number; items: Record<string, number> }[] | null)?.[0]
+    if (!row) throw new Error('買不成：後端沒有回傳結果')
+    return { coins: row.coins, items: row.items ?? {} }
+  }
+
+  async equipItem(itemId: string, on: boolean): Promise<string[]> {
+    const { data, error } = await this.db.rpc('equip_item', { p_item: itemId, p_on: on })
+    fail(on ? '穿不上' : '脫不下來', error)
+    return (data as string[] | null) ?? []
+  }
+
+  async consumeItem(itemId: string): Promise<Record<string, number>> {
+    const { data, error } = await this.db.rpc('consume_item', { p_item: itemId })
+    fail('用不了這個道具', error)
+    return (data as Record<string, number> | null) ?? {}
   }
 
   async loadProgress(studentId: string): Promise<LevelProgress[]> {

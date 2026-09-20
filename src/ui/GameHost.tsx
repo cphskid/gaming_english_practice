@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GameContext, GameHandle, GameModule, GameOutcome, LevelData, Question } from '@/core/types'
+import type { GameContext, GameHandle, GameModule, GameOutcome, Job, LevelData, Question } from '@/core/types'
 import type { Session } from '@/core/session'
 import { audio } from '@/audio'
+import { ITEMS } from '@/data/shop'
 
 /**
  * 把 GameModule 掛到畫面上。
@@ -13,15 +14,20 @@ import { audio } from '@/audio'
  * 所以每一個新遊戲都自動有返回路徑，不用各寫一次。
  */
 export function GameHost({
-  game, level, session, studentId, nextQuestion, onFinish, onLeave,
+  game, level, session, studentId, job, items, nextQuestion, onFinish, onLeave, onUseItem,
 }: {
   game: GameModule
   level: LevelData | null
   session: Session
   studentId: string
+  job: Job
+  /** 背包裡的東西，key 是 item id。道具列就是從這裡長出來的。 */
+  items: Record<string, number>
   nextQuestion: () => Question | null
   onFinish: (o: GameOutcome) => void
   onLeave: () => void
+  /** 遊戲說這個道具真的用掉了，容器才把它從背包扣掉 */
+  onUseItem: (itemId: string) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const handleRef = useRef<GameHandle | null>(null)
@@ -40,6 +46,7 @@ export function GameHost({
 
     const ctx: GameContext = {
       level,
+      job,
       nextQuestion: () => nextRef.current(),
       report: (r) => { session.report(studentId, { ...r, combo: session.comboOf(studentId) }) },
       audio,
@@ -49,7 +56,19 @@ export function GameHost({
     const handle = game.mount(el, ctx)
     handleRef.current = handle
     return () => { handleRef.current = null; handle.destroy() }
-  }, [game, level, session, studentId])
+  }, [game, level, session, studentId, job])
+
+  /**
+   * 道具列放在容器，不放在遊戲裡——跟離開鍵同一個道理：
+   * 「我有什麼道具」是角色的事，不是守塔的事，換一個遊戲也該有這一排。
+   * 遊戲只回答「這個效果現在做得出來嗎」，做不出來就不扣。
+   */
+  const bag = ITEMS.filter((it) => it.kind === 'consumable' && (items[it.id] ?? 0) > 0)
+
+  function use(id: string) {
+    audio.play('ui-tap')
+    if (handleRef.current?.useItem?.(id)) onUseItem(id)
+  }
 
   function ask(on: boolean) {
     setAsking(on)
@@ -62,6 +81,15 @@ export function GameHost({
       <div className="leavebar">
         <button className="leave" onClick={() => ask(true)}>← 離開</button>
         {level && <span className="leavebar-name">第 {level.no} 關・{level.name}</span>}
+        {bag.length > 0 && (
+          <span className="bagbar">
+            {bag.map((it) => (
+              <button key={it.id} className="bagitem" onClick={() => use(it.id)} title={it.desc}>
+                {it.name}<b>×{items[it.id]}</b>
+              </button>
+            ))}
+          </span>
+        )}
       </div>
 
       <div ref={ref} style={{ display: 'contents' }} />

@@ -1,4 +1,7 @@
 import { newCharacter, studentId } from '@/core/character'
+import { buy, consume, count } from '@/core/inventory'
+import { levelFromExp } from '@/core/progress'
+import { ITEMS } from '@/data/shop'
 import { WordStat } from '@/core/wordStat'
 import type {
   AnswerEvent, Character, ClassRoom, LevelProgress, Staff, Student, TeacherRow, WordStatEntry,
@@ -142,6 +145,58 @@ export class LocalRepository implements Repository {
 
   async saveCharacter(c: Character): Promise<void> {
     write(k.character(c.studentId), c)
+  }
+
+  /**
+   * 底下這四支在 Supabase 那邊是由資料庫把關的（價格、等級、餘額都在後端查）。
+   * 本機版沒有後端可以把關，所以這裡只是把同一套規則再寫一次，
+   * 讓沒接資料庫也玩得動——**它擋不住有心作弊的人，也不需要擋**，
+   * 本機版的存檔本來就在自己的瀏覽器裡。
+   */
+  private current(): Character {
+    const id = read<string | null>(k.session, null)
+    const c = id ? read<Character | null>(k.character(id), null) : null
+    if (!c) throw new Error('請先登入')
+    return c
+  }
+
+  async setAvatar(avatar: string): Promise<void> {
+    const c = this.current()
+    write(k.character(c.studentId), { ...c, avatar })
+  }
+
+  async buyItem(itemId: string): Promise<{ coins: number; items: Record<string, number> }> {
+    const c = this.current()
+    const item = ITEMS.find((i) => i.id === itemId)
+    if (!item) throw new Error('商店裡沒有這個東西')
+    if (levelFromExp(c.exp) < item.unlockLevel) {
+      throw new Error(`等級不夠，要 ${item.unlockLevel} 級才買得到`)
+    }
+    const r = buy(c, item)
+    if (!r.ok) throw new Error(r.why)
+    write(k.character(c.studentId), r.character)
+    return { coins: r.character.coins, items: r.character.items }
+  }
+
+  async equipItem(itemId: string, on: boolean): Promise<string[]> {
+    const c = this.current()
+    const item = ITEMS.find((i) => i.id === itemId)
+    if (!item) throw new Error('沒有這個東西')
+    if (item.kind !== 'cosmetic') throw new Error('這個不是穿戴的東西')
+    if (on && !count(c, itemId)) throw new Error('你還沒有這個東西')
+    const equipped = on
+      ? [...new Set([...c.equipped, itemId])]
+      : c.equipped.filter((e) => e !== itemId)
+    write(k.character(c.studentId), { ...c, equipped })
+    return equipped
+  }
+
+  async consumeItem(itemId: string): Promise<Record<string, number>> {
+    const c = this.current()
+    const next = consume(c, itemId)
+    if (!next) throw new Error('你沒有這個道具了')
+    write(k.character(c.studentId), next)
+    return next.items
   }
 
   async loadProgress(id: string): Promise<LevelProgress[]> {

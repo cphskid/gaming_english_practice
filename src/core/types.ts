@@ -144,6 +144,12 @@ export interface LevelData {
 export interface GameContext {
   /** 沒有關卡的遊戲是 null */
   level: LevelData | null
+  /**
+   * 玩家的職業。遊戲拿它決定「答對之後那一發怎麼分配」，
+   * 不是拿來加傷害——見 data/jobs.ts 的說明。
+   * 用不到職業的遊戲（例如打地鼠）忽略它就好。
+   */
+  job: Job
   /** 下一題。回傳 null 代表題庫用完了。 */
   nextQuestion(): Question | null
   /** 唯一的回報管道 */
@@ -165,6 +171,12 @@ export interface GameOutcome {
 export interface GameHandle {
   /** 離開畫面時要叫，停掉 requestAnimationFrame 與事件監聽 */
   destroy(): void
+  /**
+   * 用一個道具。容器管背包（有沒有、扣不扣），遊戲只管效果長什麼樣，
+   * 所以遊戲一樣碰不到金幣與存檔。回傳 false 代表現在用了會浪費，
+   * 容器就不要把道具扣掉。不吃道具的遊戲不用實作。
+   */
+  useItem?(itemId: string): boolean
   /**
    * 暫停／繼續。容器要跳確認框或設定選單時用——
    * 不暫停的話小朋友在讀「確定要離開嗎」的時候怪還在走，會莫名其妙掉血。
@@ -247,6 +259,8 @@ export type Job = 'knight' | 'mage'
 export interface Character {
   studentId: string
   job: Job
+  /** 頭像 id。空字串代表還沒創角，登入後會被帶去創角畫面。 */
+  avatar: string
   exp: number
   coins: number
   /** 道具與裝飾品，key 是 item id，value 是數量 */

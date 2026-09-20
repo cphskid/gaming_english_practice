@@ -1,4 +1,5 @@
 import { CRYSTAL, FOCUS_MAX, FOCUS_STEP, SOLDIER_REACH, SOLDIER_SLOW, TOWERS, refundOf } from '@/data/towers'
+import { JOB_EFFECT } from '@/data/jobs'
 import type { GameContext, GameHandle, LevelData, Point, Word } from '@/core/types'
 import { loadArt } from './art'
 
@@ -53,7 +54,8 @@ interface Enemy {
 interface Soldier { x: number; y: number; path: number; dist: number; hp: number; respawn: number }
 interface Tower { slot: number; kind: string; soldier: Soldier | null; builtAtWave: number }
 interface Pop { x: number; y: number; text: string; color: string; life: number }
-interface Ring { x: number; y: number; r: number; max: number; life: number; color: string }
+/** 擴散出去的圈圈。dur 是它本來有多長命，畫的時候要靠它算擴散到哪了。 */
+interface Ring { x: number; y: number; r: number; max: number; life: number; dur: number; color: string }
 interface Shot { x0: number; y0: number; x1: number; y1: number; life: number }
 interface Spawn { hp: number; speed: number; art: string; path: number; boss: boolean; scale: number }
 
@@ -150,6 +152,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     picked: 'archery',
     selected: null as number | null,
     hinted: false,
+    /** 道具「寒霜陷阱」讓這一波的怪剩幾成速度。開新的一波就恢復 1。 */
+    waveSlow: 1,
     t: 0,
   }
 
@@ -292,7 +296,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       buzz(14)
       ctx.audio.play('answer-correct')
       gainCrystals(CRYSTAL.perCorrect, e.x, e.y - 58)
-      S.rings.push({ x: e.x, y: e.y - 20, r: 16, max: 56, life: 0.42, color: '#ffe08a' })
+      S.rings.push({ x: e.x, y: e.y - 20, r: 16, max: 56, life: 0.42, dur: 0.42, color: '#ffe08a' })
       volley(e)
       speak(e.word.word)
     } else {
@@ -306,7 +310,13 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     syncUI()
   }
 
-  /** 齊射：射程涵蓋到這隻怪的塔全部打它一次，同時開火的塔越多傷害越高 */
+  /**
+   * 齊射：射程涵蓋到這隻怪的塔全部打它一次，同時開火的塔越多傷害越高。
+   *
+   * 職業在這裡進場，而且**只**在這裡進場：它改的是這一發怎麼分配，
+   * 不是玩家有多強（理由見 data/jobs.ts）。騎士把整發壓在被點到的那隻身上，
+   * 法師把同一發散到附近幾隻。塔的傷害、集火倍率、水晶收入都不受職業影響。
+   */
   function volley(e: Enemy) {
     const hits: Tower[] = []
     let base = 0
@@ -329,17 +339,82 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     ctx.audio.play('volley')
     const mult = 1 + FOCUS_STEP * Math.min(FOCUS_MAX, hits.length - 1)
     const total = Math.round(base * mult)
-    e.hp -= total
-    S.pops.push({ x: e.x + 18, y: e.y - 40, text: '-' + total, color: '#fff', life: 0.9 })
+    const job = JOB_EFFECT[ctx.job] ?? JOB_EFFECT.knight
+
+    // 主目標。騎士的專長寫在 bossBonus：打魔王特別痛，打小兵跟沒職業一樣。
+    const boss = e.boss ? job.bossBonus : 1
+    const main = Math.max(1, Math.round(total * job.focus * boss))
+    const dead: Enemy[] = []
+    e.hp -= main
+    S.pops.push({ x: e.x + 18, y: e.y - 40, text: '-' + main, color: '#fff', life: 0.9 })
     if (hits.length > 1)
       S.pops.push({ x: e.x + 18, y: e.y - 22, text: '集火 ×' + mult.toFixed(1), color: '#ffd05a', life: 1 })
-    if (e.hp <= 0) {
-      ctx.audio.play('enemy-die')
-      gainCrystals(e.boss ? CRYSTAL.perKill * 5 : CRYSTAL.perKill, e.x, e.y - 70)
-      killEnemy(e)
+    if (e.hp <= 0) dead.push(e)
+
+    // 濺射。只打已經進場的怪，近的先吃，最多 splashMax 隻——
+    // 不設上限的話後面幾關一發就清場，法師會變成唯一解。
+    if (job.splash > 0 && job.splashShare > 0) {
+      const near = S.enemies
+        .filter((o) => o !== e && o.entered)
+        .map((o) => ({ o, d: Math.hypot(o.x - e.x, o.y - e.y) }))
+        .filter((x) => x.d <= job.splash)
+        .sort((a, b) => a.d - b.d)
+        .slice(0, job.splashMax)
+      if (near.length) {
+        const dmg = Math.max(1, Math.round(total * job.splashShare))
+        S.rings.push({ x: e.x, y: e.y - 20, r: 20, max: job.splash, life: 0.5, dur: 0.5, color: '#9fd0ff' })
+        for (const { o } of near) {
+          o.hp -= dmg
+          o.shake = 0.25
+          S.pops.push({ x: o.x + 14, y: o.y - 34, text: '-' + dmg, color: '#9fd0ff', life: 0.8 })
+          if (o.hp <= 0) dead.push(o)
+        }
+      }
     }
-    else ctx.audio.play('enemy-hit')
+
+    if (dead.length) {
+      ctx.audio.play('enemy-die')
+      for (const d of dead) {
+        gainCrystals(d.boss ? CRYSTAL.perKill * 5 : CRYSTAL.perKill, d.x, d.y - 70)
+        killEnemy(d)
+      }
+    } else ctx.audio.play('enemy-hit')
     pickQuestion()
+  }
+
+  /**
+   * 用一個道具。
+   *
+   * 容器負責「有沒有這個道具、用掉之後要寫回哪裡」，遊戲只負責「效果長什麼樣」——
+   * 跟金幣一樣，遊戲碰不到背包，它只知道有人叫它做一件事。
+   * 回傳 false 代表現在用了會浪費（例如血是滿的），容器就不會把道具扣掉。
+   */
+  function useItem(id: string): boolean {
+    if (S.phase === 'done') return false
+    switch (id) {
+      case 'slow-30':
+        if (S.phase !== 'battle') { toast('開戰之後才用得到，不然會浪費'); return false }
+        S.waveSlow = 0.7
+        toast('地面結霜了，這一波的怪都走得很慢')
+        S.rings.push({ x: layout.castle.x - 120, y: layout.castle.y - 80, r: 20, max: 260, life: 0.9, dur: 0.9, color: '#9fd0ff' })
+        ctx.audio.play('explosion')
+        syncUI()
+        return true
+      case 'heal-5':
+        if (S.hp >= rules.castleHp) { toast('城堡是滿血的，留著下次用'); return false }
+        S.hp = Math.min(rules.castleHp, S.hp + 5)
+        toast('城牆補好了')
+        S.pops.push({ x: layout.castle.x - 40, y: layout.castle.y - 70, text: '+5 ❤️', color: '#9de8a0', life: 1.2 })
+        ctx.audio.play('tower-build')
+        syncUI()
+        return true
+      case 'crystal-40':
+        gainCrystals(40, layout.castle.x - 60, layout.castle.y - 100)
+        toast('補給到了，多蓋一座塔吧')
+        return true
+      default:
+        return false
+    }
   }
 
   function killEnemy(e: Enemy) {
@@ -453,7 +528,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         // 拖慢之後怪再慢也一定會走進箭塔的範圍，那個壞情況就消失了，
         // 而軍營原本的用處（替你爭取時間）完全保留。
         if (blocker) blocker.hp -= dt * 9
-        e.dist += e.speed * (blocker ? SOLDIER_SLOW : 1) * dt
+        e.dist += e.speed * (blocker ? SOLDIER_SLOW : 1) * S.waveSlow * dt
 
         const p = pointAt(PATHS[e.path], e.dist)
         e.x = p.x; e.y = p.y
@@ -485,6 +560,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         S.wave++
         S.phase = 'build'
         S.target = null
+        S.waveSlow = 1 // 寒霜陷阱只管一波
         gainCrystals(CRYSTAL.perWave, layout.castle.x - 60, layout.castle.y - 100)
         syncUI(); syncQuiz()
       }
@@ -632,7 +708,9 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       c2d.beginPath(); c2d.moveTo(s.x0, s.y0); c2d.lineTo(s.x1, s.y1); c2d.stroke()
     }
     for (const r of S.rings) {
-      const t = 1 - r.life / 0.42
+      // 本來這裡寫死 0.42（當時只有一種圈圈），命長一點的圈圈會算出負的半徑，
+      // canvas 直接丟例外，整個遊戲畫面就停在那裡。改成用它自己的 dur。
+      const t = 1 - r.life / r.dur
       c2d.strokeStyle = r.color; c2d.globalAlpha = (1 - t) * 0.9; c2d.lineWidth = 4
       c2d.beginPath(); c2d.arc(r.x, r.y, r.r + (r.max - r.r) * t, 0, 7); c2d.stroke()
       c2d.globalAlpha = 1
@@ -818,7 +896,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     if (S.phase === 'battle') {
       const hit = pickHit(x, y)
       if (hit) tapEnemy(hit)
-      else S.rings.push({ x, y, r: 6, max: 30, life: 0.3, color: 'rgba(255,255,255,.7)' })
+      else S.rings.push({ x, y, r: 6, max: 30, life: 0.3, dur: 0.3, color: 'rgba(255,255,255,.7)' })
       return
     }
     for (let i = 0; i < SLOTS.length; i++) {
@@ -868,6 +946,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   raf = requestAnimationFrame(loop)
 
   return {
+    useItem,
     setPaused(on: boolean) {
       paused = on
       // 暫停期間時間會一直走，恢復時把 last 拉回來，不然會一口氣補一大格

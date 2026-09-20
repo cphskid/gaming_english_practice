@@ -3,6 +3,7 @@ import { Quiz } from '@/core/quiz'
 import { Session, type SessionResult } from '@/core/session'
 import { WordStat } from '@/core/wordStat'
 import { mergeProgress } from '@/core/progress'
+import { needsCreation } from '@/core/character'
 import type {
   Character, GameOutcome, LevelData, LevelProgress, Staff, Student,
 } from '@/core/types'
@@ -18,9 +19,12 @@ import { Result } from './Result'
 import { Teacher } from './Teacher'
 import { Admin } from './Admin'
 import { Settings } from './Settings'
+import { CreateCharacter } from './CreateCharacter'
+import { Shop } from './Shop'
 
 type Screen =
-  | 'login' | 'staff' | 'select' | 'play' | 'result' | 'teacher' | 'admin' | 'settings'
+  | 'login' | 'staff' | 'create' | 'select' | 'shop'
+  | 'play' | 'result' | 'teacher' | 'admin' | 'settings'
 
 interface Playing {
   level: LevelData
@@ -53,7 +57,8 @@ export function App() {
     setProgress(new Map(p.map((x) => [x.levelId, x])))
     setStat(WordStat.fromEntries(stats))
     setTeacherOpen(new Set(open))
-    setScreen('select')
+    // 還沒選過職業和頭像的人先去創角，不然他永遠不知道自己可以選
+    setScreen(needsCreation(c) ? 'create' : 'select')
   }, [])
 
   /**
@@ -180,6 +185,22 @@ export function App() {
     setScreen('select')
   }, [playing, student, character])
 
+  /**
+   * 道具真的生效了才扣。扣的動作走 repo，跟買一樣由伺服器算數，
+   * 前端只是把回來的角色狀態換上去。
+   */
+  const useItem = useCallback(async (itemId: string) => {
+    if (!character) return
+    try {
+      const items = await repo.consumeItem(itemId)
+      setCharacter((c) => (c ? { ...c, items } : c))
+    } catch (e) {
+      // 道具在戰場上已經生效了，這裡只是記帳失敗。不要把遊戲打斷，
+      // 下一次讀角色就會回到伺服器的版本。
+      console.warn('扣道具失敗', e)
+    }
+  }, [character])
+
   const nextQuestion = useCallback(() => playing?.quiz.next() ?? null, [playing])
 
   return (
@@ -220,29 +241,58 @@ export function App() {
         />
       )}
 
+      {screen === 'create' && character && (
+        <CreateCharacter
+          character={character}
+          onDone={async (job, avatar) => {
+            try {
+              await repo.saveCharacter({ ...character, job })
+              await repo.setAvatar(avatar)
+              setCharacter({ ...character, job, avatar })
+              setScreen('select')
+              return null
+            } catch (e) {
+              return e instanceof Error ? e.message : String(e)
+            }
+          }}
+        />
+      )}
+
+      {screen === 'shop' && character && (
+        <Shop
+          character={character}
+          onChanged={setCharacter}
+          onBack={() => setScreen('select')}
+        />
+      )}
+
       {screen === 'select' && student && character && (
         <LevelSelect
           student={student} character={character} progress={progress}
           teacherOpen={teacherOpen} onPlay={startLevel}
           onSettings={() => setScreen('settings')}
+          onShop={() => setScreen('shop')}
         />
       )}
 
-      {screen === 'settings' && student && (
+      {screen === 'settings' && student && character && (
         <Settings
-          student={student}
+          student={student} character={character}
           onChanged={(s) => { setStudent(s); void enter(s) }}
+          onCharacter={setCharacter}
           onBack={() => setScreen('select')}
           onLogout={() => void logout()}
         />
       )}
 
-      {screen === 'play' && playing && student && (
+      {screen === 'play' && playing && student && character && (
         <GameHost
           game={towerDefense} level={playing.level} session={playing.session}
-          studentId={student.id} nextQuestion={nextQuestion}
+          studentId={student.id} job={character.job} items={character.items}
+          nextQuestion={nextQuestion}
           onFinish={(o) => void finish(o)}
           onLeave={() => void leave()}
+          onUseItem={(id) => void useItem(id)}
         />
       )}
 
