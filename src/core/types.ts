@@ -150,6 +150,11 @@ export interface GameContext {
    * 用不到職業的遊戲（例如打地鼠）忽略它就好。
    */
   job: Job
+  /**
+   * 陣營顏色的美術後綴（例如 '_red'，預設藍色是空字串）。
+   * 這是裝飾品唯一會進到遊戲裡的東西，而且**只能改外觀，不准改數值**。
+   */
+  color: string
   /** 下一題。回傳 null 代表題庫用完了。 */
   nextQuestion(): Question | null
   /** 唯一的回報管道 */

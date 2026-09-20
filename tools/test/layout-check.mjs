@@ -62,6 +62,13 @@ for (const size of SIZES) {
     const cv2 = await box('.td-cv')
     Math.abs(cv2.width - cv.width) < 2 ? ok('開戰前後畫布一樣大，怪不會跳位置')
       : bad(`開戰後畫布從 ${Math.round(cv.width)} 變成 ${Math.round(cv2.width)}`)
+    // 道具生效時上面那一條會多一段倒數。它會不會把關卡名稱或水晶數擠出畫面，
+    // 用眼睛看不準，量就準：HUD 捲不動才代表東西都還在裡面。
+    await page.evaluate(() => { window.__td?.useItem('slow-30') })
+    await page.waitForTimeout(400)
+    const spill = await page.locator('.td-hud').evaluate((e) => e.scrollWidth - e.clientWidth)
+    spill <= 1 ? ok('道具倒數擠進上面那一條還有空間')
+      : bad(`道具倒數把上面那一條擠爆了 ${spill}px`)
     await page.screenshot({ path: `/tmp/layout-${size.w}x${size.h}.png` })
   } catch (e) {
     bad(String(e).split('\n')[0])

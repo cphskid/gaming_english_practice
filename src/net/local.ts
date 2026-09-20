@@ -6,7 +6,7 @@ import { WordStat } from '@/core/wordStat'
 import type {
   AnswerEvent, Character, ClassRoom, LevelProgress, Staff, Student, TeacherRow, WordStatEntry,
 } from '@/core/types'
-import type { ClassRosterRow, Repository } from './repository'
+import type { ClassRosterRow, LeaderRow, Repository } from './repository'
 
 /**
  * localStorage 版。**存的是最終的事件形狀**，所以之後換成 Supabase
@@ -184,8 +184,14 @@ export class LocalRepository implements Repository {
     if (!item) throw new Error('沒有這個東西')
     if (item.kind !== 'cosmetic') throw new Error('這個不是穿戴的東西')
     if (on && !count(c, itemId)) throw new Error('你還沒有這個東西')
+    // 一個欄位一次只能穿一件。正式版這條規則是資料庫在管（equip_item），
+    // 本地版要跟著做，不然本機測起來對、上線又是另一回事。
+    const slot = item.slot ?? null
+    const kept = slot
+      ? c.equipped.filter((e) => ITEMS.find((i) => i.id === e)?.slot !== slot)
+      : c.equipped
     const equipped = on
-      ? [...new Set([...c.equipped, itemId])]
+      ? [...new Set([...kept, itemId])]
       : c.equipped.filter((e) => e !== itemId)
     write(k.character(c.studentId), { ...c, equipped })
     return equipped
@@ -299,6 +305,28 @@ export class LocalRepository implements Repository {
 
   async regenerateClassCode(code: string): Promise<string> {
     return code
+  }
+
+  async classLeaderboard(classCode?: string): Promise<LeaderRow[]> {
+    const me = await this.currentStudent()
+    const code = (classCode ?? me?.classCode ?? '').trim().toUpperCase()
+    if (!code) return []
+    const rows = read<string[]>(k.roster(code), []).map((id) => {
+      const s = read<Student | null>(k.student(id), null)
+      const c = read<Character | null>(k.character(id), null)
+      const p = read<LevelProgress[]>(k.progress(id), [])
+      return {
+        nickname: s?.nickname ?? '?',
+        coins: c?.coins ?? 0,
+        exp: c?.exp ?? 0,
+        stars: p.reduce((n, x) => n + x.stars, 0),
+        avatar: c?.avatar ?? '',
+        equipped: c?.equipped ?? [],
+        me: id === me?.id,
+      }
+    })
+    // 排序規則要跟後端那支 RPC 一樣，不然本機測起來是對的、上線是另一回事。
+    return rows.sort((a, b) => b.exp - a.exp || b.coins - a.coins)
   }
 
   async loadClassRoster(classCode: string): Promise<ClassRosterRow[]> {

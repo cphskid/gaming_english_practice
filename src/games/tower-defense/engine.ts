@@ -25,6 +25,14 @@ const ANSWER_COOLDOWN = 0.3
 const SOLO_GRACE = 0.4
 /** 開場那一小隊怪彼此隔多遠，免得疊在同一格 */
 const LINE_SPACING = 95
+/**
+ * 寒霜陷阱持續幾秒。
+ *
+ * 本來寫的是「這一波」，但「這一波」沒有長度可以顯示，玩家看不出來它還在不在，
+ * 用起來就像沒發生。改成固定秒數，狀態列才有倒數可以看，也才變成一個
+ * 要抓時機的判斷（等怪擠成一團再按）。
+ */
+const SLOW_SECONDS = 15
 
 interface Enemy {
   word: Word
@@ -54,6 +62,18 @@ interface Enemy {
 interface Soldier { x: number; y: number; path: number; dist: number; hp: number; respawn: number }
 interface Tower { slot: number; kind: string; soldier: Soldier | null; builtAtWave: number }
 interface Pop { x: number; y: number; text: string; color: string; life: number }
+/** 播一次就結束的圖片特效（例如治療）。t 從 0 走到 dur。 */
+interface Fx { kind: string; x: number; y: number; t: number; dur: number; size: number }
+
+/**
+ * 身上正在生效的狀態。
+ *
+ * 本來寒霜陷阱的效果是「這一波」，結果是玩家完全看不出來它還在不在——
+ * 「這一波」沒有長度可以顯示。改成固定秒數之後才有倒數可以看，
+ * 而且變成一個要抓時機的判斷（等怪擠成一團再按），比開場就按掉有趣。
+ */
+interface Buff { id: string; icon: string; name: string; left: number; dur: number }
+
 /** 擴散出去的圈圈。dur 是它本來有多長命，畫的時候要靠它算擴散到哪了。 */
 interface Ring { x: number; y: number; r: number; max: number; life: number; dur: number; color: string }
 interface Shot { x0: number; y0: number; x1: number; y1: number; life: number }
@@ -87,6 +107,7 @@ const SHELL = `
     <span class="td-qzh">準備防守</span>
     <span class="td-qhint">蓋好塔再開戰</span>
   </div>
+  <span class="td-buffs"></span>
   <button class="td-say" disabled aria-label="再念一次">🔊</button>
 </div>
 <div class="td-stage">
@@ -122,6 +143,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   const elGo = $<HTMLButtonElement>('.td-go')
   const elSell = $<HTMLButtonElement>('.td-sell')
   const elToast = $<HTMLElement>('.td-toast')
+  const elBuffs = $<HTMLElement>('.td-buffs')
 
   let img: Record<string, HTMLImageElement> = {}
   let terrain: HTMLCanvasElement | null = null
@@ -152,10 +174,13 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     picked: 'archery',
     selected: null as number | null,
     hinted: false,
-    /** 道具「寒霜陷阱」讓這一波的怪剩幾成速度。開新的一波就恢復 1。 */
-    waveSlow: 1,
+    buffs: [] as Buff[],
+    fx: [] as Fx[],
     t: 0,
   }
+
+  /** 怪現在剩幾成速度。寒霜陷阱生效中就是三成慢。 */
+  const slowFactor = () => (S.buffs.some((b) => b.id === 'slow-30') ? 0.7 : 1)
 
   // ---------------------------------------------------------------- 工具
   function toast(msg: string) {
@@ -392,26 +417,41 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   function useItem(id: string): boolean {
     if (S.phase === 'done') return false
     switch (id) {
-      case 'slow-30':
+      case 'slow-30': {
         if (S.phase !== 'battle') { toast('開戰之後才用得到，不然會浪費'); return false }
-        S.waveSlow = 0.7
-        toast('地面結霜了，這一波的怪都走得很慢')
-        S.rings.push({ x: layout.castle.x - 120, y: layout.castle.y - 80, r: 20, max: 260, life: 0.9, dur: 0.9, color: '#9fd0ff' })
+        if (S.buffs.some((b) => b.id === id)) { toast('地面已經結霜了，等它退了再用'); return false }
+        S.buffs.push({ id, icon: '❄️', name: '寒霜', left: SLOW_SECONDS, dur: SLOW_SECONDS })
+        toast('地面結霜了，怪走得很慢')
+        // 從城堡往外掃一圈，讓人看得出來是整片地結霜，不是只有一個點
+        S.rings.push({ x: layout.castle.x - 200, y: (layout.land.r0 + layout.land.r1) * 32,
+          r: 20, max: 900, life: 1.1, dur: 1.1, color: '#9fd0ff' })
+        for (const e of S.enemies) {
+          S.rings.push({ x: e.x, y: e.y - 18, r: 6, max: 46, life: 0.55, dur: 0.55, color: '#bfe6ff' })
+          S.pops.push({ x: e.x, y: e.y - 52, text: '❄️', color: '#bfe6ff', life: 0.9 })
+        }
         ctx.audio.play('explosion')
         syncUI()
         return true
+      }
       case 'heal-5':
         if (S.hp >= rules.castleHp) { toast('城堡是滿血的，留著下次用'); return false }
         S.hp = Math.min(rules.castleHp, S.hp + 5)
         toast('城牆補好了')
+        // 修士的治療特效，素材包裡本來就有（見 tools/build-td-art.py）
+        S.fx.push({ kind: 'heal', x: layout.castle.x - 6, y: layout.castle.y - 54, t: 0, dur: 0.9, size: 190 })
         S.pops.push({ x: layout.castle.x - 40, y: layout.castle.y - 70, text: '+5 ❤️', color: '#9de8a0', life: 1.2 })
         ctx.audio.play('tower-build')
         syncUI()
         return true
-      case 'crystal-40':
-        gainCrystals(40, layout.castle.x - 60, layout.castle.y - 100)
+      case 'crystal-40': {
+        // 一顆一顆冒出來，比一個 +40 有感
+        for (let i = 0; i < 8; i++)
+          S.pops.push({ x: layout.castle.x - 150 + Math.random() * 180,
+            y: layout.castle.y - 60 - Math.random() * 60, text: '💎', color: '#8fd8ff', life: 0.7 + i * 0.09 })
+        gainCrystals(40, layout.castle.x - 60, layout.castle.y - 110)
         toast('補給到了，多蓋一座塔吧')
         return true
+      }
       default:
         return false
     }
@@ -528,7 +568,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         // 拖慢之後怪再慢也一定會走進箭塔的範圍，那個壞情況就消失了，
         // 而軍營原本的用處（替你爭取時間）完全保留。
         if (blocker) blocker.hp -= dt * 9
-        e.dist += e.speed * (blocker ? SOLDIER_SLOW : 1) * S.waveSlow * dt
+        e.dist += e.speed * (blocker ? SOLDIER_SLOW : 1) * slowFactor() * dt
 
         const p = pointAt(PATHS[e.path], e.dist)
         e.x = p.x; e.y = p.y
@@ -560,11 +600,19 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         S.wave++
         S.phase = 'build'
         S.target = null
-        S.waveSlow = 1 // 寒霜陷阱只管一波
         gainCrystals(CRYSTAL.perWave, layout.castle.x - 60, layout.castle.y - 100)
         syncUI(); syncQuiz()
       }
     }
+
+    // 狀態倒數。停在備戰畫面的時候不扣，不然玩家在蓋塔它就默默退光了。
+    if (S.phase === 'battle') {
+      for (const b of S.buffs) b.left -= dt
+      const before = S.buffs.length
+      S.buffs = S.buffs.filter((b) => b.left > 0)
+      if (S.buffs.length !== before) { toast('寒霜退了'); syncUI() }
+    }
+    S.fx = S.fx.filter((f) => (f.t += dt) < f.dur)
 
     S.shots = S.shots.filter((s) => (s.life -= dt) > 0)
     S.pops = S.pops.filter((p) => { p.life -= dt; p.y -= dt * 22; return p.life > 0 })
@@ -687,6 +735,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     else { c2d.fillStyle = '#6ea84f'; c2d.fillRect(0, 0, W, H) }
 
     if (S.phase === 'build') drawBuildHints()
+    drawFrost() // 地面那一層要壓在人和塔底下，所以畫在排序之前
 
     // 所有站在地上的東西照「腳下的 y」由遠到近排，遮擋關係才會對
     const scene: { y: number; f: () => void }[] = []
@@ -714,6 +763,16 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       c2d.strokeStyle = r.color; c2d.globalAlpha = (1 - t) * 0.9; c2d.lineWidth = 4
       c2d.beginPath(); c2d.arc(r.x, r.y, r.r + (r.max - r.r) * t, 0, 7); c2d.stroke()
       c2d.globalAlpha = 1
+    }
+    // 一次性的圖片特效。治療用的是素材包裡修士的 Heal_Effect，11 格。
+    for (const f of S.fx) {
+      const im = img[f.kind]
+      if (!im?.complete) continue
+      const frames = Math.max(1, Math.round(im.width / im.height))
+      const k = Math.min(frames - 1, Math.floor((f.t / f.dur) * frames))
+      const cell = im.width / frames
+      c2d.drawImage(im, k * cell, 0, cell, im.height,
+        f.x - f.size / 2, f.y - f.size / 2, f.size, f.size)
     }
     for (const p of S.pops) {
       c2d.globalAlpha = Math.min(1, p.life)
@@ -761,26 +820,58 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     c2d.drawImage(im, d.x - im.width / 2, d.y - im.height, im.width, im.height)
   }
 
+  /**
+   * 拿這個陣營顏色的圖。素材包每一棟建築和每一個兵都有五色，
+   * 藍色是預設所以鍵名不帶後綴。沒有那一色就退回藍色，畫面不會空掉。
+   */
+  function art(key: string): HTMLImageElement | undefined {
+    return img[key + ctx.color] ?? img[key]
+  }
+
   function drawCastle() {
-    const im = img.castle
+    const im = art('castle')
     if (!im?.complete) return
     shadow(layout.castle.x, layout.castle.y - 6, 62)
     c2d.drawImage(im, layout.castle.x - 75, layout.castle.y - 120, 150, 120)
   }
 
   function drawTower(t: Tower, s: Point) {
-    const im = img[t.kind]
+    const im = art(t.kind)
     if (!im?.complete) return
     shadow(s.x, s.y - 4, 34)
     c2d.drawImage(im, s.x - 39, s.y - 102, 78, 104)
   }
 
   function drawSoldier(sd: Soldier) {
-    if (img.warrior?.complete) {
+    const w = art('warrior')
+    if (w?.complete) {
       shadow(sd.x, sd.y + 2, 20)
-      c2d.drawImage(img.warrior, sd.x - 42, sd.y - 63, 84, 84)
+      c2d.drawImage(w, sd.x - 42, sd.y - 63, 84, 84)
     }
     bar(sd.x - 19, sd.y - 48, 38, 5, sd.hp / TOWERS.barracks.soldierHp!, '#6fbf4a')
+  }
+
+  /**
+   * 結霜的視覺。道具的問題不是效果不夠強，是**看不出來它在生效**，
+   * 所以這裡分三層：整片地面偏藍、每隻怪身上一層霜、頭上一片雪花。
+   */
+  function drawFrost() {
+    if (!S.buffs.some((b) => b.id === 'slow-30')) return
+    const y0 = layout.land.r0 * 64, y1 = layout.land.r1 * 64 + 64
+    c2d.save()
+    // 淡淡的藍在綠色草地上幾乎看不出來，小朋友要一眼看得出「地上結霜了」，
+    // 所以這裡刻意上得比較重。
+    c2d.globalAlpha = 0.3
+    c2d.fillStyle = '#9fd0ff'
+    c2d.fillRect(0, y0, W, y1 - y0)
+    c2d.globalAlpha = 0.8
+    c2d.strokeStyle = '#eaf7ff'; c2d.lineWidth = 2.5
+    // 沿著上下緣畫一排冰稜，一眼看得出這一片是結霜的範圍
+    for (let x = 8; x < W; x += 34) {
+      c2d.beginPath(); c2d.moveTo(x, y0); c2d.lineTo(x + 8, y0 + 11); c2d.lineTo(x + 16, y0); c2d.stroke()
+      c2d.beginPath(); c2d.moveTo(x, y1); c2d.lineTo(x + 8, y1 - 11); c2d.lineTo(x + 16, y1); c2d.stroke()
+    }
+    c2d.restore()
   }
 
   function drawEnemy(e: Enemy) {
@@ -797,6 +888,14 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       c2d.fillStyle = '#d43c32'
       c2d.beginPath(); c2d.ellipse(e.x + sh, e.y - 20, 26, 28, 0, 0, 7); c2d.fill()
       c2d.globalAlpha = 1
+    }
+    if (S.buffs.some((b) => b.id === 'slow-30')) {
+      c2d.globalAlpha = 0.38
+      c2d.fillStyle = '#9fd0ff'
+      c2d.beginPath(); c2d.ellipse(e.x + sh, e.y - 22, 24, 27, 0, 0, 7); c2d.fill()
+      c2d.globalAlpha = 1
+      c2d.font = '13px system-ui, sans-serif'; c2d.textAlign = 'center'
+      c2d.fillText('❄️', e.x + sh, e.y - 56)
     }
     c2d.restore()
     bar(e.x + sh - 22 * e.scale, e.y - 46 * e.scale, 44 * e.scale, 5, e.hp / e.maxHp, e.boss ? '#ff7a3c' : '#d4504a')
@@ -850,6 +949,22 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       const back = refundOf(TOWERS[sel.kind].cost, sel.builtAtWave < S.wave)
       elSell.textContent = `拆除 ${TOWERS[sel.kind].name}（退 ${back} 💎）`
     }
+  }
+
+  /**
+   * 狀態列：正在生效的道具效果 ＋ 倒數條。
+   *
+   * 每一格都重畫太浪費，所以只在顯示出來的秒數變了才重建 DOM。
+   */
+  let buffSig = ''
+  function syncBuffs() {
+    const sig = S.buffs.map((b) => b.id + ':' + Math.ceil(b.left)).join(',')
+    if (sig === buffSig) return
+    buffSig = sig
+    elBuffs.innerHTML = S.buffs
+      .map((b) => `<span class="td-buff"><i>${b.icon}</i>${b.name}<b>${Math.ceil(b.left)}s</b>`
+        + `<u style="width:${Math.max(0, Math.min(100, (b.left / b.dur) * 100)).toFixed(1)}%"></u></span>`)
+      .join('')
   }
 
   function syncQuiz() {
@@ -928,6 +1043,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     const dt = Math.min(0.05, (now - last) / 1000)
     last = now
     if (S.phase !== 'done' && !paused) update(dt)
+    syncBuffs()
     draw()
     raf = requestAnimationFrame(loop)
   }
@@ -938,7 +1054,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   // 正式版 build 會整段消失（import.meta.env.DEV 在 production 是 false）。
   if (import.meta.env.DEV) {
     ;(window as unknown as { __td?: unknown }).__td = {
-      S, SLOTS, level, tapEnemy, tapSlot, sellSelected, startWave,
+      S, SLOTS, level, tapEnemy, tapSlot, sellSelected, startWave, useItem,
     }
   }
 

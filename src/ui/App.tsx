@@ -4,6 +4,7 @@ import { Session, type SessionResult } from '@/core/session'
 import { WordStat } from '@/core/wordStat'
 import { mergeProgress } from '@/core/progress'
 import { needsCreation } from '@/core/character'
+import { colorOf } from '@/data/cosmetics'
 import type {
   Character, GameOutcome, LevelData, LevelProgress, Staff, Student,
 } from '@/core/types'
@@ -21,9 +22,10 @@ import { Admin } from './Admin'
 import { Settings } from './Settings'
 import { CreateCharacter } from './CreateCharacter'
 import { Shop } from './Shop'
+import { Leaderboard } from './Leaderboard'
 
 type Screen =
-  | 'login' | 'staff' | 'create' | 'select' | 'shop'
+  | 'login' | 'staff' | 'create' | 'select' | 'shop' | 'board'
   | 'play' | 'result' | 'teacher' | 'admin' | 'settings'
 
 interface Playing {
@@ -266,12 +268,17 @@ export function App() {
         />
       )}
 
+      {screen === 'board' && student && (
+        <Leaderboard student={student} onBack={() => setScreen('select')} />
+      )}
+
       {screen === 'select' && student && character && (
         <LevelSelect
           student={student} character={character} progress={progress}
           teacherOpen={teacherOpen} onPlay={startLevel}
           onSettings={() => setScreen('settings')}
           onShop={() => setScreen('shop')}
+          onBoard={() => setScreen('board')}
         />
       )}
 
@@ -288,7 +295,8 @@ export function App() {
       {screen === 'play' && playing && student && character && (
         <GameHost
           game={towerDefense} level={playing.level} session={playing.session}
-          studentId={student.id} job={character.job} items={character.items}
+          studentId={student.id} job={character.job}
+          color={colorOf(character.equipped).suffix} items={character.items}
           nextQuestion={nextQuestion}
           onFinish={(o) => void finish(o)}
           onLeave={() => void leave()}

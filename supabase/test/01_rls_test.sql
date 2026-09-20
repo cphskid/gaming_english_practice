@@ -292,25 +292,43 @@ begin
   perform test_ok(v_after = v_before - 60, '買完金幣扣掉正確的價錢');
   perform test_ok((v_items ->> 'slow-30')::int = 1, '東西進背包了');
 
-  -- 錢不夠要被擋（披風 180，剛剛買完剩不到）
-  perform test_denied($q$ select public.buy_item('cape-red') $q$, '錢不夠還想買');
+  -- 錢不夠要被擋（紅軍 150，剛剛買完剩不到）
+  perform test_denied($q$ select public.buy_item('color-red') $q$, '錢不夠還想買');
 
   -- 補一點錢進去（用 security definer 的輔助函式，學生自己是改不動的），
   -- 才測得到後面穿脫裝飾品那幾條
-  perform test_force(format('update public.characters set coins = 500 where student_id = %L', v_id));
-  perform public.buy_item('cape-red');
+  perform test_force(format('update public.characters set coins = 900 where student_id = %L', v_id));
+  perform public.buy_item('color-red');
 
   -- 消耗品用一次就沒了，第二次要被擋
   perform public.consume_item('slow-30');
   perform test_denied($q$ select public.consume_item('slow-30') $q$, '道具用完了還想用');
 
   -- 裝飾品：買過的才穿得上，消耗品不能穿
-  perform public.equip_item('cape-red', true);
-  perform test_ok((select equipped from public.characters where student_id = v_id) ? 'cape-red', '披風穿上了');
-  perform public.equip_item('cape-red', false);
-  perform test_ok(not ((select equipped from public.characters where student_id = v_id) ? 'cape-red'), '披風脫下來了');
-  perform test_denied($q$ select public.equip_item('hat-crown', true) $q$, '穿沒買過的東西');
+  perform public.equip_item('color-red', true);
+  perform test_ok((select equipped from public.characters where student_id = v_id) ? 'color-red', '顏色穿上了');
+  perform public.equip_item('color-red', false);
+  perform test_ok(not ((select equipped from public.characters where student_id = v_id) ? 'color-red'), '顏色脫下來了');
+  perform test_denied($q$ select public.equip_item('frame-gold', true) $q$, '穿沒買過的東西');
   perform test_denied($q$ select public.equip_item('slow-30', true) $q$, '把消耗品穿在身上');
+
+  -- 一個欄位只能穿一件：換顏色會自動把原本那個顏色脫掉，
+  -- 不然存進去會變成「同時穿紅色和黃色」，畫面就不知道要顯示哪一個
+  -- 黃軍要 2 級，先把經驗補上去（一樣走 security definer，學生自己改不動）
+  perform test_force(format('update public.characters set exp = 200 where student_id = %L', v_id));
+  perform public.buy_item('color-yellow');
+  perform public.equip_item('color-red', true);
+  perform public.equip_item('color-yellow', true);
+  perform test_ok((select equipped from public.characters where student_id = v_id) ? 'color-yellow'
+              and not ((select equipped from public.characters where student_id = v_id) ? 'color-red'),
+              '換顏色會把原本的脫掉');
+
+  -- 但不同欄位可以同時穿：顏色歸顏色、外框歸外框
+  perform public.buy_item('frame-gold');
+  perform public.equip_item('frame-gold', true);
+  perform test_ok((select equipped from public.characters where student_id = v_id) ? 'color-yellow'
+              and (select equipped from public.characters where student_id = v_id) ? 'frame-gold',
+              '顏色跟外框可以同時穿');
 
   -- 頭像只認素材包裡真的有的那 25 張
   perform public.set_avatar('Avatars_07');
@@ -319,7 +337,7 @@ begin
   perform test_denied($q$ select public.set_avatar('<script>') $q$, '頭像欄位塞奇怪的字串');
 
   -- 背包也不能直接改
-  perform test_denied(format($q$ update public.characters set items = '{"hat-crown":99}'::jsonb where student_id = %L $q$, v_id), '直接改背包');
+  perform test_denied(format($q$ update public.characters set items = '{"frame-rainbow":99}'::jsonb where student_id = %L $q$, v_id), '直接改背包');
 end $$;
 
 \echo '── 密碼雜湊不能被別人讀走（RLS 管列不管欄，靠的是欄位層級的 grant）'

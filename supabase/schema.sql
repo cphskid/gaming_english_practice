@@ -152,6 +152,30 @@ create table if not exists public.shop_items (
   kind         text not null check (kind in ('consumable','cosmetic')),
   unlock_level int  not null default 1 check (unlock_level >= 1)
 );
+-- 裝飾品穿在哪個欄位。一個欄位一次只能穿一件：顏色只能有一種、外框只能有一個。
+-- 這條規則放在資料庫而不是前端，因為「同時穿四種顏色」這種狀態一旦存進去，
+-- 畫面要顯示哪一個就變成沒有答案的問題。
+alter table public.shop_items add column if not exists slot text;
+do $$ begin
+  alter table public.shop_items add constraint shop_items_slot_ck
+    check (slot is null or slot in ('color','frame'));
+exception when duplicate_object then null; end $$;
+
+-- 2026-09-20 的品項搬家。第一版賣的「小皇冠／紅披風」是要畫在頭像上的，
+-- 但那 25 張頭像是完成品不是可以疊圖層的人偶，所以改成了「皇冠框／金邊框」。
+-- 已經花錢買過的人不能白買，這裡直接換成對應的新品項，錢不動。
+-- 跑第二次以後 where 就不成立了，重複套用是安全的。
+update public.characters c
+   set items = (c.items - 'hat-crown' - 'cape-red')
+             || (case when c.items ? 'hat-crown' then jsonb_build_object('frame-crown', 1) else '{}'::jsonb end)
+             || (case when c.items ? 'cape-red'  then jsonb_build_object('frame-gold',  1) else '{}'::jsonb end),
+       equipped = coalesce((
+         select jsonb_agg(distinct case x when 'hat-crown' then 'frame-crown'
+                                          when 'cape-red'  then 'frame-gold'
+                                          else x end)
+           from jsonb_array_elements_text(c.equipped) x), '[]'::jsonb)
+ where c.items ? 'hat-crown' or c.items ? 'cape-red'
+    or c.equipped @> '["hat-crown"]'::jsonb or c.equipped @> '["cape-red"]'::jsonb;
 
 -- -----------------------------------------------------------------------------
 -- 5. 答題事件 —— 整個系統的地基
@@ -866,10 +890,10 @@ create or replace function public.equip_item(p_item text, p_on boolean)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_student uuid := public.current_student_id();
-  v_kind text; v_have int; v_equipped jsonb;
+  v_kind text; v_slot text; v_have int; v_equipped jsonb;
 begin
   if v_student is null then raise exception '還沒加入班級'; end if;
-  select i.kind into v_kind from public.shop_items i where i.id = p_item;
+  select i.kind, i.slot into v_kind, v_slot from public.shop_items i where i.id = p_item;
   if v_kind is null then raise exception '沒有這個東西'; end if;
   if v_kind <> 'cosmetic' then raise exception '這個不是穿戴的東西'; end if;
 
@@ -877,10 +901,18 @@ begin
     from public.characters c where c.student_id = v_student;
   if p_on and v_have <= 0 then raise exception '你還沒有這個東西'; end if;
 
+  -- 穿上同欄位的東西時，先把那個欄位原本那件脫下來。
+  -- 不做這件事的話會出現「同時穿紅色和紫色」，畫面就不知道要顯示哪一個。
   update public.characters c
      set equipped = case when p_on
-           then (select jsonb_agg(distinct e)
-                   from jsonb_array_elements_text(c.equipped || to_jsonb(p_item)) e)
+           then (select coalesce(jsonb_agg(distinct e), '[]'::jsonb)
+                   from jsonb_array_elements_text(
+                          coalesce((select jsonb_agg(x)
+                                      from jsonb_array_elements_text(c.equipped) x
+                                     where v_slot is null
+                                        or x not in (select i.id from public.shop_items i
+                                                      where i.slot = v_slot)),
+                                   '[]'::jsonb) || to_jsonb(p_item)) e)
            else coalesce((select jsonb_agg(e)
                    from jsonb_array_elements_text(c.equipped) e
                   where e <> p_item), '[]'::jsonb) end,
@@ -912,16 +944,23 @@ begin
 end;
 $$;
 
--- 同班排行榜。只給暱稱與分數，不給背包內容。
+-- 同班排行榜。只給暱稱、分數和外觀，不給背包內容——
+-- 「誰有幾個道具」不是排行榜的事，但**外框和顏色一定要看得到**：
+-- 收集品要同學看得到才有意義（見 src/data/cosmetics.ts）。
+-- me 是「這一列是不是我」，讓畫面把自己那一行標出來，不用把 id 送出去。
+-- 回傳的欄位變多了，create or replace 不能改回傳型別，所以先丟掉舊的。
+drop function if exists public.class_leaderboard(text);
 create or replace function public.class_leaderboard(p_code text default null)
-returns table (nickname text, coins int, exp int, stars int)
+returns table (nickname text, coins int, exp int, stars int,
+               avatar text, equipped jsonb, me boolean)
 language sql stable security definer set search_path = public, pg_temp as $$
   with target as (
     select coalesce(upper(btrim(p_code)), public.current_class_code()) as code
   )
   select s.nickname, c.coins, c.exp,
          coalesce((select sum(lp.stars)::int from public.level_progress lp
-                    where lp.student_id = s.id), 0)
+                    where lp.student_id = s.id), 0),
+         c.avatar, c.equipped, s.id = public.current_student_id()
     from public.students s
     join public.characters c on c.student_id = s.id
     join target t on t.code = s.class_code

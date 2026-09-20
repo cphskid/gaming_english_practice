@@ -51,6 +51,13 @@ export interface Repository {
   /** 用掉一個消耗品。回傳用完之後的背包。 */
   consumeItem(itemId: string): Promise<Record<string, number>>
 
+  /**
+   * 班內排行榜。**排名由後端算**，而且只回暱稱、分數和外觀——
+   * 角色存檔本身別人是讀不到的（RLS 擋住），要比分數就得走這支。
+   * 老師傳班級代碼可以看任何一班，學生不用傳，看的就是自己那一班。
+   */
+  classLeaderboard(classCode?: string): Promise<LeaderRow[]>
+
   loadProgress(studentId: string): Promise<LevelProgress[]>
   saveProgress(studentId: string, p: LevelProgress): Promise<void>
 
@@ -114,4 +121,16 @@ export interface ClassRosterRow {
   exp: number
   stars: number
   answers: number
+}
+
+export interface LeaderRow {
+  nickname: string
+  coins: number
+  exp: number
+  stars: number
+  avatar: string
+  /** 身上的裝飾品，畫頭像外框用 */
+  equipped: string[]
+  /** 這一列是不是自己。把自己那一行標出來，找起來才快 */
+  me: boolean
 }

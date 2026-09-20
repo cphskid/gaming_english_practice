@@ -3,7 +3,7 @@ import type {
   AnswerEvent, Character, ClassRoom, Job, LevelProgress, Skill, Staff, Student,
   TeacherRow, WordStatEntry,
 } from '@/core/types'
-import type { ClassRosterRow, Repository } from './repository'
+import type { ClassRosterRow, LeaderRow, Repository } from './repository'
 
 /**
  * Supabase 版。
@@ -424,6 +424,22 @@ export class SupabaseRepository implements Repository {
     })
     fail('換代碼失敗', error)
     return data as string
+  }
+
+  async classLeaderboard(classCode?: string): Promise<LeaderRow[]> {
+    // 不帶代碼就是「我這一班」，代碼由後端從身分查，客戶端插不了手。
+    const { data, error } = await this.db.rpc('class_leaderboard', {
+      p_code: classCode ? classCode.trim().toUpperCase() : null,
+    })
+    fail('讀取排行榜失敗', error)
+    type Row = {
+      nickname: string; coins: number; exp: number; stars: number
+      avatar: string | null; equipped: string[] | null; me: boolean
+    }
+    return ((data as Row[] | null) ?? []).map((r) => ({
+      nickname: r.nickname, coins: r.coins, exp: r.exp, stars: Number(r.stars),
+      avatar: r.avatar ?? '', equipped: r.equipped ?? [], me: r.me,
+    }))
   }
 
   async loadClassRoster(classCode: string): Promise<ClassRosterRow[]> {

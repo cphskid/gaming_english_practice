@@ -1,3 +1,4 @@
+import type { Slot } from '@/data/cosmetics'
 import type { Character } from './types'
 
 /**
@@ -12,6 +13,11 @@ export interface ItemDef {
   desc: string
   price: number
   kind: 'consumable' | 'cosmetic'
+  /**
+   * 裝飾品穿在哪個欄位。一個欄位一次只能穿一件（顏色只能有一種、
+   * 外框只能有一個），這條規則是資料庫在管，不是前端。
+   */
+  slot?: Slot
   /** 要幾級才買得到 */
   unlockLevel: number
 }

@@ -3,17 +3,22 @@ import { count } from '@/core/inventory'
 import { levelFromExp } from '@/core/progress'
 import type { Character } from '@/core/types'
 import { ITEMS } from '@/data/shop'
-import { avatarSrc } from '@/data/jobs'
+import { COLORS, FRAMES, colorOf, frameOf } from '@/data/cosmetics'
 import { JOB_NAME } from '@/core/character'
 import { repo } from '@/net'
+import { avatarSrc } from '@/data/jobs'
+import { Avatar } from './Avatar'
 
 /**
- * 商店與背包。
+ * 商店與「我的角色」。
  *
  * **買賣一律走後端**：這裡只送品項 id，價格、等級門檻、餘額都是資料庫查的。
  * 前端這份 ITEMS 只負責顯示名字和說明，就算被改掉也買不到便宜貨。
  *
  * 裝飾品純外觀不給數值——付錢變強的話，這就不是練英文的遊戲了。
+ *
+ * 「我的角色」這一頁是**收集感的主場**：買到的排在前面、沒買到的畫成灰色剪影
+ * 並標上價錢。看得到自己還缺什麼，才會想再打一關。
  */
 export function Shop({
   character, onChanged, onBack,
@@ -22,12 +27,15 @@ export function Shop({
   onChanged: (c: Character) => void
   onBack: () => void
 }) {
-  const [tab, setTab] = useState<'shop' | 'bag'>('shop')
+  const [tab, setTab] = useState<'shop' | 'me'>('shop')
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const level = levelFromExp(character.exp)
+  const has = (id: string) => count(character, id) > 0
+  const wornColor = colorOf(character.equipped)
+  const wornFrame = frameOf(character.equipped)
 
   async function run(what: () => Promise<string>) {
     if (busy) return
@@ -40,12 +48,26 @@ export function Shop({
     setBusy(false)
   }
 
-  const owned = ITEMS.filter((i) => count(character, i.id) > 0)
+  const buy = (id: string, name: string) => run(async () => {
+    const r = await repo.buyItem(id)
+    onChanged({ ...character, coins: r.coins, items: r.items })
+    return `買了「${name}」`
+  })
+
+  /** 穿上或脫下。同一個欄位只能穿一件，換掉哪一件是資料庫決定的。 */
+  const wear = (id: string, on: boolean, name: string) => run(async () => {
+    const equipped = await repo.equipItem(id, on)
+    onChanged({ ...character, equipped })
+    return on ? `換上「${name}」了` : `脫下「${name}」了`
+  })
+
+  const cosmetics = ITEMS.filter((i) => i.kind === 'cosmetic')
+  const ownedCosmetics = cosmetics.filter((i) => has(i.id)).length
 
   return (
-    <div className="screen">
+    <div className="screen wide">
       <div className="topbar">
-        <img className="mug" src={avatarSrc(character.avatar)} alt="" />
+        <Avatar character={character} />
         <span className="who">{JOB_NAME[character.job]}　Lv.{level}</span>
         <span className="spacer" />
         <span className="coins">🪙 {character.coins}</span>
@@ -54,66 +76,108 @@ export function Shop({
 
       <div className="tabs">
         <button className={tab === 'shop' ? 'on' : ''} onClick={() => setTab('shop')}>商店</button>
-        <button className={tab === 'bag' ? 'on' : ''} onClick={() => setTab('bag')}>背包</button>
+        <button className={tab === 'me' ? 'on' : ''} onClick={() => setTab('me')}>我的角色</button>
       </div>
 
       {error && <p className="error">{error}</p>}
       {note && <p className="note">{note}</p>}
 
       {tab === 'shop' && (
-        <div className="items">
-          {ITEMS.map((i) => {
-            const locked = level < i.unlockLevel
-            const poor = character.coins < i.price
-            return (
-              <div className={'item' + (locked ? ' locked' : '')} key={i.id}>
-                <span className="i-name">{i.name}</span>
-                <span className="i-desc">{i.desc}</span>
-                <span className="i-tag">
-                  {i.kind === 'cosmetic' ? '純裝飾，不會變強' : '道具'}
-                  {count(character, i.id) > 0 && `　已有 ${count(character, i.id)}`}
-                </span>
-                <button className="btn small" disabled={busy || locked}
-                  onClick={() => void run(async () => {
-                    const r = await repo.buyItem(i.id)
-                    onChanged({ ...character, coins: r.coins, items: r.items })
-                    return `買了「${i.name}」`
-                  })}>
-                  {locked ? `${i.unlockLevel} 級解鎖` : `🪙 ${i.price}`}
-                </button>
-                {!locked && poor && <span className="i-poor">還差 {i.price - character.coins}</span>}
+        <div className="shopwrap">
+          {[
+            { key: 'consumable', title: '道具', hint: '帶進關卡裡用，用掉就沒了' },
+            { key: 'color', title: '陣營顏色', hint: '城堡、塔、士兵整套變色' },
+            { key: 'frame', title: '頭像外框', hint: '套在頭像外面，同學也看得到' },
+          ].map((g) => (
+            <section key={g.key}>
+              <h2 className="sec">{g.title}<small>　{g.hint}</small></h2>
+              <div className="items">
+                {ITEMS.filter((i) => (g.key === 'consumable' ? i.kind === 'consumable' : i.slot === g.key))
+                  .map((i) => {
+                    const locked = level < i.unlockLevel
+                    const owned = has(i.id)
+                    const poor = character.coins < i.price
+                    return (
+                      <div className={'item' + (locked ? ' locked' : '')} key={i.id}>
+                        <span className="i-name">{i.icon} {i.name}</span>
+                        <span className="i-desc">{i.desc}</span>
+                        {owned && i.kind === 'cosmetic'
+                          ? <span className="i-tag">已經有了，去「我的角色」換上</span>
+                          : <span className="i-tag">{owned ? `已有 ${count(character, i.id)} 個` : ''}</span>}
+                        <button className="btn small" disabled={busy || locked || (owned && i.kind === 'cosmetic')}
+                          onClick={() => void buy(i.id, i.name)}>
+                          {locked ? `${i.unlockLevel} 級解鎖` : owned && i.kind === 'cosmetic' ? '已擁有' : `🪙 ${i.price}`}
+                        </button>
+                        {!locked && poor && !owned && <span className="i-poor">還差 {i.price - character.coins}</span>}
+                      </div>
+                    )
+                  })}
               </div>
-            )
-          })}
+            </section>
+          ))}
         </div>
       )}
 
-      {tab === 'bag' && (
-        <div className="items">
-          {owned.length === 0 && (
-            <p className="lede">背包還是空的。答對題目賺金幣，就可以去商店買東西了。</p>
-          )}
-          {owned.map((i) => {
-            const on = character.equipped.includes(i.id)
-            return (
-              <div className="item" key={i.id}>
-                <span className="i-name">{i.name}　<small>×{count(character, i.id)}</small></span>
-                <span className="i-desc">{i.desc}</span>
-                {i.kind === 'cosmetic' ? (
-                  <button className={'btn small' + (on ? '' : ' ghost')} disabled={busy}
-                    onClick={() => void run(async () => {
-                      const eq = await repo.equipItem(i.id, !on)
-                      onChanged({ ...character, equipped: eq })
-                      return on ? `脫下「${i.name}」` : `戴上「${i.name}」`
-                    })}>
-                    {on ? '穿在身上' : '穿起來'}
-                  </button>
-                ) : (
-                  <span className="i-tag">打的時候在最上面那一排點它</span>
-                )}
-              </div>
-            )
-          })}
+      {tab === 'me' && (
+        <div className="shopwrap">
+          <div className="hero">
+            <Avatar character={character} size={96} />
+            <div className="hero-txt">
+              <b>{JOB_NAME[character.job]}　Lv.{level}</b>
+              <span>{wornColor.name}　{wornFrame ? wornFrame.name : '沒戴外框'}</span>
+              <span className="i-tag">收集進度 {ownedCosmetics} / {cosmetics.length}</span>
+            </div>
+          </div>
+
+          <h2 className="sec">陣營顏色<small>　換了之後整個戰場都是你的顏色</small></h2>
+          <div className="picks">
+            {COLORS.map((c) => {
+              const owned = !c.id || has(c.id)
+              const on = wornColor.id === c.id
+              const price = ITEMS.find((i) => i.id === c.id)?.price
+              return (
+                <button key={c.id || 'default'} className={'pick' + (on ? ' on' : '') + (owned ? '' : ' locked')}
+                  disabled={busy || !owned}
+                  onClick={() => void (c.id ? wear(c.id, true, c.name)
+                    : wornColor.id && wear(wornColor.id, false, wornColor.name))}>
+                  <span className="sw" style={{ background: c.swatch }} />
+                  {c.name}
+                  {!owned && <small>🪙 {price}</small>}
+                </button>
+              )
+            })}
+          </div>
+
+          <h2 className="sec">頭像外框</h2>
+          <div className="picks">
+            <button className={'pick' + (wornFrame ? '' : ' on')} disabled={busy || !wornFrame}
+              onClick={() => void (wornFrame && wear(wornFrame.id, false, wornFrame.name))}>不戴</button>
+            {FRAMES.map((f) => {
+              const owned = has(f.id)
+              const on = wornFrame?.id === f.id
+              const price = ITEMS.find((i) => i.id === f.id)?.price
+              return (
+                <button key={f.id} className={'pick' + (on ? ' on' : '') + (owned ? '' : ' locked')}
+                  disabled={busy || !owned} onClick={() => void wear(f.id, true, f.name)}>
+                  <span className={'mugbox ' + f.className} style={{ width: 26, height: 26 }}>
+                    <img src={avatarSrc(character.avatar)} alt="" />
+                    {f.badge && <i className="mugbadge" style={{ fontSize: 11 }}>{f.badge}</i>}
+                  </span>
+                  {f.name}
+                  {!owned && <small>🪙 {price}</small>}
+                </button>
+              )
+            })}
+          </div>
+
+          <h2 className="sec">道具<small>　在關卡最上面那一排點它</small></h2>
+          <div className="picks">
+            {ITEMS.filter((i) => i.kind === 'consumable').map((i) => (
+              <span key={i.id} className={'pick' + (has(i.id) ? '' : ' locked')}>
+                {i.icon} {i.name}<small>{has(i.id) ? `×${count(character, i.id)}` : '沒有'}</small>
+              </span>
+            ))}
+          </div>
         </div>
       )}
     </div>

@@ -44,8 +44,12 @@ try {
   await page.locator('button.btn.big').click()
   await page.waitForSelector('.levels', { timeout: 10000 })
   ok('出發之後進到選關')
-  if (await page.locator('.topbar .mug').count()) ok('選關畫面上看得到頭像')
+  if (await page.locator('.topbar .mugbox').count()) ok('選關畫面上看得到頭像')
   else fail('選關畫面沒有頭像')
+  // 上面那一條又多了一顆「排行榜」。手機直拿只有 390px 寬，擠不下就會橫向捲動，
+  // 小朋友只會覺得「畫面壞了」，所以這裡量給它看。
+  const wide = await page.evaluate(() => document.documentElement.scrollWidth)
+  wide <= 390 ? ok('選關畫面沒有橫向捲動') : fail(`選關畫面往右多出 ${wide - 390}px`)
 
   console.log('── 塞一點金幣，去商店買東西')
   await page.evaluate(() => {
@@ -64,23 +68,72 @@ try {
   const after = Number((await page.locator('.coins').innerText()).replace(/\D/g, ''))
   before - after === 60 ? ok(`買了寒霜陷阱，金幣 ${before} → ${after}`) : fail(`金幣扣錯：${before} → ${after}`)
 
-  await page.locator('.item', { hasText: '紅披風' }).locator('button').click()
+  console.log('── 買裝飾品，去「我的角色」穿起來')
+  await page.locator('.item', { hasText: '金邊框' }).locator('button').click()
   await page.waitForSelector('.note')
-  await page.getByRole('button', { name: '背包' }).click()
-  await page.waitForSelector('.items .item')
-  await page.locator('.item', { hasText: '紅披風' }).locator('button').click()
+  await page.locator('.item', { hasText: '紅軍' }).locator('button').click()
   await page.waitForTimeout(300)
-  const worn = await page.locator('.item', { hasText: '紅披風' }).locator('button').innerText()
-  worn.includes('穿在身上') ? ok('披風穿起來了') : fail('披風穿不起來：' + worn)
-  await page.screenshot({ path: SHOT + '/3-bag.png', fullPage: true })
+  await page.locator('.item', { hasText: '黃軍' }).locator('button').click()
+  await page.waitForTimeout(300)
+
+  await page.getByRole('button', { name: '我的角色' }).click()
+  await page.waitForSelector('.hero')
+  await page.locator('.pick', { hasText: '金邊框' }).click()
+  await page.waitForTimeout(300)
+  const framed = await page.locator('.hero .mugbox').getAttribute('class')
+  framed.includes('f-gold') ? ok('金邊框戴到頭像上了') : fail('外框沒戴上：' + framed)
+
+  await page.locator('.pick', { hasText: '紅軍' }).click()
+  await page.waitForTimeout(300)
+  const redOn = await page.locator('.pick', { hasText: '紅軍' }).getAttribute('class')
+  redOn.includes('on') ? ok('換成紅軍了') : fail('顏色沒換成功：' + redOn)
+  await page.screenshot({ path: SHOT + '/3-me.png', fullPage: true })
+
+  // 一個欄位只能穿一件：換成黃軍，紅軍要自己脫下來（規則在資料庫，這裡只是確認畫面跟得上）
+  await page.locator('.pick', { hasText: '黃軍' }).click()
+  await page.waitForTimeout(300)
+  const stillRed = (await page.locator('.pick', { hasText: '紅軍' }).getAttribute('class')).includes(' on')
+  stillRed ? fail('換了黃軍紅軍還穿著') : ok('換顏色會把原本那件脫掉')
+  await page.locator('.pick', { hasText: '紅軍' }).click()
+  await page.waitForTimeout(300)
+
+  console.log('── 排行榜')
+  await page.getByRole('button', { name: '回去' }).click()
+  await page.waitForSelector('.levels')
+  await page.getByRole('button', { name: '排行榜' }).click()
+  await page.waitForSelector('.board .rank', { timeout: 10000 })
+  const mine = page.locator('.rank.me')
+  await mine.first().waitFor({ timeout: 5000 })
+  ok('排行榜上找得到自己：' + (await mine.first().innerText()).replace(/\n/g, ' '))
+  const myFrame = await mine.first().locator('.mugbox').getAttribute('class')
+  if (myFrame.includes('f-gold')) ok('外框在排行榜上也看得到（同學看得到才叫收集）')
+  else fail('排行榜上沒有外框：' + myFrame)
+  await page.screenshot({ path: SHOT + '/4-board.png', fullPage: true })
 
   console.log('── 帶道具進關卡')
   await page.getByRole('button', { name: '回去' }).click()
   await page.waitForSelector('.levels')
+  // 關卡本來就是橫著玩的，轉過來才量得準
+  await page.setViewportSize({ width: 844, height: 390 })
   await page.locator('.lv').first().click()
   await page.waitForSelector('.td-cv', { timeout: 10000 })
-  // 直拿的時候「請轉成橫的」那層蓋在上面，點一下就收起來（它本來就是這樣設計的）
-  await page.locator('.rotate').click()
+  await page.locator('.rotate').click({ timeout: 1500 }).catch(() => {})
+  await page.waitForTimeout(600)
+
+  // 陣營顏色到底有沒有換，用眼睛看容易騙自己，量畫布的紅藍差就不會：
+  // 紅軍的城堡、箭塔、士兵整套變紅，整張圖的紅就會比藍多出一截。
+  // 整張圖的平均色沒有用——畫面九成是草地，城堡再紅也拉不動平均。
+  // 改數「明顯偏紅的點有幾個」，紅軍的城堡、箭塔、士兵就藏不住了。
+  const redBlue = () => page.locator('.td-cv').evaluate((cv) => {
+    const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
+    let n = 0
+    // 草地也是 R 比 B 大，所以紅要贏過綠才算紅
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i] - d[i + 1] > 40 && d[i] - d[i + 2] > 40) n++
+    }
+    return (n / (d.length / 4)) * 100
+  })
+  const redness = await redBlue()
   const bag = page.locator('.bagitem')
   await bag.first().waitFor({ timeout: 5000 })
   ok('關卡上面那一排看得到道具：' + (await bag.first().innerText()).replace('\n', ' '))
@@ -101,7 +154,37 @@ try {
   gone === 0 ? ok('開戰後用掉了，道具列空了') : ok('開戰後用掉了，還剩 ' + gone + ' 種道具')
   const toast = await page.locator('.td-toast').innerText()
   toast.includes('結霜') ? ok('效果真的發生了：' + toast) : fail('沒看到效果：' + toast)
+
+  // 道具有沒有在生效，要有一條看得到的狀態才算數
+  const buff = page.locator('.td-buff')
+  await buff.first().waitFor({ timeout: 3000 })
+  const left = await buff.first().innerText()
+  if (/\d+s/.test(left)) ok('上面那條在倒數：' + left.replace(/\n/g, ' '))
+  else fail('狀態條沒有倒數：' + left)
   await page.screenshot({ path: SHOT + '/5-item-used.png' })
+
+  console.log('── 換回藍軍，確認戰場真的跟著變')
+  await page.locator('.leave').click()
+  await page.locator('.confirm-btns .btn:not(.ghost)').click()
+  await page.waitForSelector('.levels')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('button', { name: '商店' }).click()
+  await page.getByRole('button', { name: '我的角色' }).click()
+  await page.waitForSelector('.hero')
+  await page.locator('.pick', { hasText: '藍軍' }).click()
+  await page.waitForTimeout(300)
+  await page.getByRole('button', { name: '回去' }).click()
+  await page.waitForSelector('.levels')
+  await page.setViewportSize({ width: 844, height: 390 })
+  await page.locator('.lv').first().click()
+  await page.waitForSelector('.td-cv', { timeout: 10000 })
+  await page.locator('.rotate').click({ timeout: 1500 }).catch(() => {})
+  await page.waitForTimeout(600)
+  const blueness = await redBlue()
+  redness > blueness * 2
+    ? ok(`陣營顏色真的換了（偏紅的點 ${redness.toFixed(2)}% vs 藍軍的 ${blueness.toFixed(2)}%）`)
+    : fail(`換了顏色但戰場看起來一樣（偏紅的點 ${redness.toFixed(2)}% vs ${blueness.toFixed(2)}%）`)
+  await page.screenshot({ path: SHOT + '/6-blue.png' })
 } catch (e) {
   fail(String(e))
   await page.screenshot({ path: SHOT + '/error.png' }).catch(() => {})
