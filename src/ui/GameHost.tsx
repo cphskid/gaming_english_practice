@@ -84,8 +84,11 @@ export function GameHost({
         {bag.length > 0 && (
           <span className="bagbar">
             {bag.map((it) => (
-              <button key={it.id} className="bagitem" onClick={() => use(it.id)} title={it.desc}>
-                {it.name}<b>×{items[it.id]}</b>
+              <button key={it.id} className="bagitem" onClick={() => use(it.id)}
+                title={it.name + '：' + it.desc}>
+                <span className="ic">{it.icon}</span>
+                <span className="nm">{it.name}</span>
+                <b>×{items[it.id]}</b>
               </button>
             ))}
           </span>

@@ -7,6 +7,8 @@ import type { Character } from './types'
 export interface ItemDef {
   id: string
   name: string
+  /** 戰場上那一排只放得下一個圖示，所以每個道具都要有一個 */
+  icon: string
   desc: string
   price: number
   kind: 'consumable' | 'cosmetic'

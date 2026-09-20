@@ -31,6 +31,13 @@ await page.fill('#lid', BOT)
 await page.fill('#pw', 'robot42')
 await page.fill('#nick', '機器人')
 await page.click('button[type=submit]')
+// 註冊完會先進創角（養成包之後多出來的一步），隨便挑一組就好
+await page.waitForSelector('.jobs .job, .levels', { timeout: 20000 })
+if (await page.locator('.jobs .job').count()) {
+  await page.locator('.jobs .job').first().click()
+  await page.locator('.avatars .av').first().click()
+  await page.locator('button.btn.big').click()
+}
 await page.waitForSelector('.levels', { timeout: 20000 })
 await page.locator('.lv').nth(LEVEL - 1).click()
 await page.waitForSelector('.td-cv')
