@@ -1,13 +1,17 @@
 import { newCharacter, studentId } from '@/core/character'
 import { buy, consume, count } from '@/core/inventory'
-import { levelFromExp } from '@/core/progress'
+import { firstClearBonus, levelFromExp, mergeProgress, starsFor } from '@/core/progress'
+import { LEVELS } from '@/data/levels'
+import type { LevelData } from '@/core/types'
 import { ITEMS } from '@/data/shop'
 import { WordStat } from '@/core/wordStat'
 import type {
   AdminClassRow, AnswerEvent, Character, ClassRoom, LevelProgress, Staff, Student,
   TeacherRow, WordStatEntry,
 } from '@/core/types'
-import type { AddedTeacher, ClassRosterRow, LeaderRow, Repository } from './repository'
+import type {
+  AddedTeacher, ClassRosterRow, LeaderRow, LevelResult, Repository, SavedResult,
+} from './repository'
 
 /**
  * localStorage 版。**存的是最終的事件形狀**，所以之後換成 Supabase
@@ -210,12 +214,40 @@ export class LocalRepository implements Repository {
     return read<LevelProgress[]>(k.progress(id), [])
   }
 
-  async saveProgress(id: string, p: LevelProgress): Promise<void> {
+  /**
+   * 星星在這裡也是算出來的，不是接收來的——規則要跟資料庫那支
+   * save_progress 一模一樣，不然本機測起來對、上線是另一回事。
+   */
+  async saveResult(r: LevelResult): Promise<SavedResult> {
+    const c = this.current()
+    const id = c.studentId
+    const level = LEVELS.find((l) => l.id === r.levelId)
+    if (!level) throw new Error('沒有這一關：' + r.levelId)
+
+    const mine = read<AnswerEvent[]>(k.events(id), [])
+      .filter((e) => e.sessionId === r.sessionId && e.levelId === r.levelId)
+    const correct = mine.filter((e) => e.correct).length
+    // 怪只會被齊射打死，齊射只有答對才會發生——答對數連下限都不到就不是真的打過的
+    const win = r.win && correct >= minCorrectOf(level)
+    const next: LevelProgress = {
+      levelId: r.levelId,
+      stars: starsFor({ outcome: { win, survival: r.survival, detail: '' }, correct, asked: mine.length }),
+      bestCorrect: correct,
+      clearedAt: win ? Date.now() : null,
+    }
+
     const all = read<LevelProgress[]>(k.progress(id), [])
-    const i = all.findIndex((x) => x.levelId === p.levelId)
-    if (i >= 0) all[i] = p
-    else all.push(p)
+    const i = all.findIndex((x) => x.levelId === r.levelId)
+    const was = i >= 0 ? all[i] : undefined
+    const merged = mergeProgress(was, next)
+    if (i >= 0) all[i] = merged
+    else all.push(merged)
     write(k.progress(id), all)
+
+    // 首通獎金也在這裡發，跟資料庫那邊同一條規則：第一次真的通關才有
+    const bonusCoins = win && !was?.clearedAt ? firstClearBonus(level.no, false) : 0
+    if (bonusCoins) write(k.character(id), { ...this.current(), coins: this.current().coins + bonusCoins })
+    return { progress: merged, bonusCoins }
   }
 
   async appendEvents(events: AnswerEvent[]): Promise<void> {
@@ -411,4 +443,14 @@ export class LocalRepository implements Repository {
   async setTeacherActive(): Promise<void> {
     // 本地版只有一個人，沒有要停用誰
   }
+}
+
+/**
+ * 這一關至少要答對幾題才可能通關。跟 tools/gen-levels-seed.mjs 灌進資料庫的
+ * 那個數字同一套算法：怪的總數打對折。刻意訂得寬鬆——擋的是
+ * 「一題都沒答就說自己通關」，不是去評誰打得好。
+ */
+function minCorrectOf(l: LevelData): number {
+  const enemies = l.rules.waves.reduce((n, w) => n + w.count, 0) + (l.rules.boss ? 1 : 0)
+  return Math.ceil(enemies * 0.5)
 }

@@ -3,7 +3,9 @@ import type {
   AdminClassRow, AnswerEvent, Character, ClassRoom, Job, LevelProgress, Skill, Staff,
   Student, TeacherRow, WordStatEntry,
 } from '@/core/types'
-import type { AddedTeacher, ClassRosterRow, LeaderRow, Repository } from './repository'
+import type {
+  AddedTeacher, ClassRosterRow, LeaderRow, LevelResult, Repository, SavedResult,
+} from './repository'
 
 /**
  * Supabase 版。
@@ -33,7 +35,8 @@ interface ProgressRow {
 }
 interface EventRow {
   student_id: string; word_id: number; skill: Skill; correct: boolean
-  ms: number; combo: number; game_id: string; level_id: string | null; at: string
+  ms: number; combo: number; game_id: string; level_id: string | null
+  session_id: string | null; at: string
 }
 interface StatRow {
   word_id: number; skill: Skill; seen: number; correct: number; wrong: number
@@ -232,15 +235,28 @@ export class SupabaseRepository implements Repository {
     }))
   }
 
-  /** 首次通關獎勵在資料庫那邊發，這裡送的星星與通關與否只是回報 */
-  async saveProgress(_studentId: string, p: LevelProgress): Promise<void> {
-    const { error } = await this.db.rpc('save_progress', {
-      p_level_id: p.levelId,
-      p_stars: p.stars,
-      p_best_correct: p.bestCorrect,
-      p_win: p.clearedAt !== null,
+  /** 星星、答對數、首次通關獎勵全部在資料庫那邊算，這裡只回報打完了什麼 */
+  async saveResult(r: LevelResult): Promise<SavedResult> {
+    const { data, error } = await this.db.rpc('save_progress', {
+      p_level_id: r.levelId,
+      p_session: r.sessionId,
+      p_win: r.win,
+      p_survival: r.survival,
     })
     fail('存關卡進度失敗', error)
+    type Row = {
+      stars: number; best_correct: number; cleared_at: string | null; bonus_coins: number
+    }
+    const row = (data as Row[] | null)?.[0]
+    return {
+      progress: {
+        levelId: r.levelId,
+        stars: (row?.stars ?? 0) as 0 | 1 | 2 | 3,
+        bestCorrect: row?.best_correct ?? 0,
+        clearedAt: row?.cleared_at ? ms(row.cleared_at) : null,
+      },
+      bonusCoins: row?.bonus_coins ?? 0,
+    }
   }
 
   /**
@@ -257,6 +273,7 @@ export class SupabaseRepository implements Repository {
         combo: e.combo,
         gameId: e.gameId,
         levelId: e.levelId,
+        sessionId: e.sessionId,
       }))
       const { error } = await this.db.rpc('submit_answers', { p_events: chunk })
       fail('回報答題失敗', error)
@@ -266,7 +283,7 @@ export class SupabaseRepository implements Repository {
   async loadEvents(studentId: string): Promise<AnswerEvent[]> {
     const { data, error } = await this.db
       .from('answer_events')
-      .select('student_id, word_id, skill, correct, ms, combo, game_id, level_id, at')
+      .select('student_id, word_id, skill, correct, ms, combo, game_id, level_id, session_id, at')
       .eq('student_id', studentId)
       .order('at', { ascending: true })
       .limit(CLASS_EVENT_LIMIT)
@@ -299,7 +316,7 @@ export class SupabaseRepository implements Repository {
   async loadClassEvents(classCode: string): Promise<AnswerEvent[]> {
     const { data, error } = await this.db
       .from('answer_events')
-      .select('student_id, word_id, skill, correct, ms, combo, game_id, level_id, at, students!inner(class_code)')
+      .select('student_id, word_id, skill, correct, ms, combo, game_id, level_id, session_id, at, students!inner(class_code)')
       .eq('students.class_code', classCode.trim().toUpperCase())
       .order('at', { ascending: true })
       .limit(CLASS_EVENT_LIMIT)
@@ -574,6 +591,7 @@ function toEvent(r: EventRow): AnswerEvent {
     combo: r.combo,
     gameId: r.game_id,
     levelId: r.level_id,
+    sessionId: r.session_id ?? '',
     at: ms(r.at),
   }
 }

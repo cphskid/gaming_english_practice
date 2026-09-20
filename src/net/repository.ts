@@ -60,7 +60,15 @@ export interface Repository {
   classLeaderboard(classCode?: string): Promise<LeaderRow[]>
 
   loadProgress(studentId: string): Promise<LevelProgress[]>
-  saveProgress(studentId: string, p: LevelProgress): Promise<void>
+
+  /**
+   * 打完一關。
+   *
+   * **星星與答對數由伺服器算，這裡只送「哪一關、哪一場、守住了沒、城堡剩幾成」。**
+   * 星星會上排行榜，排行榜一出現就值得作弊了，所以不能讓前端說「我三顆星」。
+   * 伺服器自己去數那一場的答題事件，回傳算出來的結果——畫面顯示的是它回的那份。
+   */
+  saveResult(r: LevelResult): Promise<SavedResult>
 
   /**
    * 寫入答題事件。整個系統的地基：金幣、經驗、星星、排行榜、老師報表
@@ -159,4 +167,21 @@ export interface AddedTeacher {
   email: string
   /** true 代表帳號是這次開的；false 代表本來就有，只是設成老師 */
   created: boolean
+}
+
+export interface LevelResult {
+  levelId: string
+  /** 這一場的 id（Session.id），伺服器靠它數這一場答對幾題 */
+  sessionId: string
+  /** 守住了嗎。城堡有沒有破不重跑一場算不出來，所以這件事還是信前端，
+   *  但答對的題數不到這一關的下限就不算數（見 schema.sql 的 save_progress）。 */
+  win: boolean
+  /** 城堡剩幾成血，0~1。只影響第三顆星。 */
+  survival: number
+}
+
+export interface SavedResult {
+  progress: LevelProgress
+  /** 首次通關獎金。也是伺服器發的，畫面上的數字要跟著它，不要自己算一份。 */
+  bonusCoins: number
 }

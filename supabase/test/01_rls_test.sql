@@ -263,6 +263,82 @@ select public.submit_answers($$[
   {"wordId":1,"skill":"recognize","correct":true,"ms":900,"combo":0,"gameId":"tower-defense","levelId":"td-01"}
 ]$$::jsonb);
 
+\echo '── 通關與星星是伺服器算的，前端說了不算'
+do $blk$
+declare
+  v_sess uuid := gen_random_uuid();
+  v_r    record;
+  v_i    int;
+  v_coins_before int;
+  v_coins_after  int;
+begin
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+
+  -- 一題都沒答就說自己通關了。這是最好按的那個洞。
+  select * into v_r from public.save_progress('td-02', v_sess, true, 1.0);
+  perform test_ok(not v_r.win and v_r.stars = 0 and v_r.cleared_at is null,
+                  '一題都沒答說自己通關：不算，也沒有星星');
+
+  -- 答了幾題但遠不到這一關的下限（td-02 要 15 題），照樣不算通關
+  for v_i in 1..6 loop
+    perform public.submit_answers(jsonb_build_array(jsonb_build_object(
+      'wordId', 20 + v_i, 'skill', 'recognize', 'correct', true, 'ms', 1000,
+      'combo', 0, 'gameId', 'tower-defense', 'levelId', 'td-02',
+      'sessionId', v_sess::text)));
+  end loop;
+  select * into v_r from public.save_progress('td-02', v_sess, true, 1.0);
+  perform test_ok(not v_r.win and v_r.stars = 0,
+                  '只答 6 題就說通關第二關：不算（下限 15 題）');
+
+  -- 真的打完一場：答對數過了下限、正確率滿分、城堡還剩很多血 → 三顆星
+  v_sess := gen_random_uuid();
+  for v_i in 1..20 loop
+    perform public.submit_answers(jsonb_build_array(jsonb_build_object(
+      'wordId', 30 + v_i, 'skill', 'recognize', 'correct', true, 'ms', 1000,
+      'combo', 0, 'gameId', 'tower-defense', 'levelId', 'td-02',
+      'sessionId', v_sess::text)));
+  end loop;
+  select c.coins into v_coins_before from public.characters c
+   where c.student_id = public.current_student_id();
+  select * into v_r from public.save_progress('td-02', v_sess, true, 0.9);
+  perform test_ok(v_r.win and v_r.stars = 3 and v_r.counted_correct = 20,
+                  '真的打完一場：三顆星，答對數 ' || v_r.counted_correct || ' 是資料庫自己數的');
+  perform test_ok(v_r.bonus_coins > 0, '首次通關獎金 ' || v_r.bonus_coins || ' 入帳了');
+  select c.coins into v_coins_after from public.characters c
+   where c.student_id = public.current_student_id();
+  perform test_ok(v_coins_after = v_coins_before + v_r.bonus_coins, '金幣真的加上去了');
+
+  -- 重玩同一關不會再拿一次首通獎金
+  v_sess := gen_random_uuid();
+  for v_i in 1..20 loop
+    perform public.submit_answers(jsonb_build_array(jsonb_build_object(
+      'wordId', 30 + v_i, 'skill', 'recognize', 'correct', true, 'ms', 1000,
+      'combo', 0, 'gameId', 'tower-defense', 'levelId', 'td-02',
+      'sessionId', v_sess::text)));
+  end loop;
+  select * into v_r from public.save_progress('td-02', v_sess, true, 0.9);
+  perform test_ok(v_r.bonus_coins = 0, '重玩不會再拿一次首通獎金');
+
+  -- 正確率不夠就只有一顆星，前端沒有任何欄位可以蓋過去
+  v_sess := gen_random_uuid();
+  -- 答 40 題對 20 題：過得了 td-03 的下限（17），但正確率只有一半
+  for v_i in 1..40 loop
+    perform public.submit_answers(jsonb_build_array(jsonb_build_object(
+      'wordId', 60 + v_i, 'skill', 'recognize', 'correct', (v_i % 2 = 0), 'ms', 1000,
+      'combo', 0, 'gameId', 'tower-defense', 'levelId', 'td-03',
+      'sessionId', v_sess::text)));
+  end loop;
+  select * into v_r from public.save_progress('td-03', v_sess, true, 1.0);
+  perform test_ok(v_r.win and v_r.stars = 1,
+                  '正確率一半只給一顆星（答對 ' || v_r.counted_correct ||
+                  ' / ' || v_r.counted_asked || '）');
+
+  -- 別人那一場的答題不能拿來當自己的成績
+  perform test_as('a0000000-0000-0000-0000-000000000012', true);
+  select * into v_r from public.save_progress('td-02', v_sess, true, 1.0);
+  perform test_ok(not v_r.win and v_r.stars = 0, '借用別人那一場的 id：一題都不算');
+end $blk$;
+
 \echo '── 學生不能直接改自己的資料'
 do $$
 declare v_id uuid;

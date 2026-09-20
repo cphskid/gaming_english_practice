@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { Quiz } from '@/core/quiz'
 import { Session, type SessionResult } from '@/core/session'
 import { WordStat } from '@/core/wordStat'
-import { mergeProgress } from '@/core/progress'
 import { needsCreation } from '@/core/character'
 import { colorOf } from '@/data/cosmetics'
 import type {
@@ -136,21 +135,23 @@ export function App() {
     await repo.appendEvents(r.events)
     const nextStat = WordStat.fromEntries(await repo.loadWordStats(student.id))
 
-    const coins = me.coins + r.bonusCoins
     const nextChar: Character = {
       ...character,
-      coins: character.coins + coins,
+      coins: character.coins + me.coins,
       exp: character.exp + me.exp,
     }
     await repo.saveCharacter(nextChar)
 
-    const nextProgress = mergeProgress(progress.get(playing.level.id), {
+    // 星星、通關、首通獎金都由伺服器從這一場的答題事件算，畫面顯示的是它回的那份，
+    // 不是我們自己算的。前端算出來的 r.stars 只拿來畫結算動畫。
+    const saved = await repo.saveResult({
       levelId: playing.level.id,
-      stars: r.stars,
-      bestCorrect: me.correct,
-      clearedAt: outcome.win ? Date.now() : null,
+      sessionId: playing.session.id,
+      win: outcome.win,
+      survival: outcome.survival,
     })
-    await repo.saveProgress(student.id, nextProgress)
+    const nextProgress = saved.progress
+    const coins = me.coins + saved.bonusCoins
 
     setStat(nextStat)
     // 金幣以資料庫為準再讀一次回來。接了後端之後真正算數的是伺服器，
@@ -158,7 +159,12 @@ export function App() {
     // 萬一哪天漂移了，這一行會讓它立刻現形，而不是默默越差越多。
     setCharacter(await repo.loadCharacter(student.id))
     setProgress((m) => new Map(m).set(playing.level.id, nextProgress))
-    setResult({ r, coins, exp: me.exp })
+    // 結算畫面上的星星也要是伺服器那一份，不然畫面上三顆、選關畫面上一顆，
+    // 小朋友只會覺得星星會不見。
+    setResult({
+      r: { ...r, stars: nextProgress.stars, bonusCoins: saved.bonusCoins },
+      coins, exp: me.exp,
+    })
     setScreen('result')
   }, [playing, student, character, progress])
 

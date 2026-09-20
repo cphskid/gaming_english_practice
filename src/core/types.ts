@@ -78,6 +78,11 @@ export interface AnswerEvent extends AnswerReport {
   gameId: string
   /** 沒有關卡的遊戲（例如打地鼠）是 null */
   levelId: string | null
+  /**
+   * 這一題屬於哪一場。伺服器靠它把「這一場答對幾題」和「這一場通關了嗎」
+   * 兜在一起——星星是這樣算出來的，不是前端說了算。
+   */
+  sessionId: string
   /** epoch 毫秒 */
   at: number
 }

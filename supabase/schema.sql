@@ -37,6 +37,10 @@ create table if not exists public.levels (
   no   int  not null unique check (no > 0),
   name text not null default ''
 );
+-- 「這一關至少要答對幾題才可能通關」。通關與星星是伺服器判定的，就得知道這個數字。
+-- 由 tools/gen-levels-seed.mjs 從 src/data/levels.ts 算出來（怪的總數打對折），
+-- 訂得刻意寬鬆：擋的是「一題都沒答就說自己通關」，不是去評誰打得好。
+alter table public.levels add column if not exists min_correct int not null default 0;
 
 -- -----------------------------------------------------------------------------
 -- 2. 老師與班級
@@ -195,6 +199,11 @@ create table if not exists public.answer_events (
   -- 用伺服器時間，不用客戶端送來的，不然時間可以偽造
   at         timestamptz not null default now()
 );
+-- 一場遊戲一個 id。有了它，伺服器才能把「這一場答對幾題」跟「這一場通關了嗎」
+-- 兜在一起——不然只能看時間區間，玩家開兩個分頁就騙得過去。
+-- 舊資料沒有這一欄，所以可以是 null。
+alter table public.answer_events add column if not exists session_id uuid;
+create index if not exists answer_events_session on public.answer_events(session_id);
 create index if not exists answer_events_student_at on public.answer_events(student_id, at desc);
 create index if not exists answer_events_level on public.answer_events(student_id, level_id, at desc);
 create index if not exists answer_events_word on public.answer_events(word_id);
@@ -704,10 +713,13 @@ begin
     v_prior := coalesce(v_prior, 0);
 
     insert into public.answer_events
-      (student_id, word_id, skill, correct, ms, combo, game_id, level_id)
+      (student_id, word_id, skill, correct, ms, combo, game_id, level_id, session_id)
     values
       (v_student, v_word, v_skill, v_ok, v_ms, v_combo,
-       coalesce(e ->> 'gameId', 'unknown'), nullif(e ->> 'levelId', ''));
+       coalesce(e ->> 'gameId', 'unknown'), nullif(e ->> 'levelId', ''),
+       -- 格式不對就當沒有，不要讓一個壞欄位把整包答題擋下來
+       (case when (e ->> 'sessionId') ~ '^[0-9a-fA-F-]{36}$'
+             then (e ->> 'sessionId')::uuid end));
 
     insert into public.word_stats as ws
       (student_id, word_id, skill, seen, correct, wrong, streak, last_at, avg_ms)
@@ -748,20 +760,49 @@ end;
 $$;
 
 -- -----------------------------------------------------------------------------
--- 存關卡進度。首次通關的獎勵在這裡發，關卡是第幾關由資料庫自己查，
--- 不能讓前端說「我剛通關第 14 關」就領大獎。
+-- 存關卡進度。
 --
--- 已知限制：p_stars 與 p_win 還是前端說了算。要真的擋住得由伺服器重跑一場，
--- 這版不做。所以這裡至少要求「最近一小時在這一關真的答對過 10 題」才給獎金，
--- 把最好按的那個洞先堵起來。
+-- **星星與答對數是伺服器自己算的，前端說了不算。** 個人玩的時候作弊只是騙自己，
+-- 但星星會上排行榜，排行榜一出現就值得作弊了——而且小朋友真的會找漏洞，
+-- 第一次試玩就有人發現亂點得分，不是假想敵。
+--
+-- 做法：前端送「這一場的 id」，伺服器自己去數這一場答對幾題、問了幾題，
+-- 由正確率算星星（規則跟 core/progress.ts 的 starsFor 一模一樣）。
+--
+-- 還是信前端的兩件事，以及為什麼可以接受：
+--   * p_win（我守住了嗎）：城堡有沒有被打破是玩法的結果，不重跑一場算不出來。
+--     但守塔的怪只會被齊射打死，而齊射只有答對才會發生，所以「通關」至少要
+--     答對 levels.min_correct 題——達不到就不算通關，那一場只記錄答題。
+--   * p_survival（城堡剩幾成血）：只影響第三顆星，而且夾在 0~1 之間。
+-- 兩個都不可能靠「直接呼叫這支函式」憑空生出星星，最好按的那個洞堵住了。
 -- -----------------------------------------------------------------------------
+
+-- 星星規則。跟 src/core/progress.ts 的 starsFor 是同一套，改一邊要改另一邊
+-- （tools/test/economy-parity.mjs 會對帳）。
+-- 用正確率當門檻不用速度，因為用速度會鼓勵亂點。
+create or replace function public.stars_of(
+  p_win boolean, p_correct int, p_asked int, p_survival numeric)
+returns int language sql immutable as $$
+  select case
+    when not coalesce(p_win, false) then 0
+    when coalesce(p_asked, 0) = 0 then 0
+    when p_correct::numeric / p_asked >= 0.8
+     and least(greatest(coalesce(p_survival, 0), 0), 1) >= 0.6 then 3
+    when p_correct::numeric / p_asked >= 0.8 then 2
+    else 1
+  end;
+$$;
+
+-- 參數變了，舊的那支要丟掉，不然會變成兩支同名函式，前端呼叫誰全看運氣。
+drop function if exists public.save_progress(text, int, int, boolean);
 create or replace function public.save_progress(
-  p_level_id     text,
-  p_stars        int,
-  p_best_correct int,
-  p_win          boolean
+  p_level_id  text,
+  p_session   uuid,
+  p_win       boolean,
+  p_survival  numeric default 0
 )
-returns table (stars int, best_correct int, cleared_at timestamptz, bonus_coins int)
+returns table (stars int, best_correct int, cleared_at timestamptz,
+               bonus_coins int, counted_correct int, counted_asked int, win boolean)
 language plpgsql security definer set search_path = public, pg_temp as $$
 -- returns table 的欄位名會變成 PL/pgSQL 變數，跟資料表欄位撞名時 Postgres 會直接拒絕。
 -- 這一行叫它撞名時一律當作欄位（回傳值都是用 return query 給的，不靠變數名）。
@@ -769,38 +810,48 @@ language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_student uuid := public.current_student_id();
   v_no      int;
+  v_min     int;
   v_was     timestamptz;
-  v_recent  int;
+  v_correct int := 0;
+  v_asked   int := 0;
+  v_win     boolean;
+  v_stars   int;
   v_bonus   int := 0;
-  v_stars   int := least(greatest(coalesce(p_stars, 0), 0), 3);
-  v_best    int := greatest(coalesce(p_best_correct, 0), 0);
 begin
   if v_student is null then raise exception '還沒加入班級'; end if;
 
-  select l.no into v_no from public.levels l where l.id = p_level_id;
+  select l.no, l.min_correct into v_no, v_min from public.levels l where l.id = p_level_id;
   if v_no is null then raise exception '沒有這一關：%', p_level_id; end if;
+
+  -- 這一場答了什麼，資料庫自己數。沒有 session id 就一題都不算，
+  -- 也就拿不到星星——舊版的前端送不出這個欄位，升版時會自己接上。
+  if p_session is not null then
+    select count(*) filter (where ae.correct), count(*)
+      into v_correct, v_asked
+      from public.answer_events ae
+     where ae.student_id = v_student
+       and ae.session_id = p_session
+       and ae.level_id   = p_level_id;
+  end if;
+
+  -- 怪只會被齊射打死，齊射只有答對才會發生。答對的題數連下限都不到，
+  -- 就不可能是真的打過去的。
+  v_win   := coalesce(p_win, false) and v_correct >= v_min;
+  v_stars := public.stars_of(v_win, v_correct, v_asked, p_survival);
 
   select lp.cleared_at into v_was
     from public.level_progress lp
    where lp.student_id = v_student and lp.level_id = p_level_id;
 
-  if p_win and v_was is null then
-    select count(*) into v_recent
-      from public.answer_events ae
-     where ae.student_id = v_student
-       and ae.level_id = p_level_id
-       and ae.correct
-       and ae.at > now() - interval '1 hour';
-    if v_recent >= 10 then
-      v_bonus := 40 + v_no * 10;
-    end if;
+  if v_win and v_was is null then
+    v_bonus := 40 + v_no * 10;
   end if;
 
   insert into public.level_progress as lp
     (student_id, level_id, stars, best_correct, cleared_at)
   values
-    (v_student, p_level_id, v_stars, v_best,
-     case when p_win then now() else null end)
+    (v_student, p_level_id, v_stars, v_correct,
+     case when v_win then now() else null end)
   on conflict (student_id, level_id) do update set
     stars        = greatest(lp.stars, excluded.stars),
     best_correct = greatest(lp.best_correct, excluded.best_correct),
@@ -814,7 +865,7 @@ begin
   end if;
 
   return query
-    select lp.stars::int, lp.best_correct, lp.cleared_at, v_bonus
+    select lp.stars::int, lp.best_correct, lp.cleared_at, v_bonus, v_correct, v_asked, v_win
       from public.level_progress lp
      where lp.student_id = v_student and lp.level_id = p_level_id;
 end;
@@ -1432,7 +1483,8 @@ grant execute on function
   public.student_set_nickname(text),
   public.student_join_class(text),
   public.submit_answers(jsonb),
-  public.save_progress(text, int, int, boolean),
+  public.save_progress(text, uuid, boolean, numeric),
+  public.stars_of(boolean, int, int, numeric),
   public.set_job(text),
   public.set_avatar(text),
   public.buy_item(text),
