@@ -993,6 +993,18 @@ begin
   if exists (select 1 from public.teachers t where t.user_id = auth.uid()) then
     return v_email;
   end if;
+  -- 全新的一套系統完全空的時候，第一個用 email 登入的人直接成為管理員。
+  -- 沒有這一段就是死結：老師要有人邀請，邀請的人必須是管理員，
+  -- 而管理員本身也得先是老師，於是誰都進不來。
+  --
+  -- 條件故意加上「邀請名單也是空的」：名單上只要有一個人，這道後門就關了，
+  -- 否則在還沒有人註冊之前，任何知道網址的人都能搶先變成管理員。
+  if not exists (select 1 from public.teachers)
+     and not exists (select 1 from public.teacher_invites) then
+    insert into public.teachers (user_id, display_name, is_admin)
+    values (auth.uid(), coalesce(nullif(btrim(p_display_name), ''), '管理員'), true);
+    return v_email;
+  end if;
   if not exists (select 1 from public.teacher_invites i where i.email = v_email) then
     raise exception '這個 email 不在老師名單裡，請先請管理員把你加進去';
   end if;

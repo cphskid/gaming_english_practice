@@ -68,6 +68,24 @@ insert into auth.users (id, email) values
 
 set role authenticated;
 
+-- 這一條是真的踩過的死結：老師要有人邀請，邀請的人必須是管理員，
+-- 而管理員自己也得先是老師，結果第一個人永遠進不來。
+\echo '── 死結檢查：系統全空的時候，第一個 email 帳號直接就是管理員'
+select test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+begin;
+select public.claim_teacher('第一個人');
+select test_ok(public.is_admin(), '系統全空時第一個註冊的人就是管理員');
+rollback;
+
+-- 而且這道後門在名單上有人之後就要關起來，不然誰都能搶先當管理員。
+\echo '── 邀請名單上一有人，那道後門就要關掉'
+begin;
+select test_force($$ insert into public.teacher_invites (email) values ('someone@rlstest.local') $$);
+select test_as('a0000000-0000-0000-0000-000000000003', false, 'nobody@rlstest.local');
+select test_denied($$ select public.claim_teacher('搶先的') $$, '名單上有人之後還想走後門當管理員');
+rollback;
+select test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+
 \echo '── 管理員：第一個人可以自己認領，之後就不行'
 select test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
 select public.claim_first_admin();

@@ -303,15 +303,23 @@ export class SupabaseRepository implements Repository {
   // 老師用真的 email 帳號，跟學生完全分開。理由是老師需要自己救得回密碼，
   // 而學生的密碼是由老師或管理員重設的。
 
+  /**
+   * 讀出這個登入帳號的老師身分。沒有老師那一列就不是老師——
+   * 這時候把人留在系統裡只會讓他在後台一直撞牆，所以直接登出並說清楚原因。
+   */
   private async staffOf(userId: string, email: string): Promise<Staff> {
     const { data } = await this.db
-      .from('teachers').select('display_name, is_admin').eq('user_id', userId).maybeSingle()
-    const r = data as { display_name: string; is_admin: boolean } | null
-    return {
-      userId, email,
-      displayName: r?.display_name ?? '老師',
-      isAdmin: r?.is_admin ?? false,
+      .from('teachers').select('display_name, is_admin, active').eq('user_id', userId).maybeSingle()
+    const r = data as { display_name: string; is_admin: boolean; active: boolean } | null
+    if (!r) {
+      await this.db.auth.signOut()
+      throw new Error('這個 email 還不是老師，請先請管理員把它加進名單')
     }
+    if (!r.active) {
+      await this.db.auth.signOut()
+      throw new Error('這個老師帳號已經被停用了')
+    }
+    return { userId, email, displayName: r.display_name, isAdmin: r.is_admin }
   }
 
   async staffSignUp(email: string, password: string, displayName: string): Promise<Staff> {
@@ -322,7 +330,7 @@ export class SupabaseRepository implements Repository {
     if (!data.session) {
       throw new Error('帳號建好了，請到信箱收確認信，點完連結再回來登入')
     }
-    // 名單上有這個 email 才變得成老師。不在名單上這裡就會丟出錯誤。
+    // 名單上有這個 email 才變得成老師；系統還沒有任何老師時，第一個人就是管理員。
     const { error: claimErr } = await this.db.rpc('claim_teacher', { p_display_name: displayName })
     fail('這個 email 還不能當老師', claimErr)
     return this.staffOf(user.id, user.email ?? email)
@@ -336,6 +344,7 @@ export class SupabaseRepository implements Repository {
     const user = data.user
     if (!user) throw new Error('登入失敗')
     // 第一次登入時如果還沒認領過老師身分，這裡補認領；已經是老師就直接回來。
+    // 認領失敗（不在名單上）不在這裡報錯，交給 staffOf 統一給訊息。
     await this.db.rpc('claim_teacher', { p_display_name: null })
     return this.staffOf(user.id, user.email ?? email)
   }
@@ -344,7 +353,12 @@ export class SupabaseRepository implements Repository {
     const { data } = await this.db.auth.getSession()
     const user = data.session?.user
     if (!user || user.is_anonymous) return null
-    return this.staffOf(user.id, user.email ?? '')
+    // 開場回復畫面用的，不是老師就當作沒登入，不要讓整個 App 開不起來。
+    try {
+      return await this.staffOf(user.id, user.email ?? '')
+    } catch {
+      return null
+    }
   }
 
   async staffLogout(): Promise<void> {
