@@ -69,10 +69,16 @@ try {
     before - after === 60 ? ok(`買到了，金幣 ${before} → ${after}（價錢是資料庫算的）`)
       : fail(`買不成或扣錯：${before} → ${after}／${await page.locator('.error').innerText().catch(() => '')}`)
 
-    await page.locator('.item', { hasText: '金邊框' }).locator('button').click()
-    await page.waitForSelector('.note, .error')
-    await page.locator('.item', { hasText: '紅軍' }).locator('button').click()
-    await page.waitForSelector('.note, .error')
+    // 這支腳本會對同一個帳號重跑，而裝飾品買過就買不了第二次（按鈕會變成「已擁有」）。
+    // 所以已經有的就跳過，不然第二次跑一定卡在這裡。
+    const buyOnce = async (name) => {
+      const btn = page.locator('.item', { hasText: name }).locator('button')
+      if (await btn.isDisabled()) { ok(name + ' 之前就買過了，跳過'); return }
+      await btn.click()
+      await page.waitForSelector('.note, .error')
+    }
+    await buyOnce('金邊框')
+    await buyOnce('紅軍')
 
     await page.getByRole('button', { name: '我的角色' }).click()
     await page.waitForSelector('.hero')
