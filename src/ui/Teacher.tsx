@@ -100,8 +100,12 @@ export function Teacher({
           <form className="row" onSubmit={(e) => {
             e.preventDefault()
             void run(async () => {
+              const code = newCode.trim().toUpperCase()
               await repo.createClass(newCode, newName)
               setNewCode(''); setNewName('')
+              // 剛開的班直接選起來，不然畫面還停在舊的那一班，
+              // 看起來像沒開成功。
+              setActive(code)
               return '班級開好了'
             })
           }}>

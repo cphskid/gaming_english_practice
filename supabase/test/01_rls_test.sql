@@ -108,6 +108,12 @@ select test_as('a0000000-0000-0000-0000-000000000002', false, 'teacher2@rlstest.
 select public.claim_teacher('李老師');
 select public.create_class('RLS2', '別班');
 
+-- 少了 grant 的話這一條會掛，而且掛在前端是「登入後不是管理員」這種很難查的症狀。
+\echo '── 老師直接讀得到自己那一列（畫面靠它判斷是不是管理員）'
+select test_ok((select count(*) from public.teachers) = 1, '老師只讀得到自己那一列');
+select test_ok((select is_admin from public.teachers) = false, '王老師不是管理員');
+select test_denied($$ select email from public.teacher_invites $$, '老師讀邀請名單');
+
 \echo '── 一般人不能發老師邀請'
 select test_as('a0000000-0000-0000-0000-000000000001', false, 'teacher1@rlstest.local');
 select test_denied($$ select public.admin_invite_teacher('hacker@rlstest.local') $$, '老師自己發邀請');

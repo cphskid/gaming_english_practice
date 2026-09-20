@@ -226,6 +226,12 @@ grant select on public.classes, public.characters,
                 public.level_progress, public.teacher_open, public.student_links
   to authenticated;
 
+-- teachers 與 teacher_invites 也要 grant，不然 policy 寫得再對也讀不到：
+-- 少了這一行，老師登入後讀不到自己那一列，畫面上就永遠不是管理員。
+-- 這兩張表沒有密碼之類的欄位，可以整張給，擋住列的是上面的 policy
+-- （teachers 只看得到自己那列，invites 只有管理員看得到）。
+grant select on public.teachers, public.teacher_invites to authenticated;
+
 -- -----------------------------------------------------------------------------
 -- 小幫手。都是 security definer，因為 policy 裡面再查有 RLS 的表會打結。
 -- -----------------------------------------------------------------------------
