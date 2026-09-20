@@ -1211,7 +1211,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
    order by t.is_admin desc, t.created_at;
 $$;
 
--- 管理員直接幫老師開好帳號（不寄確認信）。
+-- 管理員加一位老師：帳號直接開好（不寄確認信），已經有帳號的就直接設成老師。
 --
 -- 為什麼不是讓老師自己註冊：Supabase 註冊會寄一封確認信，而這個專案的寄信
 -- 額度是**一小時兩封**，也沒有接外部寄信服務。幾位老師同一個下午一起註冊
@@ -1227,11 +1227,12 @@ $$;
 -- 另外 confirmed_at 是自動算出來的欄位，不能寫。
 create or replace function public.admin_create_teacher(
   p_email text, p_password text, p_display_name text default null)
-returns text language plpgsql security definer set search_path = public, pg_temp as $fn$
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
 declare
   v_email text := lower(btrim(coalesce(p_email, '')));
   v_name  text := nullif(btrim(coalesce(p_display_name, '')), '');
   v_uid   uuid := gen_random_uuid();
+  v_have  uuid;
 begin
   if not public.is_admin() then raise exception '只有管理員可以做這件事'; end if;
   if v_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
@@ -1242,8 +1243,23 @@ begin
   if length(coalesce(p_password, '')) < 8 then
     raise exception '老師的密碼至少要 8 個字';
   end if;
-  if exists (select 1 from auth.users u where lower(u.email) = v_email) then
-    raise exception '這個 email 已經有帳號了';
+
+  -- 這個 email 已經自己註冊過了（名單上沒有他，所以卡在「還不是老師」）。
+  -- 這種人很常見，就是照著畫面註冊完卻進不去的那些。這時不要再開一個帳號，
+  -- 直接把他設成老師就好，密碼還是他自己的那組，我們不去動別人的密碼。
+  select u.id into v_have from auth.users u
+   where lower(u.email) = v_email and coalesce(u.is_anonymous, false) = false;
+  if v_have is not null then
+    if exists (select 1 from public.teachers t where t.user_id = v_have) then
+      update public.teachers set active = true,
+             display_name = coalesce(v_name, display_name)
+       where user_id = v_have;
+      return jsonb_build_object('email', v_email, 'created', false, 'existing', true);
+    end if;
+    insert into public.teachers (user_id, display_name) values (v_have, coalesce(v_name, '老師'));
+    insert into public.teacher_invites (email, invited_by, used_at)
+    values (v_email, auth.uid(), now()) on conflict (email) do update set used_at = now();
+    return jsonb_build_object('email', v_email, 'created', false, 'existing', true);
   end if;
 
   insert into auth.users (
@@ -1277,7 +1293,7 @@ begin
   insert into public.teacher_invites (email, invited_by, used_at)
   values (v_email, auth.uid(), now())
   on conflict (email) do update set used_at = now();
-  return v_email;
+  return jsonb_build_object('email', v_email, 'created', true, 'existing', false);
 end;
 $fn$;
 

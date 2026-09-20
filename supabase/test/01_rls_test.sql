@@ -442,8 +442,23 @@ begin
   perform test_ok(test_peek_identities(v_uid) = 1, '有 identities 那一列（沒有就登入不了）');
   perform test_denied($$ select public.admin_create_teacher('short@rlstest.local', 'abc1234') $$,
                       '密碼太短的老師帳號');
-  perform test_denied($$ select public.admin_create_teacher('newbie@rlstest.local', 'longenough1') $$,
-                      '同一個 email 開第二次');
+  -- 已經自己註冊過、卻卡在「不是老師」的人很常見（照畫面註冊完卻進不去的那些）。
+  -- 這種情況不該再開一個帳號，而是把現有的那個設成老師。
+  perform test_force($$ insert into auth.users (id, email)
+                        values ('a0000000-0000-0000-0000-000000000003', 'stuck@rlstest.local')
+                        on conflict (id) do update set email = 'stuck@rlstest.local' $$);
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  perform test_ok(
+    (public.admin_create_teacher('stuck@rlstest.local', 'longenough1', '卡住的老師') ->> 'created') = 'false',
+    '已經有帳號的人不會被開第二個帳號');
+  perform test_ok((select count(*) from auth.users u where u.email = 'stuck@rlstest.local') = 1,
+                  'auth 帳號還是只有一個');
+  perform test_ok((select count(*) from public.teachers t
+                    where t.user_id = 'a0000000-0000-0000-0000-000000000003') = 1,
+                  '他現在是老師了');
+  perform test_ok(
+    (public.admin_create_teacher('newbie@rlstest.local', 'longenough1') ->> 'created') = 'false',
+    '同一個 email 加第二次不會壞');
   perform test_as('a0000000-0000-0000-0000-000000000001', false, 'teacher1@rlstest.local');
   perform test_denied($$ select public.admin_create_teacher('sneaky@rlstest.local', 'longenough1') $$,
                       '一般老師自己開老師帳號');

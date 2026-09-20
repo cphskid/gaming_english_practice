@@ -111,9 +111,11 @@ export interface Repository {
   /**
    * 直接幫老師開好帳號。**不寄確認信**——Supabase 的寄信額度是一小時兩封，
    * 幾位老師同一個下午一起註冊就會有人卡在收不到信，而且不知道自己在等什麼。
-   * 回傳開好的 email。
+   *
+   * 已經自己註冊過、卻因為不在名單上而進不去的人很常見，那種情況不會再開一個
+   * 帳號，直接把他設成老師，密碼還是他自己那組（`created` 會是 false）。
    */
-  createTeacher(email: string, password: string, displayName: string): Promise<string>
+  createTeacher(email: string, password: string, displayName: string): Promise<AddedTeacher>
 
   /** 指定某個 email 可以成為老師。對方自己註冊、自己設密碼（會收到確認信）。 */
   inviteTeacher(email: string): Promise<string>
@@ -151,4 +153,10 @@ export interface LeaderRow {
   equipped: string[]
   /** 這一列是不是自己。把自己那一行標出來，找起來才快 */
   me: boolean
+}
+
+export interface AddedTeacher {
+  email: string
+  /** true 代表帳號是這次開的；false 代表本來就有，只是設成老師 */
+  created: boolean
 }

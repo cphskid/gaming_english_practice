@@ -3,7 +3,7 @@ import type {
   AdminClassRow, AnswerEvent, Character, ClassRoom, Job, LevelProgress, Skill, Staff,
   Student, TeacherRow, WordStatEntry,
 } from '@/core/types'
-import type { ClassRosterRow, LeaderRow, Repository } from './repository'
+import type { AddedTeacher, ClassRosterRow, LeaderRow, Repository } from './repository'
 
 /**
  * Supabase 版。
@@ -494,14 +494,17 @@ export class SupabaseRepository implements Repository {
     return data as string
   }
 
-  async createTeacher(email: string, password: string, displayName: string): Promise<string> {
+  async createTeacher(
+    email: string, password: string, displayName: string,
+  ): Promise<AddedTeacher> {
     const { data, error } = await this.db.rpc('admin_create_teacher', {
       p_email: email.trim().toLowerCase(),
       p_password: password,
       p_display_name: displayName.trim(),
     })
-    fail('開老師帳號失敗', error)
-    return String(data ?? email.trim().toLowerCase())
+    fail('加老師失敗', error)
+    const r = data as { email?: string; created?: boolean } | null
+    return { email: r?.email ?? email.trim().toLowerCase(), created: r?.created !== false }
   }
 
   async listAllClasses(): Promise<AdminClassRow[]> {

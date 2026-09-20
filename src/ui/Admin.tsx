@@ -66,7 +66,8 @@ export function Admin({ onBack }: { onBack: () => void }) {
           <h2>加一位老師</h2>
           <p className="lede left">
             帳號直接幫他開好，把 email 和密碼給他就能登入，不用等確認信。
-            他登入之後可以自己改密碼。
+            他如果已經自己註冊過（卡在進不去），這裡填一樣的 email 就會把他設成老師，
+            密碼還是他自己原本那組。
           </p>
         </div>
         <form className="row" onSubmit={(e) => {
@@ -74,7 +75,9 @@ export function Admin({ onBack }: { onBack: () => void }) {
           void run(async () => {
             const added = await repo.createTeacher(email, password, name)
             setEmail(''); setPassword(''); setName('')
-            return `${added} 的帳號開好了，把 email 和密碼給他`
+            return added.created
+              ? `${added.email} 的帳號開好了，把 email 和密碼給他`
+              : `${added.email} 本來就有帳號，已經設成老師了，請他用原本的密碼登入`
           })
         }}>
           <input value={name} placeholder="他的名字（例如 王老師）"
@@ -124,8 +127,10 @@ export function Admin({ onBack }: { onBack: () => void }) {
                 {c.name || '（沒有名字）'}<small>　{c.code}</small>
               </span>
               <span className="s">
-                {c.ownerName}{!c.ownerActive && '（已停用）'}　{c.students} 位同學
-                　{c.open ? '開放加入' : '不開放'}
+                {/* 手機上這一行會折行，全形空白折起來會黏成一團，所以用點分隔 */}
+                {c.ownerName}{!c.ownerActive && '（已停用）'}
+                {' ・ '}{c.students} 位同學
+                {' ・ '}{c.open ? '開放加入' : '不開放'}
               </span>
               <select value={c.ownerId} disabled={active.length < 2}
                 onChange={(e) => {

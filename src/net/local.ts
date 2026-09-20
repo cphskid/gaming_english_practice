@@ -7,7 +7,7 @@ import type {
   AdminClassRow, AnswerEvent, Character, ClassRoom, LevelProgress, Staff, Student,
   TeacherRow, WordStatEntry,
 } from '@/core/types'
-import type { ClassRosterRow, LeaderRow, Repository } from './repository'
+import type { AddedTeacher, ClassRosterRow, LeaderRow, Repository } from './repository'
 
 /**
  * localStorage 版。**存的是最終的事件形狀**，所以之後換成 Supabase
@@ -373,9 +373,9 @@ export class LocalRepository implements Repository {
     return email
   }
 
-  async createTeacher(email: string): Promise<string> {
+  async createTeacher(email: string): Promise<AddedTeacher> {
     // 本地版沒有第二個人，開了也沒地方登入
-    return email.trim().toLowerCase()
+    return { email: email.trim().toLowerCase(), created: true }
   }
 
   async listAllClasses(): Promise<AdminClassRow[]> {
