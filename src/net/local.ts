@@ -6,12 +6,24 @@ import type { LevelData } from '@/core/types'
 import { ITEMS } from '@/data/shop'
 import { WordStat } from '@/core/wordStat'
 import type {
-  AdminClassRow, AnswerEvent, Character, ClassRoom, LevelProgress, Staff, Student,
+  AdminClassRow, AnswerEvent, Character, ClassRoom, LevelProgress, Mode, Staff, Student,
   TeacherRow, WordStatEntry,
 } from '@/core/types'
 import type {
-  AddedTeacher, ClassRosterRow, LeaderRow, LevelResult, Repository, SavedResult,
+  AddedTeacher, ClassRosterRow, LeaderRow, LevelResult, Repository, RoomMember, RoomState,
+  SavedResult,
 } from './repository'
+
+/** 本地版存下來的一場。跟 RoomState 差在沒有 here／me，那兩個是讀的時候才算的。 */
+interface StoredRoom {
+  id: string
+  classCode: string
+  levelId: string
+  mode: Mode
+  status: 'lobby' | 'playing' | 'done'
+  startedAt: number | null
+  members: Omit<RoomMember, 'here' | 'me'>[]
+}
 
 /**
  * localStorage 版。**存的是最終的事件形狀**，所以之後換成 Supabase
@@ -33,6 +45,7 @@ const k = {
   password: (id: string) => `${NS}.pw.${id}`,
   session: `${NS}.session`,
   classes: `${NS}.classes`,
+  room: (code: string) => `${NS}.room.${code}`,
   staff: `${NS}.staff`,
 }
 
@@ -286,6 +299,109 @@ export class LocalRepository implements Repository {
 
   async setTeacherOpen(classCode: string, levelIds: string[]): Promise<void> {
     write(k.teacherOpen(classCode.trim().toUpperCase()), levelIds)
+  }
+
+  // ------------------------------------------------------------------ 房間
+  //
+  // 本地版只有一個人，所以房間在這裡沒什麼戲唱：開得起來、進得去、
+  // 狀態會變，就夠讓選關畫面與老師後台在沒有後端的情況下也跑得動
+  // （keyless 的開發伺服器與版面測試都靠這個）。真正的多人在 Supabase 版。
+
+  async openRoom(classCode: string, levelId: string, mode: Mode): Promise<string> {
+    const code = classCode.trim().toUpperCase()
+    const room: StoredRoom = {
+      id: 'room-' + Date.now().toString(36),
+      classCode: code,
+      levelId,
+      mode,
+      status: 'lobby',
+      startedAt: null,
+      members: [],
+    }
+    write(k.room(code), room)
+    return room.id
+  }
+
+  private roomOf(code: string | null): StoredRoom | null {
+    if (!code) return null
+    const room = read<StoredRoom | null>(k.room(code), null)
+    return room && room.status !== 'done' ? room : null
+  }
+
+  private async myRoom(): Promise<{ room: StoredRoom; me: Student } | null> {
+    const me = await this.currentStudent()
+    const room = this.roomOf(me?.classCode ?? null)
+    return room && me ? { room, me } : null
+  }
+
+  async startRoom(roomId: string): Promise<void> {
+    await this.patchRoom(roomId, (r) => ({ ...r, status: 'playing', startedAt: Date.now() }))
+  }
+
+  async closeRoom(roomId: string): Promise<void> {
+    await this.patchRoom(roomId, (r) => ({ ...r, status: 'done' }))
+  }
+
+  async joinRoom(): Promise<string> {
+    const found = await this.myRoom()
+    if (!found) throw new Error('老師還沒開一場')
+    const { room, me } = found
+    if (!room.members.some((m) => m.studentId === me.id)) {
+      const c = await this.loadCharacter(me.id)
+      room.members.push({
+        studentId: me.id, nickname: me.nickname, team: null,
+        avatar: c.avatar, equipped: c.equipped, finished: false,
+      })
+      write(k.room(room.classCode), room)
+    }
+    return room.id
+  }
+
+  async leaveRoom(roomId: string): Promise<void> {
+    const me = await this.currentStudent()
+    await this.patchRoom(roomId, (r) => ({
+      ...r, members: r.members.filter((m) => m.studentId !== me?.id),
+    }))
+  }
+
+  async roomState(classCode?: string): Promise<RoomState | null> {
+    const me = await this.currentStudent()
+    const code = classCode ? classCode.trim().toUpperCase() : me?.classCode ?? null
+    const room = this.roomOf(code)
+    if (!room) return null
+    return {
+      id: room.id, classCode: room.classCode, levelId: room.levelId,
+      mode: room.mode, status: room.status, startedAt: room.startedAt,
+      // 本地版沒有別台裝置，所以在不在線上永遠是「在」。
+      members: room.members.map((m) => ({ ...m, here: true, me: m.studentId === me?.id })),
+    }
+  }
+
+  async roomPlaying(roomId: string, _sessionId: string): Promise<void> {
+    await this.markMe(roomId, false)
+  }
+
+  async roomFinished(roomId: string): Promise<void> {
+    await this.markMe(roomId, true)
+  }
+
+  private async markMe(roomId: string, finished: boolean): Promise<void> {
+    const me = await this.currentStudent()
+    await this.patchRoom(roomId, (r) => ({
+      ...r,
+      members: r.members.map((m) => (m.studentId === me?.id ? { ...m, finished } : m)),
+    }))
+  }
+
+  /** 房間是照班級存的，但外面拿在手上的是房間 id，所以要先找出是哪一班的。 */
+  private async patchRoom(roomId: string, f: (r: StoredRoom) => StoredRoom): Promise<void> {
+    const codes = [...read<ClassRoom[]>(k.classes, []).map((c) => c.code),
+                   (await this.currentStudent())?.classCode ?? '']
+    for (const code of codes) {
+      if (!code) continue
+      const room = read<StoredRoom | null>(k.room(code), null)
+      if (room?.id === roomId) { write(k.room(code), f(room)); return }
+    }
   }
 
   // ------------------------------------------------------------ 老師與管理員

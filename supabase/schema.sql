@@ -1449,6 +1449,230 @@ language sql stable security definer set search_path = public, pg_temp as $$
 $$;
 
 -- =============================================================================
+-- 房間：一整班同時玩同一關
+--
+-- **學生不用輸入房間代碼。** 班級代碼已經是他的身分的一部分，再叫小朋友抄一組
+-- 四位數字只會多一批「我打不進去」的手。所以規則改成：一個班同一時間只有一場
+-- 還沒結束的房間，學生在選關畫面直接看到「老師開了一場」，按一下就進去。
+--
+-- 房間只管「誰在、什麼時候一起開始」。分數不存在這裡——分數一律從答題事件算，
+-- room_members 只記下那個人這一場的 session_id，剩下的用它去查（見 save_progress）。
+-- =============================================================================
+
+create table if not exists public.rooms (
+  id         uuid primary key default gen_random_uuid(),
+  class_code text not null references public.classes(code)
+             on delete cascade on update cascade,
+  level_id   text not null references public.levels(id),
+  -- solo＝各打各的只是同時開始；versus／team 是之後的事，欄位先留著。
+  mode       text not null default 'solo' check (mode in ('solo', 'versus', 'team')),
+  status     text not null default 'lobby' check (status in ('lobby', 'playing', 'done')),
+  opened_by  uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  started_at timestamptz,
+  ended_at   timestamptz
+);
+-- 「一班同時只有一場」不是慣例是規則，學生端靠它才能不問代碼就找到房間。
+create unique index if not exists rooms_one_live_per_class
+  on public.rooms(class_code) where status <> 'done';
+create index if not exists rooms_class on public.rooms(class_code, created_at desc);
+
+create table if not exists public.room_members (
+  room_id    uuid not null references public.rooms(id) on delete cascade,
+  student_id uuid not null references public.students(id) on delete cascade,
+  -- 團隊模式才會填
+  team       text,
+  -- 他這一場的 Session.id。之後要算即時分數就是拿它去 answer_events 加總。
+  session_id uuid,
+  joined_at   timestamptz not null default now(),
+  -- 心跳。學生每幾秒問一次房間狀態，順手更新這一格，
+  -- 關掉分頁的人就會停在那裡，老師的名單上看得出誰不在了。
+  seen_at     timestamptz not null default now(),
+  finished_at timestamptz,
+  primary key (room_id, student_id)
+);
+create index if not exists room_members_student on public.room_members(student_id);
+
+alter table public.rooms        enable row level security;
+alter table public.room_members enable row level security;
+grant select on public.rooms, public.room_members to authenticated;
+
+drop policy if exists rooms_read on public.rooms;
+create policy rooms_read on public.rooms for select to authenticated
+  using (class_code = public.current_class_code() or public.is_teacher_of(class_code));
+
+drop policy if exists room_members_read on public.room_members;
+create policy room_members_read on public.room_members for select to authenticated
+  using (exists (
+    select 1 from public.rooms r
+     where r.id = room_id
+       and (r.class_code = public.current_class_code() or public.is_teacher_of(r.class_code))
+  ));
+
+-- -----------------------------------------------------------------------------
+-- 老師：開一場、開始、收掉
+-- -----------------------------------------------------------------------------
+
+create or replace function public.open_room(
+  p_class_code text, p_level_id text, p_mode text default 'solo')
+returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_code text := upper(btrim(p_class_code));
+        v_mode text := lower(btrim(coalesce(p_mode, 'solo')));
+        v_id   uuid;
+begin
+  if not public.is_teacher_of(v_code) then raise exception '這不是你的班'; end if;
+  if not exists (select 1 from public.levels l where l.id = p_level_id) then
+    raise exception '沒有這一關';
+  end if;
+  if v_mode not in ('solo', 'versus', 'team') then raise exception '沒有這種模式'; end if;
+
+  -- 老師再按一次「開一場」就是換一關重開。舊的那場直接收掉，
+  -- 不然學生會進到上一節課的房間，而且畫面上看不出來哪裡不對。
+  update public.rooms set status = 'done', ended_at = now()
+   where class_code = v_code and status <> 'done';
+
+  insert into public.rooms (class_code, level_id, mode, opened_by)
+       values (v_code, p_level_id, v_mode, auth.uid())
+    returning id into v_id;
+  return v_id;
+end;
+$$;
+
+create or replace function public.start_room(p_room uuid)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_code text;
+begin
+  select r.class_code into v_code from public.rooms r where r.id = p_room;
+  if v_code is null then raise exception '找不到這一場'; end if;
+  if not public.is_teacher_of(v_code) then raise exception '這不是你的班'; end if;
+  update public.rooms set status = 'playing', started_at = now()
+   where id = p_room and status = 'lobby';
+end;
+$$;
+
+create or replace function public.close_room(p_room uuid)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_code text;
+begin
+  select r.class_code into v_code from public.rooms r where r.id = p_room;
+  if v_code is null then raise exception '找不到這一場'; end if;
+  if not public.is_teacher_of(v_code) then raise exception '這不是你的班'; end if;
+  update public.rooms set status = 'done', ended_at = now() where id = p_room;
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 學生：加入、離開、回報
+-- -----------------------------------------------------------------------------
+
+-- 加入自己班上那一場。已經開始的也進得去——遲到的人照樣要能玩，
+-- 一節課只有四十分鐘，卡在門外沒有任何好處。
+create or replace function public.join_room()
+returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_student uuid := public.current_student_id();
+        v_code    text := public.current_class_code();
+        v_room    uuid;
+begin
+  if v_student is null then raise exception '請先登入'; end if;
+  if v_code is null then raise exception '還沒加入班級'; end if;
+  select r.id into v_room from public.rooms r
+   where r.class_code = v_code and r.status <> 'done'
+   order by r.created_at desc limit 1;
+  if v_room is null then raise exception '老師還沒開一場'; end if;
+
+  insert into public.room_members as m (room_id, student_id)
+       values (v_room, v_student)
+    on conflict (room_id, student_id) do update set seen_at = now();
+  return v_room;
+end;
+$$;
+
+create or replace function public.leave_room(p_room uuid)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  delete from public.room_members
+   where room_id = p_room and student_id = public.current_student_id();
+end;
+$$;
+
+-- 我開打了，這是我這一場的 session。伺服器之後靠它把這個人的答題事件
+-- 跟這一場房間對起來。
+create or replace function public.room_playing(p_room uuid, p_session uuid)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  update public.room_members
+     set session_id = p_session, finished_at = null, seen_at = now()
+   where room_id = p_room and student_id = public.current_student_id();
+end;
+$$;
+
+create or replace function public.room_finished(p_room uuid)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  update public.room_members
+     set finished_at = now(), seen_at = now()
+   where room_id = p_room and student_id = public.current_student_id();
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 現在這一場長什麼樣。學生跟老師都是問這一支，每幾秒一次。
+-- 一次把房間跟名單都給出來，因為輪詢的次數會是全班人數乘以每分鐘三十次，
+-- 拆成兩支就是白白多一倍。
+-- -----------------------------------------------------------------------------
+create or replace function public.room_state(p_class_code text default null)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_code    text := coalesce(upper(btrim(p_class_code)), public.current_class_code());
+        v_student uuid := public.current_student_id();
+        v_room    public.rooms;
+        v_empty   jsonb := jsonb_build_object('room', null, 'members', '[]'::jsonb);
+begin
+  if v_code is null then return v_empty; end if;
+  if not (v_code = public.current_class_code() or public.is_teacher_of(v_code)) then
+    raise exception '看不到這一班';
+  end if;
+
+  select * into v_room from public.rooms r
+   where r.class_code = v_code and r.status <> 'done'
+   order by r.created_at desc limit 1;
+  if v_room.id is null then return v_empty; end if;
+
+  -- 順便報到（見 room_members.seen_at）。
+  if v_student is not null then
+    update public.room_members
+       set seen_at = now()
+     where room_id = v_room.id and student_id = v_student;
+  end if;
+
+  return jsonb_build_object(
+    'room', jsonb_build_object(
+      'id',        v_room.id,
+      'classCode', v_room.class_code,
+      'levelId',   v_room.level_id,
+      'mode',      v_room.mode,
+      'status',    v_room.status,
+      'startedAt', v_room.started_at),
+    'members', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'studentId', m.student_id,
+               'nickname',  s.nickname,
+               'team',      m.team,
+               'avatar',    coalesce(c.avatar, ''),
+               'equipped',  coalesce(c.equipped, '[]'::jsonb),
+               'finished',  m.finished_at is not null,
+               -- 三十秒沒回報就當作人不在了。輪詢是每幾秒一次，
+               -- 抓太短會讓網路頓一下的人一直閃掉。
+               'here',      m.seen_at > now() - interval '30 seconds',
+               'me',        m.student_id = v_student)
+             order by m.joined_at)
+        from public.room_members m
+        join public.students s on s.id = m.student_id
+        left join public.characters c on c.student_id = m.student_id
+       where m.room_id = v_room.id), '[]'::jsonb));
+end;
+$$;
+
+-- =============================================================================
 -- 維修用：掌握度算錯了就從事件重算一次。事件是真相，這張表只是快取。
 -- =============================================================================
 create or replace function public.rebuild_word_stats(p_student uuid)
@@ -1494,7 +1718,13 @@ grant execute on function
   public.class_leaderboard(text),
   public.current_student_id(),
   public.current_class_code(),
-  public.rebuild_word_stats(uuid)
+  public.rebuild_word_stats(uuid),
+  public.join_room(),
+  public.leave_room(uuid),
+  public.room_playing(uuid, uuid),
+  public.room_finished(uuid),
+  -- 老師也是叫這一支看自己班上那一場，函式裡面自己分辨誰在問。
+  public.room_state(text)
 to authenticated;
 
 -- 老師。函式裡面自己會檢查「這是不是你的班」，所以給 authenticated 沒關係。
@@ -1509,7 +1739,10 @@ grant execute on function
   public.class_regenerate_code(text),
   public.class_most_missed(text, int),
   public.class_overview(text),
-  public.is_teacher_of(text)
+  public.is_teacher_of(text),
+  public.open_room(text, text, text),
+  public.start_room(uuid),
+  public.close_room(uuid)
 to authenticated;
 
 -- 管理員。同樣靠函式內部的 is_admin() 把關。

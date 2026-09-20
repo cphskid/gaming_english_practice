@@ -1,10 +1,11 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type {
-  AdminClassRow, AnswerEvent, Character, ClassRoom, Job, LevelProgress, Skill, Staff,
+  AdminClassRow, AnswerEvent, Character, ClassRoom, Job, LevelProgress, Mode, Skill, Staff,
   Student, TeacherRow, WordStatEntry,
 } from '@/core/types'
 import type {
-  AddedTeacher, ClassRosterRow, LeaderRow, LevelResult, Repository, SavedResult,
+  AddedTeacher, ClassRosterRow, LeaderRow, LevelResult, Repository, RoomMember, RoomState,
+  SavedResult,
 } from './repository'
 
 /**
@@ -339,6 +340,76 @@ export class SupabaseRepository implements Repository {
       p_level_ids: levelIds,
     })
     fail('設定開放關卡失敗', error)
+  }
+
+  // ------------------------------------------------------------------ 房間
+  //
+  // 全部走一支 room_state 輪詢。Supabase 有 Realtime 可以推播，但一個班三十個人、
+  // 幾秒一次的查詢對資料庫來說是小事，而輪詢在教室的 wifi 斷一下再回來時
+  // 會自己接上——長連線斷掉要自己處理重連，那才是真的會在上課中出事的地方。
+
+  async openRoom(classCode: string, levelId: string, mode: Mode): Promise<string> {
+    const { data, error } = await this.db.rpc('open_room', {
+      p_class_code: classCode.trim().toUpperCase(),
+      p_level_id: levelId,
+      p_mode: mode,
+    })
+    fail('開一場失敗', error)
+    return String(data)
+  }
+
+  async startRoom(roomId: string): Promise<void> {
+    const { error } = await this.db.rpc('start_room', { p_room: roomId })
+    fail('開始失敗', error)
+  }
+
+  async closeRoom(roomId: string): Promise<void> {
+    const { error } = await this.db.rpc('close_room', { p_room: roomId })
+    fail('結束這一場失敗', error)
+  }
+
+  async joinRoom(): Promise<string> {
+    const { data, error } = await this.db.rpc('join_room')
+    fail('加入失敗', error)
+    return String(data)
+  }
+
+  async leaveRoom(roomId: string): Promise<void> {
+    const { error } = await this.db.rpc('leave_room', { p_room: roomId })
+    fail('離開失敗', error)
+  }
+
+  async roomState(classCode?: string): Promise<RoomState | null> {
+    const { data, error } = await this.db.rpc('room_state', {
+      p_class_code: classCode ? classCode.trim().toUpperCase() : null,
+    })
+    fail('讀取這一場失敗', error)
+    type Row = {
+      room: {
+        id: string; classCode: string; levelId: string; mode: Mode
+        status: 'lobby' | 'playing' | 'done'; startedAt: string | null
+      } | null
+      members: RoomMember[] | null
+    }
+    const row = data as Row | null
+    if (!row?.room) return null
+    return {
+      ...row.room,
+      startedAt: row.room.startedAt ? ms(row.room.startedAt) : null,
+      members: (row.members ?? []).map((m) => ({ ...m, equipped: m.equipped ?? [] })),
+    }
+  }
+
+  async roomPlaying(roomId: string, sessionId: string): Promise<void> {
+    const { error } = await this.db.rpc('room_playing', {
+      p_room: roomId, p_session: sessionId,
+    })
+    fail('回報開打失敗', error)
+  }
+
+  async roomFinished(roomId: string): Promise<void> {
+    const { error } = await this.db.rpc('room_finished', { p_room: roomId })
+    fail('回報打完失敗', error)
   }
 
   // ------------------------------------------------------------ 老師與管理員

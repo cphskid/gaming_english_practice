@@ -360,3 +360,27 @@ h2.sec small{font-size:12px;font-weight:400;color:var(--muted)}
   /* 只剩圖示就不必橫捲了，而且 overflow 會讓這一格量不出自己的寬度、被擠扁 */
   .bagbar{max-width:none;overflow:visible}
 }
+
+/* 「老師開了一場」。選關畫面最上面那一條，就是房間的全部入口——
+   沒有代碼要抄，看到就按得下去。所以它做得比關卡卡片還醒目，會發亮。 */
+.roomcall{display:flex;align-items:center;gap:12px;width:100%;max-width:880px;
+  margin-bottom:12px;padding:12px 14px;border-radius:14px;cursor:pointer;text-align:left;
+  background:var(--panel2);border:3px solid var(--gold);color:inherit;
+  animation:roomcall 2.4s ease-in-out infinite}
+@keyframes roomcall{
+  0%,100%{box-shadow:0 0 0 0 rgba(212,175,55,0)}
+  50%{box-shadow:0 0 0 5px rgba(212,175,55,.18)}
+}
+.roomcall .ico{font-size:26px;flex:none}
+.roomcall .txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.roomcall .txt b{font-size:16px}
+.roomcall .txt small{font-size:12px;color:var(--muted)}
+.roomcall .go{flex:none;font-weight:800;font-size:14px;color:var(--gold);
+  border:2px solid var(--gold);border-radius:10px;padding:6px 12px}
+
+/* 等待室的名單借排行榜那一套，右邊那格換成狀態（到了／進行中／打完了）。 */
+.board .rank .sc b{font-size:13px;white-space:nowrap}
+
+/* 老師後台的關卡下拉。row 裡面的 input 有樣式，select 沒有，不設會變成系統預設的白底。 */
+.row select{background:var(--panel2);color:inherit;border:2px solid var(--line);
+  border-radius:10px;padding:9px 10px;font:inherit;min-width:0;flex:1}

@@ -7,6 +7,7 @@ import { colorOf } from '@/data/cosmetics'
 import type {
   Character, GameOutcome, LevelData, LevelProgress, Staff, Student,
 } from '@/core/types'
+import { LEVELS } from '@/data/levels'
 import { WORDS_BY_ID, wordsOfThemes } from '@/data/words'
 import { towerDefense } from '@/games'
 import { repo } from '@/net'
@@ -22,10 +23,11 @@ import { Settings } from './Settings'
 import { CreateCharacter } from './CreateCharacter'
 import { Shop } from './Shop'
 import { Leaderboard } from './Leaderboard'
+import { RoomLobby, useRoom } from './Room'
 
 type Screen =
   | 'login' | 'staff' | 'create' | 'select' | 'shop' | 'board'
-  | 'play' | 'result' | 'teacher' | 'admin' | 'settings'
+  | 'play' | 'result' | 'teacher' | 'admin' | 'settings' | 'lobby'
 
 interface Playing {
   level: LevelData
@@ -44,6 +46,17 @@ export function App() {
   const [result, setResult] = useState<{ r: SessionResult; coins: number; exp: number } | null>(null)
   const [rotateOff, setRotateOff] = useState(false)
   const [staff, setStaff] = useState<Staff | null>(null)
+  /** 現在在哪一場房間裡。null＝沒參加。 */
+  const [roomId, setRoomId] = useState<string | null>(null)
+
+  /**
+   * 老師開的那一場。只在選關與等待室問，玩的時候不問——
+   * 戰場那個迴圈不該被網路請求打斷，而且那時候也沒有東西需要更新。
+   */
+  const { room } = useRoom(
+    student?.classCode ?? null,
+    !!student && (screen === 'select' || screen === 'lobby'),
+  )
 
   /** 載入一位學生的全部東西並進到選關畫面。登入、註冊、換班都走這裡。 */
   const enter = useCallback(async (s: Student) => {
@@ -100,11 +113,12 @@ export function App() {
     await repo.staffLogout()
     setStudent(null); setCharacter(null); setStaff(null)
     setProgress(new Map()); setTeacherOpen(new Set()); setStat(new WordStat())
+    setRoomId(null)
     setScreen('login')
   }, [])
 
-  const startLevel = useCallback((level: LevelData) => {
-    if (!student) return
+  const startLevel = useCallback((level: LevelData): Session | null => {
+    if (!student) return null
     audio.unlock()
     // 關卡描述地圖和怪，模式描述規則。這裡是 solo，但 Session 天生支援多人。
     const quiz = new Quiz({
@@ -124,7 +138,32 @@ export function App() {
     })
     setPlaying({ level, session, quiz })
     setScreen('play')
+    return session
   }, [student, stat, progress])
+
+  /** 老師按了開始，等待室把我們推進來。回報這一場的 session，老師那邊才看得到誰在打。 */
+  const startFromRoom = useCallback((levelId: string) => {
+    const level = LEVELS.find((l) => l.id === levelId)
+    if (!level) return
+    const session = startLevel(level)
+    if (session && roomId) void repo.roomPlaying(roomId, session.id).catch(() => {})
+  }, [startLevel, roomId])
+
+  const joinRoom = useCallback(async () => {
+    // 已經在這一場裡的人按「進去」就只是回等待室。
+    // 比對的是房間 id 不是「有沒有值」——老師收掉再開一場的時候，
+    // 手上那個 id 是上一場的，那種情況要真的重新加入。
+    if (roomId !== room?.id) {
+      try { setRoomId(await repo.joinRoom()) }
+      catch { /* 那一場剛好被收掉了，下一次輪詢就會發現 */ }
+    }
+    setScreen('lobby')
+  }, [roomId, room])
+
+  /** 老師把這一場收掉了。等待室就沒有東西好等，回選關畫面。 */
+  useEffect(() => {
+    if (screen === 'lobby' && !room) { setRoomId(null); setScreen('select') }
+  }, [screen, room])
 
   const finish = useCallback(async (outcome: GameOutcome) => {
     if (!playing || !student || !character) return
@@ -165,8 +204,10 @@ export function App() {
       r: { ...r, stars: nextProgress.stars, bonusCoins: saved.bonusCoins },
       coins, exp: me.exp,
     })
+    // 在房間裡的話，跟老師說我打完了。失敗就算了，老師那邊頂多晚一點才看到。
+    if (roomId) await repo.roomFinished(roomId).catch(() => {})
     setScreen('result')
-  }, [playing, student, character, progress])
+  }, [playing, student, character, progress, roomId])
 
   /**
    * 中途離開。已經答過的題目照樣寫進紀錄——學生真的答了那些題，
@@ -190,8 +231,11 @@ export function App() {
     setStat(nextStat)
     setCharacter(await repo.loadCharacter(student.id))
     setPlaying(null)
+    // 中途離開就是退出這一場。掛在名單上顯示「進行中」卻其實沒在打，
+    // 老師會一直等他，不如直接消失，想玩再從選關畫面按一次加入。
+    if (roomId) { await repo.leaveRoom(roomId).catch(() => {}); setRoomId(null) }
     setScreen('select')
-  }, [playing, student, character])
+  }, [playing, student, character, roomId])
 
   /**
    * 道具真的生效了才扣。扣的動作走 repo，跟買一樣由伺服器算數，
@@ -278,10 +322,24 @@ export function App() {
         <Leaderboard student={student} onBack={() => setScreen('select')} />
       )}
 
+      {screen === 'lobby' && room && (
+        <RoomLobby
+          room={room}
+          onStart={startFromRoom}
+          onLeave={() => void (async () => {
+            if (roomId) await repo.leaveRoom(roomId).catch(() => {})
+            setRoomId(null)
+            setScreen('select')
+          })()}
+        />
+      )}
+
       {screen === 'select' && student && character && (
         <LevelSelect
           student={student} character={character} progress={progress}
-          teacherOpen={teacherOpen} onPlay={startLevel}
+          teacherOpen={teacherOpen} room={room}
+          onPlay={(l) => { startLevel(l) }}
+          onRoom={() => void joinRoom()}
           onSettings={() => setScreen('settings')}
           onShop={() => setScreen('shop')}
           onBoard={() => setScreen('board')}

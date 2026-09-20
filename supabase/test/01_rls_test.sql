@@ -71,7 +71,8 @@ insert into auth.users (id, email) values
   ('a0000000-0000-0000-0000-000000000011', null),   -- 小明的平板
   ('a0000000-0000-0000-0000-000000000012', null),   -- 小華的平板
   ('a0000000-0000-0000-0000-000000000013', null),   -- 小明改用電腦
-  ('a0000000-0000-0000-0000-000000000014', null);   -- 朋友的小孩，沒有班級
+  ('a0000000-0000-0000-0000-000000000014', null),   -- 朋友的小孩，沒有班級
+  ('a0000000-0000-0000-0000-000000000015', null);   -- 別班的人，測房間用
 
 set role authenticated;
 
@@ -562,6 +563,83 @@ begin
   perform public.teacher_reset_student_password(v_id, 'peach99');
   perform test_ok(true, '管理員重設得了沒有班級的學生的密碼');
 end $$;
+
+\echo '── 房間：老師開一場，全班進來'
+do $blk$
+declare v_room uuid; v_room2 uuid; v_state jsonb; v_other uuid;
+begin
+  -- 開房間是老師的事。學生自己開得了的話，那就不是老師開的課了。
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  perform test_denied($$ select public.open_room('RLS1', 'td-01') $$, '學生自己開一場');
+  perform test_denied($$ select public.join_room() $$, '沒有房間卻想加入');
+
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  select public.open_room('RLS1', 'td-03') into v_room;
+  perform test_denied($$ select public.open_room('RLS1', 'td-99') $$, '開一個不存在的關卡');
+  perform test_denied($$ select public.open_room('RLS1', 'td-03', 'chaos') $$, '開一個不存在的模式');
+
+  select public.room_state('RLS1') into v_state;
+  perform test_ok(v_state -> 'room' ->> 'status' = 'lobby', '老師開了一場，在等人');
+  perform test_ok(v_state -> 'room' ->> 'levelId' = 'td-03', '開的是指定的那一關');
+  perform test_ok(jsonb_array_length(v_state -> 'members') = 0, '還沒有人進來');
+
+  -- 學生不用輸代碼：他的班就決定了他要進哪一場。
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  perform test_ok(public.join_room() = v_room, '小明進來了');
+  perform test_ok(public.join_room() = v_room, '按兩次也只算一個人');
+  perform test_as('a0000000-0000-0000-0000-000000000012', true);
+  perform public.join_room();
+
+  select public.room_state() into v_state;
+  perform test_ok(jsonb_array_length(v_state -> 'members') = 2, '名單上兩個人');
+  perform test_ok((select count(*) from jsonb_array_elements(v_state -> 'members') m
+                    where (m ->> 'me')::boolean) = 1, '自己那一列標出來了');
+  perform test_ok((select count(*) from jsonb_array_elements(v_state -> 'members') m
+                    where (m ->> 'here')::boolean) = 2, '兩個人都在線上');
+
+  -- 別班看不到這一場。房間是掛在班級上的。
+  perform test_as('a0000000-0000-0000-0000-000000000015', true);
+  perform public.register_student('rlsroom', 'melon12', '別班的人', 'RLS2');
+  perform test_ok(public.room_state() ->> 'room' is null, '別班的學生看不到這一場');
+  perform test_denied($$ select public.room_state('RLS1') $$, '別班的學生指定班級偷看');
+  perform test_denied($$ select public.join_room() $$, '別班的學生加入');
+  perform test_as('a0000000-0000-0000-0000-000000000001', false, 'teacher1@rlstest.local');
+  perform test_denied(format('select public.start_room(%L)', v_room), '別班老師按開始');
+
+  -- 老師按開始，學生那邊輪詢就會看到狀態變了，自己開打。
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  perform public.start_room(v_room);
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  select public.room_state() into v_state;
+  perform test_ok(v_state -> 'room' ->> 'status' = 'playing', '開始了');
+
+  -- 打完了。誰打完誰還在打，老師看得出來。
+  perform public.room_playing(v_room, gen_random_uuid());
+  perform public.room_finished(v_room);
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  select public.room_state('RLS1') into v_state;
+  perform test_ok((select count(*) from jsonb_array_elements(v_state -> 'members') m
+                    where (m ->> 'finished')::boolean) = 1, '一個人打完了，另一個還在打');
+
+  -- 再開一場就是換一關重開，舊的那場自己收掉。
+  select public.open_room('RLS1', 'td-05') into v_room2;
+  perform test_ok(v_room2 <> v_room, '再開一場是新的一場');
+  perform test_ok((select count(*) from public.rooms r
+                    where r.class_code = 'RLS1' and r.status <> 'done') = 1,
+                  '一個班同時只有一場');
+  select public.room_state('RLS1') into v_state;
+  perform test_ok(jsonb_array_length(v_state -> 'members') = 0, '新的一場沒有人在裡面');
+
+  -- 學生離開
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  perform public.join_room();
+  perform public.leave_room(v_room2);
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  perform test_ok(jsonb_array_length(public.room_state('RLS1') -> 'members') = 0, '離開之後名單上沒有他');
+
+  perform public.close_room(v_room2);
+  perform test_ok(public.room_state('RLS1') ->> 'room' is null, '收掉之後就沒有這一場了');
+end $blk$;
 
 reset role;
 \echo ''

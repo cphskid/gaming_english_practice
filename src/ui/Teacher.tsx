@@ -4,6 +4,7 @@ import { WORDS_BY_ID } from '@/data/words'
 import { WordStat } from '@/core/wordStat'
 import { SKILL_NAME, type ClassRoom, type Staff } from '@/core/types'
 import { repo, type ClassRosterRow } from '@/net'
+import { TeacherRoom } from './Room'
 
 /**
  * 老師後台。
@@ -168,6 +169,8 @@ export function Teacher({
                 </button>
               </div>
             </div>
+
+            <TeacherRoom classCode={room.code} />
 
             <div>
               <h2>班上同學（{roster.length}）</h2>

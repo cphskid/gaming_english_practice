@@ -1,5 +1,5 @@
 import type {
-  AdminClassRow, AnswerEvent, Character, ClassRoom, LevelProgress, Staff, Student,
+  AdminClassRow, AnswerEvent, Character, ClassRoom, LevelProgress, Mode, Staff, Student,
   TeacherRow, WordStatEntry,
 } from '@/core/types'
 
@@ -113,6 +113,33 @@ export interface Repository {
   loadTeacherOpen(classCode: string): Promise<string[]>
   setTeacherOpen(classCode: string, levelIds: string[]): Promise<void>
 
+  // -------------------------------------------------------------- 房間
+  /**
+   * 老師開一場：全班同一關、同時開始。
+   *
+   * **學生不用輸入房間代碼。** 一個班同時只有一場還沒結束的房間，
+   * 學生在選關畫面就看得到「老師開了一場」——叫小朋友抄一組四位數字，
+   * 得到的只會是一批「我打不進去」的手。再開一場就是換一關重開，舊的自動收掉。
+   */
+  openRoom(classCode: string, levelId: string, mode: Mode): Promise<string>
+  /** 人到齊了，大家一起開始 */
+  startRoom(roomId: string): Promise<void>
+  /** 收掉這一場。收掉之後學生那邊就看不到了。 */
+  closeRoom(roomId: string): Promise<void>
+
+  /** 加入自己班上那一場。回傳房間 id。已經開始的也進得去（遲到的人照樣要能玩）。 */
+  joinRoom(): Promise<string>
+  leaveRoom(roomId: string): Promise<void>
+  /**
+   * 現在這一場長什麼樣。學生跟老師都是問這一支，每幾秒一次。
+   * 順便當心跳：關掉分頁的人 here 會變成 false。
+   * 老師要傳班級代碼，學生不用傳（看的就是自己那一班）。
+   */
+  roomState(classCode?: string): Promise<RoomState | null>
+  /** 我開打了，這是我這一場的 Session.id。分數之後從答題事件算，靠它對起來。 */
+  roomPlaying(roomId: string, sessionId: string): Promise<void>
+  roomFinished(roomId: string): Promise<void>
+
   // -------------------------------------------------------------- 管理員
   /** 還沒有任何管理員的時候，第一個呼叫的人就是管理員。之後永遠拒絕。 */
   claimFirstAdmin(): Promise<void>
@@ -160,6 +187,31 @@ export interface LeaderRow {
   /** 身上的裝飾品，畫頭像外框用 */
   equipped: string[]
   /** 這一列是不是自己。把自己那一行標出來，找起來才快 */
+  me: boolean
+}
+
+/** 現在這一場。房間只管「誰在、什麼時候一起開始」，分數不存在這裡。 */
+export interface RoomState {
+  id: string
+  classCode: string
+  levelId: string
+  mode: Mode
+  /** lobby＝在等人，playing＝開打了，done＝收掉了（收掉就讀不到了，所以不會出現） */
+  status: 'lobby' | 'playing' | 'done'
+  startedAt: number | null
+  members: RoomMember[]
+}
+
+export interface RoomMember {
+  studentId: string
+  nickname: string
+  /** 團隊模式才有 */
+  team: string | null
+  avatar: string
+  equipped: string[]
+  finished: boolean
+  /** 最近還有在回報。關掉分頁的人會變成 false，老師才看得出誰不在了。 */
+  here: boolean
   me: boolean
 }
 
