@@ -1211,6 +1211,120 @@ language sql stable security definer set search_path = public, pg_temp as $$
    order by t.is_admin desc, t.created_at;
 $$;
 
+-- 管理員直接幫老師開好帳號（不寄確認信）。
+--
+-- 為什麼不是讓老師自己註冊：Supabase 註冊會寄一封確認信，而這個專案的寄信
+-- 額度是**一小時兩封**，也沒有接外部寄信服務。幾位老師同一個下午一起註冊
+-- 就會有人卡在收不到信，而且卡住的人完全不知道自己在等什麼。
+--
+-- 所以這裡直接把 auth.users 那一列寫好，email_confirmed_at 先填上，
+-- 對方拿到帳號密碼就能登入。email 在這套系統裡只是登入用的名字，
+-- 老師的權限本來就是靠管理員給的，不是靠驗 email 驗出來的。
+--
+-- **手寫 auth.users 有一個坑**：GoTrue 會把 confirmation_token 這一類欄位讀進
+-- 不可為空的字串，欄位是 NULL 的話登入直接回 500 Database error querying schema。
+-- 所以下面每一個 token 欄位都要填空字串，不能留 NULL。
+-- 另外 confirmed_at 是自動算出來的欄位，不能寫。
+create or replace function public.admin_create_teacher(
+  p_email text, p_password text, p_display_name text default null)
+returns text language plpgsql security definer set search_path = public, pg_temp as $fn$
+declare
+  v_email text := lower(btrim(coalesce(p_email, '')));
+  v_name  text := nullif(btrim(coalesce(p_display_name, '')), '');
+  v_uid   uuid := gen_random_uuid();
+begin
+  if not public.is_admin() then raise exception '只有管理員可以做這件事'; end if;
+  if v_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
+    raise exception 'email 格式不對';
+  end if;
+  -- 老師的密碼要求比學生高：學生是全班一起註冊、六位好記為主，
+  -- 老師手上是整個班的資料。
+  if length(coalesce(p_password, '')) < 8 then
+    raise exception '老師的密碼至少要 8 個字';
+  end if;
+  if exists (select 1 from auth.users u where lower(u.email) = v_email) then
+    raise exception '這個 email 已經有帳號了';
+  end if;
+
+  insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, recovery_token, email_change_token_new, email_change,
+    email_change_token_current, phone_change, phone_change_token, reauthentication_token,
+    is_sso_user, is_anonymous
+  ) values (
+    '00000000-0000-0000-0000-000000000000', v_uid, 'authenticated', 'authenticated',
+    v_email, extensions.crypt(p_password, extensions.gen_salt('bf')), now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    jsonb_build_object('display_name', coalesce(v_name, '老師')), now(), now(),
+    '', '', '', '', '', '', '', '',
+    false, false
+  );
+
+  -- 沒有這一列的話帳號建起來了卻登入不了：GoTrue 是照 identities 找帳號的。
+  insert into auth.identities (
+    id, provider_id, user_id, identity_data, provider,
+    last_sign_in_at, created_at, updated_at
+  ) values (
+    gen_random_uuid(), v_uid::text, v_uid,
+    jsonb_build_object('sub', v_uid::text, 'email', v_email), 'email',
+    null, now(), now()
+  );
+
+  insert into public.teachers (user_id, display_name) values (v_uid, coalesce(v_name, '老師'));
+  -- 名單是「誰可以自己註冊」用的，這條路沒走名單，但把它補上去，
+  -- 免得同一個 email 之後又被加進名單變成兩套說法。
+  insert into public.teacher_invites (email, invited_by, used_at)
+  values (v_email, auth.uid(), now())
+  on conflict (email) do update set used_at = now();
+  return v_email;
+end;
+$fn$;
+
+-- 管理員看到的全部班級：哪一班、誰在帶、班上幾個人。
+-- 老師只看得到自己的班（listClasses），管理員要看得到整間學校的，
+-- 不然「誰在帶哪一班」只有問人才知道。
+create or replace function public.admin_list_classes()
+returns table (code text, name text, open boolean,
+               owner uuid, owner_name text, owner_active boolean, students bigint)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select c.code, c.name, c.open, c.owner, t.display_name, t.active,
+         (select count(*) from public.students s where s.class_code = c.code)
+    from public.classes c
+    left join public.teachers t on t.user_id = c.owner
+   where public.is_admin()
+   order by c.created_at;
+$$;
+
+-- 管理員把一個班交給另一位老師。
+--
+-- 一個班目前就是一位老師（classes.owner），所以「換老師」是換這一欄。
+-- 班級代碼、學生、進度全部不動——學生是掛在班級代碼上的，不是掛在老師身上，
+-- 所以換人帶不會有人掉出去。之後要做一班多位老師的話，
+-- 這一欄的意思會變成「班主」（能改名字、換代碼、刪班的那個人）。
+create or replace function public.admin_set_class_owner(p_code text, p_owner uuid)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_code text := upper(btrim(coalesce(p_code, '')));
+begin
+  if not public.is_admin() then raise exception '只有管理員可以做這件事'; end if;
+  if not exists (select 1 from public.classes c where c.code = v_code) then
+    raise exception '找不到這個班級';
+  end if;
+  -- 交給一個被停用的老師等於這個班沒人帶，畫面上還會看起來正常，所以擋掉。
+  if not exists (select 1 from public.teachers t where t.user_id = p_owner and t.active) then
+    raise exception '這個人不是啟用中的老師';
+  end if;
+  update public.classes set owner = p_owner where code = v_code;
+end;
+$$;
+
+-- 這套系統有沒有管理員。用來決定要不要在老師後台顯示「認領管理員」。
+-- 誰都問得到（答案只有有或沒有），不問就沒人知道自己卡在哪。
+create or replace function public.has_admin()
+returns boolean language sql stable security definer set search_path = public, pg_temp as $$
+  select exists (select 1 from public.teachers t where t.is_admin);
+$$;
+
 -- 管理員看到的老師邀請名單（還沒註冊的也看得到）。
 create or replace function public.admin_list_invites()
 returns table (email text, used_at timestamptz, created_at timestamptz)
@@ -1337,5 +1451,9 @@ grant execute on function
   public.admin_set_teacher_active(uuid, boolean),
   public.admin_list_teachers(),
   public.admin_list_invites(),
+  public.admin_create_teacher(text, text, text),
+  public.admin_list_classes(),
+  public.admin_set_class_owner(text, uuid),
+  public.has_admin(),
   public.is_admin()
 to authenticated;

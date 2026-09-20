@@ -15,10 +15,11 @@ import { repo, type ClassRosterRow } from '@/net'
  * 代碼之後流出去也沒用。真的流出去了就換一組，班上的人會跟著走不會被踢掉。
  */
 export function Teacher({
-  staff, onAdmin, onBack, onLogout,
+  staff, onAdmin, onClaimAdmin, onBack, onLogout,
 }: {
   staff: Staff
   onAdmin: () => void
+  onClaimAdmin: () => Promise<void>
   onBack: () => void
   onLogout: () => void
 }) {
@@ -29,6 +30,15 @@ export function Teacher({
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
+
+  /**
+   * 這套系統還沒有管理員。
+   *
+   * 「我是第一個使用者」本來只長在老師登入畫面上，但它要求你**已經登入**，
+   * 而登入成功畫面就跳走了——於是那顆按鈕永遠按不到，誰都當不成管理員。
+   * 所以這裡再放一顆：已經是老師、系統又還沒有管理員，才會出現。
+   */
+  const [noAdmin, setNoAdmin] = useState(false)
 
   const [newCode, setNewCode] = useState('')
   const [newName, setNewName] = useState('')
@@ -42,6 +52,11 @@ export function Teacher({
   }, [])
 
   useEffect(() => { void refreshClasses() }, [refreshClasses])
+
+  useEffect(() => {
+    if (staff.isAdmin) { setNoAdmin(false); return }
+    void repo.hasAdmin().then((has) => setNoAdmin(!has)).catch(() => setNoAdmin(false))
+  }, [staff.isAdmin])
 
   const refreshClass = useCallback(async (code: string) => {
     const [rows, events, opened] = await Promise.all([
@@ -76,6 +91,13 @@ export function Teacher({
       <div className="topbar">
         <span className="who">{staff.displayName}</span>
         {staff.isAdmin && <button className="btn ghost small" onClick={onAdmin}>管理員</button>}
+        {noAdmin && (
+          <button className="btn small" onClick={() => void run(async () => {
+            await onClaimAdmin()
+            setNoAdmin(false)
+            return '你現在是最高管理者了'
+          })}>我是這裡的管理員</button>
+        )}
         <span className="spacer" />
         <button className="btn ghost small" onClick={onBack}>回遊戲</button>
         <button className="btn ghost small" onClick={onLogout}>登出</button>

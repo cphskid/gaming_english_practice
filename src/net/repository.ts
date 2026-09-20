@@ -1,5 +1,6 @@
 import type {
-  AnswerEvent, Character, ClassRoom, LevelProgress, Staff, Student, TeacherRow, WordStatEntry,
+  AdminClassRow, AnswerEvent, Character, ClassRoom, LevelProgress, Staff, Student,
+  TeacherRow, WordStatEntry,
 } from '@/core/types'
 
 /**
@@ -107,8 +108,25 @@ export interface Repository {
   // -------------------------------------------------------------- 管理員
   /** 還沒有任何管理員的時候，第一個呼叫的人就是管理員。之後永遠拒絕。 */
   claimFirstAdmin(): Promise<void>
-  /** 指定某個 email 可以成為老師。對方自己註冊、自己設密碼。 */
+  /**
+   * 直接幫老師開好帳號。**不寄確認信**——Supabase 的寄信額度是一小時兩封，
+   * 幾位老師同一個下午一起註冊就會有人卡在收不到信，而且不知道自己在等什麼。
+   * 回傳開好的 email。
+   */
+  createTeacher(email: string, password: string, displayName: string): Promise<string>
+
+  /** 指定某個 email 可以成為老師。對方自己註冊、自己設密碼（會收到確認信）。 */
   inviteTeacher(email: string): Promise<string>
+  /** 整間學校的班級，含各班是誰在帶。老師只看得到自己的班，管理員看得到全部。 */
+  listAllClasses(): Promise<AdminClassRow[]>
+  /**
+   * 把一個班交給另一位老師。班級代碼、學生、進度都不動——
+   * 學生是掛在班級代碼上的，不是掛在老師身上。
+   */
+  setClassOwner(code: string, userId: string): Promise<void>
+  /** 這套系統有沒有管理員。沒有的話老師後台要讓人認領，不然誰都進不去。 */
+  hasAdmin(): Promise<boolean>
+
   listTeachers(): Promise<TeacherRow[]>
   listInvites(): Promise<{ email: string; used: boolean }[]>
   setTeacherActive(userId: string, active: boolean): Promise<void>

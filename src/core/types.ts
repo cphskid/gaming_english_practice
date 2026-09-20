@@ -259,6 +259,18 @@ export interface TeacherRow {
   students: number
 }
 
+/** 管理員看到的一個班級：誰在帶、幾個人。 */
+export interface AdminClassRow {
+  code: string
+  name: string
+  open: boolean
+  /** 帶這一班的老師。班級是掛在代碼上的，換老師不會動到學生。 */
+  ownerId: string
+  ownerName: string
+  ownerActive: boolean
+  students: number
+}
+
 export type Job = 'knight' | 'mage'
 
 export interface Character {

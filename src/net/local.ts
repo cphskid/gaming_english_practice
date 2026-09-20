@@ -4,7 +4,8 @@ import { levelFromExp } from '@/core/progress'
 import { ITEMS } from '@/data/shop'
 import { WordStat } from '@/core/wordStat'
 import type {
-  AnswerEvent, Character, ClassRoom, LevelProgress, Staff, Student, TeacherRow, WordStatEntry,
+  AdminClassRow, AnswerEvent, Character, ClassRoom, LevelProgress, Staff, Student,
+  TeacherRow, WordStatEntry,
 } from '@/core/types'
 import type { ClassRosterRow, LeaderRow, Repository } from './repository'
 
@@ -370,6 +371,28 @@ export class LocalRepository implements Repository {
 
   async inviteTeacher(email: string): Promise<string> {
     return email
+  }
+
+  async createTeacher(email: string): Promise<string> {
+    // 本地版沒有第二個人，開了也沒地方登入
+    return email.trim().toLowerCase()
+  }
+
+  async listAllClasses(): Promise<AdminClassRow[]> {
+    const s = read<Staff | null>(k.staff, null)
+    return read<ClassRoom[]>(k.classes, []).map((c) => ({
+      code: c.code, name: c.name, open: c.open,
+      ownerId: s?.userId ?? '', ownerName: s?.displayName ?? '老師', ownerActive: true,
+      students: read<string[]>(k.roster(c.code), []).length,
+    }))
+  }
+
+  async setClassOwner(): Promise<void> {
+    // 本地版只有一個人，沒有別的老師可以換
+  }
+
+  async hasAdmin(): Promise<boolean> {
+    return read<Staff | null>(k.staff, null)?.isAdmin ?? false
   }
 
   async listTeachers(): Promise<TeacherRow[]> {

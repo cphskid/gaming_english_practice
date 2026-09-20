@@ -45,6 +45,13 @@ language sql security definer as $$
     from public.students s where s.login_id = lower(p_login);
 $$;
 
+-- auth.identities 連 authenticated 都不該讀得到（真的 Supabase 也是），
+-- 但「有沒有這一列」決定了帳號登不登得進去，所以用 security definer 偷看一眼。
+create or replace function test_peek_identities(p_user uuid) returns bigint
+language sql security definer as $$
+  select count(*) from auth.identities i where i.user_id = p_user;
+$$;
+
 create or replace function test_force(p_sql text) returns void
 language plpgsql security definer as $$
 begin execute p_sql; end $$;
@@ -395,10 +402,58 @@ select test_as('a0000000-0000-0000-0000-000000000002', false, 'teacher2@rlstest.
 select test_denied($$ select public.create_class('RLS3','停用後開的班') $$, '被停用的老師開班');
 select test_ok((select count(*) from public.class_overview('RLS2')) = 0, '被停用的老師看不到自己的班');
 
+\echo '── 管理員：看得到全部班級、換得了老師'
+do $blk$
+declare v_owner uuid; v_n int;
+begin
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  -- 上一段把李老師停用了，這裡要先恢復——停用中的老師不能接班
+  perform public.admin_set_teacher_active('a0000000-0000-0000-0000-000000000002', true);
+  select count(*) into v_n from public.admin_list_classes();
+  perform test_ok(v_n >= 2, '管理員看得到全部班級（' || v_n || ' 班）');
+  -- RLS1 本來是 teacher1 的，交給 teacher2
+  perform public.admin_set_class_owner('RLS1', 'a0000000-0000-0000-0000-000000000002');
+  select c.owner into v_owner from public.classes c where c.code = 'RLS1';
+  perform test_ok(v_owner = 'a0000000-0000-0000-0000-000000000002', '班級換老師了');
+  -- 換老師不能把學生弄丟：學生是掛在班級代碼上的
+  select count(*) into v_n from public.students s where s.class_code = 'RLS1';
+  perform test_ok(v_n >= 3, '換老師之後班上的人還在（' || v_n || ' 個）');
+  perform test_denied($$ select public.admin_set_class_owner('RLS1', 'a0000000-0000-0000-0000-000000000009') $$,
+                      '把班交給不是老師的人');
+  perform public.admin_set_class_owner('RLS1', 'a0000000-0000-0000-0000-000000000001');  -- 換回來收尾
+end $blk$;
+
+\echo '── 管理員直接幫老師開帳號（不寄確認信）'
+do $blk$
+declare v_uid uuid;
+begin
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  perform public.admin_create_teacher('newbie@rlstest.local', 'longenough1', '新來的老師');
+  select u.id into v_uid from auth.users u where u.email = 'newbie@rlstest.local';
+  perform test_ok(v_uid is not null, '帳號建起來了');
+  perform test_ok((select count(*) from public.teachers t where t.user_id = v_uid) = 1, '同時就是老師了');
+  -- 這三件事任何一件漏掉，帳號建得起來但登入會失敗
+  perform test_ok((select u.email_confirmed_at is not null from auth.users u where u.id = v_uid),
+                  'email 直接算已確認，不用收信');
+  perform test_ok((select u.confirmation_token = '' and u.recovery_token = ''
+                     and u.email_change = '' and u.email_change_token_new = ''
+                   from auth.users u where u.id = v_uid),
+                  'token 欄位是空字串不是 NULL（NULL 會讓登入回 500）');
+  perform test_ok(test_peek_identities(v_uid) = 1, '有 identities 那一列（沒有就登入不了）');
+  perform test_denied($$ select public.admin_create_teacher('short@rlstest.local', 'abc1234') $$,
+                      '密碼太短的老師帳號');
+  perform test_denied($$ select public.admin_create_teacher('newbie@rlstest.local', 'longenough1') $$,
+                      '同一個 email 開第二次');
+  perform test_as('a0000000-0000-0000-0000-000000000001', false, 'teacher1@rlstest.local');
+  perform test_denied($$ select public.admin_create_teacher('sneaky@rlstest.local', 'longenough1') $$,
+                      '一般老師自己開老師帳號');
+end $blk$;
+
 \echo '── 一般老師看不到管理員的名單'
 select test_as('a0000000-0000-0000-0000-000000000001', false, 'teacher1@rlstest.local');
 select test_ok((select count(*) from public.admin_list_teachers()) = 0, '老師拿不到老師名單');
 select test_ok((select count(*) from public.admin_list_invites()) = 0, '老師拿不到邀請名單');
+select test_ok((select count(*) from public.admin_list_classes()) = 0, '老師拿不到全部班級');
 
 \echo '── 沒有班級的學生（朋友的小孩）'
 do $$

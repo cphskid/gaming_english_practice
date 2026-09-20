@@ -227,6 +227,11 @@ button{font-family:inherit}
 .roster .r .n{font-weight:800;min-width:6em}
 .roster .r .n small{color:var(--gold);font-weight:700}
 .roster .r .s{flex:1;color:var(--muted);font-size:13px}
+/* 管理員那頁的「這一班交給誰」。手機上點得到，所以留 44px */
+.roster .r select{min-height:40px;padding:7px 10px;border-radius:9px;
+  border:2px solid var(--line);background:#2b2118;color:var(--ink);
+  font-family:inherit;font-size:14px;font-weight:700}
+.roster .r select:disabled{opacity:.5}
 
 .teacher{width:100%;max-width:880px;display:flex;flex-direction:column;gap:14px}
 

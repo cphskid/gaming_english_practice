@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type {
-  AnswerEvent, Character, ClassRoom, Job, LevelProgress, Skill, Staff, Student,
-  TeacherRow, WordStatEntry,
+  AdminClassRow, AnswerEvent, Character, ClassRoom, Job, LevelProgress, Skill, Staff,
+  Student, TeacherRow, WordStatEntry,
 } from '@/core/types'
 import type { ClassRosterRow, LeaderRow, Repository } from './repository'
 
@@ -492,6 +492,44 @@ export class SupabaseRepository implements Repository {
     })
     fail('發邀請失敗', error)
     return data as string
+  }
+
+  async createTeacher(email: string, password: string, displayName: string): Promise<string> {
+    const { data, error } = await this.db.rpc('admin_create_teacher', {
+      p_email: email.trim().toLowerCase(),
+      p_password: password,
+      p_display_name: displayName.trim(),
+    })
+    fail('開老師帳號失敗', error)
+    return String(data ?? email.trim().toLowerCase())
+  }
+
+  async listAllClasses(): Promise<AdminClassRow[]> {
+    const { data, error } = await this.db.rpc('admin_list_classes')
+    fail('讀取班級失敗', error)
+    type Row = {
+      code: string; name: string; open: boolean
+      owner: string | null; owner_name: string | null; owner_active: boolean | null
+      students: number
+    }
+    return ((data as Row[] | null) ?? []).map((r) => ({
+      code: r.code, name: r.name, open: r.open,
+      ownerId: r.owner ?? '', ownerName: r.owner_name ?? '（已經不在了）',
+      ownerActive: r.owner_active ?? false, students: Number(r.students),
+    }))
+  }
+
+  async setClassOwner(code: string, userId: string): Promise<void> {
+    const { error } = await this.db.rpc('admin_set_class_owner', {
+      p_code: code.trim().toUpperCase(), p_owner: userId,
+    })
+    fail('換老師失敗', error)
+  }
+
+  async hasAdmin(): Promise<boolean> {
+    const { data, error } = await this.db.rpc('has_admin')
+    fail('讀取系統狀態失敗', error)
+    return data === true
   }
 
   async listTeachers(): Promise<TeacherRow[]> {

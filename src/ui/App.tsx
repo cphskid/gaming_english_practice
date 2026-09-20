@@ -316,6 +316,11 @@ export function App() {
         <Teacher
           staff={staff}
           onAdmin={() => setScreen('admin')}
+          onClaimAdmin={async () => {
+            await repo.claimFirstAdmin()
+            // 認領完要重新讀一次自己，不然畫面上還是「不是管理員」
+            setStaff(await repo.currentStaff())
+          }}
           onBack={() => setScreen(student ? 'select' : 'login')}
           onLogout={() => void logout()}
         />
