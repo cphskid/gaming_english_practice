@@ -70,7 +70,9 @@ export function StaffAuth({
           onClick={() => { setTab('signup'); setError(null) }}>第一次使用</button>
       </div>
 
-      <form className="form panel" onSubmit={submit}>
+      {/* noValidate：瀏覽器內建的 email 檢查會搶在送出之前擋掉，
+          我們自己的訊息就永遠不會出現，畫面上還會留著上一次的錯誤。 */}
+      <form className="form panel" onSubmit={submit} noValidate>
         <div>
           <label htmlFor="em">email</label>
           <input id="em" type="email" value={email} autoComplete="email"

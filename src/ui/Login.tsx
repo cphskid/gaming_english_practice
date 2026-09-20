@@ -24,15 +24,33 @@ export function Login({
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const idOk = /^[a-z0-9_]{3,16}$/.test(loginId.trim().toLowerCase())
-  const pwOk = password.trim().length >= 6
-  const ok = tab === 'login'
-    ? idOk && pwOk
-    : idOk && pwOk && nickname.trim().length >= 1 && code.trim().length >= 3
+  /**
+   * 填得不對的時候**講出哪裡不對**，而不是讓按鈕變暗。
+   *
+   * 使用者是國小學生。一顆按不動又不說話的按鈕，小朋友只會一直按，
+   * 然後跑去跟老師說「壞掉了」。訊息也要寫成小朋友看得懂的話。
+   */
+  function problem(): string | null {
+    const id = loginId.trim().toLowerCase()
+    if (!id) return '要先填帳號喔'
+    if (id.length < 3) return '帳號太短了，至少 3 個字'
+    if (id.length > 16) return '帳號太長了，最多 16 個字'
+    if (!/^[a-z0-9_]+$/.test(id)) return '帳號只能用英文字母、數字和底線'
+    if (password.trim().length < 6) {
+      return '密碼至少要 6 個字（現在 ' + password.trim().length + ' 個）'
+    }
+    if (tab === 'register') {
+      if (!nickname.trim()) return '取一個暱稱吧，那是排行榜上會顯示的名字'
+      if (code.trim().length < 3) return '要填老師給你的班級代碼'
+    }
+    return null
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!ok || busy) return
+    if (busy) return
+    const bad = problem()
+    if (bad) { setError(bad); return }
     setBusy(true)
     setError(null)
     const msg = tab === 'login'
@@ -89,7 +107,7 @@ export function Login({
 
         {error && <p className="error">{error}</p>}
 
-        <button className="btn" type="submit" disabled={!ok || busy}>
+        <button className="btn" type="submit" disabled={busy}>
           {busy ? '請稍等…' : tab === 'login' ? '開始玩' : '建立帳號'}
         </button>
       </form>
