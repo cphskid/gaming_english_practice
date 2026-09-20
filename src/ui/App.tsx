@@ -184,11 +184,19 @@ export function App() {
 
   return (
     <>
-      <div className={'rotate' + (rotateOff ? ' off' : '')} onClick={() => setRotateOff(true)}>
-        <div style={{ fontSize: 44 }}>📱↻</div>
-        <div>請把裝置轉成橫的<br /><span style={{ color: '#a8b89a', fontSize: 13 }}>守塔的路是橫著走的，橫拿看得比較清楚</span></div>
-        <div style={{ color: '#a8b89a', fontSize: 13 }}>（點一下這裡可以直接開始）</div>
-      </div>
+      {/*
+        只有真的在玩的時候才勸人把手機轉橫的——守塔的路是橫著走的。
+        登入、註冊、選關、老師後台這些都是直的表單和清單，直拿剛剛好。
+        本來這塊蓋在每一個畫面上，手機直拿的人會看到一片黑幕蓋住登入畫面，
+        以為網站壞了（第一個用的人就是這樣卡住的）。
+      */}
+      {screen === 'play' && (
+        <div className={'rotate' + (rotateOff ? ' off' : '')} onClick={() => setRotateOff(true)}>
+          <div style={{ fontSize: 44 }}>📱↻</div>
+          <div>請把裝置轉成橫的<br /><span style={{ color: '#a8b89a', fontSize: 13 }}>守塔的路是橫著走的，橫拿看得比較清楚</span></div>
+          <div style={{ color: '#a8b89a', fontSize: 13 }}>（點一下這裡可以直接開始）</div>
+        </div>
+      )}
 
       {screen === 'login' && (
         <Login onLogin={login} onRegister={register} onStaff={() => setScreen('staff')} />
