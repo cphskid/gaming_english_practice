@@ -9,7 +9,7 @@
  *
  *   node tools/test/pack-prod-e2e.mjs a <url> <班級代碼>   註冊＋創角
  *   （用 SQL 把那個角色的 coins/exp 設好）
- *   node tools/test/pack-prod-e2e.mjs b <url>              商店、背包、道具
+ *   node tools/test/pack-prod-e2e.mjs b <url>              商店、換裝、排行榜、道具
  *
  * 第一段會把帳號寫到 /tmp/pack-prod.json，第二段自己讀。
  */
@@ -46,7 +46,7 @@ try {
     ok('職業與頭像存進正式資料庫了（set_job / set_avatar）')
     await page.reload({ waitUntil: 'networkidle' })
     await page.waitForSelector('.levels', { timeout: 25000 })
-    const mug = await page.locator('.topbar .mug').getAttribute('src')
+    const mug = await page.locator('.topbar .mugbox img').getAttribute('src')
     mug?.includes('Avatars_12') ? ok('重新整理之後頭像還在：' + mug.split('/').pop())
       : fail('頭像沒存住：' + mug)
     writeFileSync(STATE, JSON.stringify({ id }))
@@ -69,15 +69,38 @@ try {
     before - after === 60 ? ok(`買到了，金幣 ${before} → ${after}（價錢是資料庫算的）`)
       : fail(`買不成或扣錯：${before} → ${after}／${await page.locator('.error').innerText().catch(() => '')}`)
 
-    await page.locator('.item', { hasText: '紅披風' }).locator('button').click()
+    await page.locator('.item', { hasText: '金邊框' }).locator('button').click()
     await page.waitForSelector('.note, .error')
-    await page.getByRole('button', { name: '背包' }).click()
-    await page.waitForSelector('.items .item')
-    await page.locator('.item', { hasText: '紅披風' }).locator('button').click()
+    await page.locator('.item', { hasText: '紅軍' }).locator('button').click()
+    await page.waitForSelector('.note, .error')
+
+    await page.getByRole('button', { name: '我的角色' }).click()
+    await page.waitForSelector('.hero')
+    await page.locator('.pick', { hasText: '金邊框' }).click()
     // 正式站是真的連線，按下去到畫面更新中間隔一趟往返，等結果出現再看
     await page.waitForSelector('.note, .error')
-    const worn = await page.locator('.item', { hasText: '紅披風' }).locator('button').innerText()
-    worn.includes('穿在身上') ? ok('披風穿起來了（equip_item）') : fail('穿不起來：' + worn)
+    const framed = await page.locator('.hero .mugbox').getAttribute('class')
+    framed.includes('f-gold') ? ok('外框戴上去了（equip_item）') : fail('戴不上去：' + framed)
+
+    await page.locator('.pick', { hasText: '紅軍' }).click()
+    await page.waitForSelector('.note, .error')
+    const redOn = await page.locator('.pick', { hasText: '紅軍' }).getAttribute('class')
+    redOn.includes(' on') ? ok('換成紅軍了') : fail('顏色沒換成功：' + redOn)
+
+    console.log('── 排行榜')
+    await page.getByRole('button', { name: '回去' }).click()
+    await page.waitForSelector('.levels')
+    await page.getByRole('button', { name: '排行榜' }).click()
+    await page.waitForSelector('.board .rank, .error', { timeout: 25000 })
+    const err = await page.locator('.error').innerText().catch(() => '')
+    if (err) fail('排行榜讀不到（class_leaderboard 的 grant？）：' + err)
+    else {
+      const me = page.locator('.rank.me')
+      await me.first().waitFor({ timeout: 10000 })
+      ok('排行榜讀得到，自己在上面：' + (await me.first().innerText()).replace(/\n/g, ' '))
+      const n = await page.locator('.board .rank').count()
+      ok('班上有 ' + n +' 個人有成績')
+    }
 
     console.log('── 帶道具進關卡')
     await page.getByRole('button', { name: '回去' }).click()
@@ -108,6 +131,11 @@ try {
     await page.waitForTimeout(1200)
     const toast = await page.locator('.td-toast').innerText()
     toast.includes('結霜') ? ok('道具生效了（consume_item）：' + toast) : fail('道具沒生效：' + toast)
+    const buff = page.locator('.td-buff')
+    await buff.first().waitFor({ timeout: 5000 })
+    const ticking = await buff.first().innerText()
+    if (/\d+s/.test(ticking)) ok('上面那條在倒數：' + ticking.replace(/\n/g, ' '))
+    else fail('狀態條沒有倒數：' + ticking)
     const left = await page.locator('.bagitem').count()
     ok('用掉之後道具列剩 ' + left + ' 種')
     await page.screenshot({ path: '/tmp/pack-prod.png' })
