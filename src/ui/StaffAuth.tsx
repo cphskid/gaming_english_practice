@@ -25,11 +25,24 @@ export function StaffAuth({
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const ok = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim()) && password.length >= 8
+  /**
+   * 填得不對的時候**回傳原因**，而不是讓按鈕變暗。
+   *
+   * 本來是暗的，結果第一個用的人按了半天沒反應，也不知道是密碼太短——
+   * 一顆按不動又不說話的按鈕，使用者只會覺得壞了。
+   */
+  function problem(): string | null {
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) return 'email 看起來不太對，再檢查一下'
+    if (password.length < 8) return '密碼至少要 8 個字（現在 ' + password.length + ' 個）'
+    if (tab === 'signup' && !name.trim()) return '填一下你的稱呼，學生會看到'
+    return null
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!ok || busy) return
+    if (busy) return
+    const bad = problem()
+    if (bad) { setError(bad); setNote(null); return }
     setBusy(true); setError(null); setNote(null)
     const msg = tab === 'login'
       ? await onLogin(email, password)
@@ -80,13 +93,14 @@ export function StaffAuth({
         {error && <p className="error">{error}</p>}
         {note && <p className="note">{note}</p>}
 
-        <button className="btn" type="submit" disabled={!ok || busy}>
+        <button className="btn" type="submit" disabled={busy}>
           {busy ? '請稍等…' : tab === 'login' ? '登入' : '建立帳號'}
         </button>
       </form>
 
       <p className="lede">
-        老師帳號要由管理員先把你的 email 加進名單才建得起來。
+        第一次用的人點上面的「第一次使用」自己建帳號。
+        你的 email 要先在管理員的名單上才建得起來。
       </p>
 
       <div className="row">
@@ -96,8 +110,8 @@ export function StaffAuth({
         </button>
       </div>
       <p className="lede small">
-        「我是第一個使用者」只有在系統還沒有任何管理員時有用，按一下就會把目前登入的
-        帳號設成最高管理員。之後再按都會被拒絕。
+        「我是第一個使用者」要<strong>先建好帳號並登入之後</strong>再按，它會把目前登入的
+        帳號設成最高管理員。系統一旦有了管理員，之後再按都會被拒絕。
       </p>
     </div>
   )

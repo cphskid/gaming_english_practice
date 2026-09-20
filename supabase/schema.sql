@@ -964,7 +964,9 @@ $$;
 create or replace function public.claim_first_admin()
 returns void language plpgsql security definer set search_path = public, pg_temp as $$
 begin
-  if not public.is_real_account() then raise exception '要先用 email 登入'; end if;
+  if not public.is_real_account() then
+    raise exception '要先在上面建好老師帳號並登入，才按得了這個';
+  end if;
   if exists (select 1 from public.teachers t where t.is_admin) then
     raise exception '這個系統已經有管理員了';
   end if;
