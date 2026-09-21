@@ -6,6 +6,12 @@
 
 角色、建築、地形、UI 與特效素材皆出自此素材包。作者授權可自由用於個人與商業專案並可修改，且不強制標註；此處仍列出以示感謝。
 
+**496 pixel art icons for medieval/fantasy RPG** — [Henrique Lazarini（7Soul1）](https://opengameart.org/content/496-pixel-art-icons-for-medievalfantasy-rpg)
+
+授權為 Creative Commons Zero (CC0)。`assets/rpg-icons/` 完整收錄這 496 張 34×34 像素圖示，
+道具系統的圖示（寒霜陷阱、城牆修補、水晶、金幣、血量、箭塔、軍營等）出自此包。
+對照表見 `docs/icon-map.md`。
+
 ## 單字題庫
 
 **十二年國民基本教育課程綱要 語文領域－英語文**，中華民國教育部。
