@@ -1,6 +1,6 @@
 import type { GameContext, GameHandle, Opponent, Word } from '@/core/types'
 import { makeFeeder } from '@/core/opponent'
-import { loadArt } from '../tower-defense/art'
+import { ART, TERRAIN_KEYS, loadArt, onArt } from '../tower-defense/art'
 import {
   LINES, LINE_COST, LINE_IDS, MAX_TIER, RULES, nextCost, newBattle, pushed, statsOf, step,
   strike, summon, upgrade, type Line, type Unit,
@@ -119,8 +119,12 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   // 對手一定要有，不然這個遊戲沒有意義；容器負責給。
   const foe: Opponent = ctx.opponent!
   const R = RULES
-  let img: Record<string, HTMLImageElement> = {}
+  // 素材一張一張進來，ART 這個物件會就地長大，拿參考就好。
+  const img = ART
   let terrain: HTMLCanvasElement | null = null
+  // 戰場先畫在暫存畫布上再整張貼；圖後到的話得把它作廢重畫。
+  const unArt = onArt((k) => { if (TERRAIN_KEYS.includes(k)) terrain = null })
+  let artKick = performance.now()
   let raf = 0
   let paused = false
   let last = performance.now()
@@ -665,6 +669,8 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     const dt = Math.min(0.05, (now - last) / 1000)
     last = now
     if (!S.done && !paused) update(dt)
+    // 戰場的圖還沒到就每三秒再敲一次，在戰場裡也救得回來，不用退出去重進。
+    if (!img.tiles && now - artKick > 3000) { artKick = now; void loadArt() }
     draw()
     syncUI()
     syncBar()
@@ -990,10 +996,27 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     }
   }
 
+  /** 戰場還沒下載完的時候畫這個，免得看起來像壞掉的地圖。 */
+  function drawLoadingField() {
+    c2d.fillStyle = '#3f6b39'; c2d.fillRect(0, 0, W, H)
+    c2d.save()
+    // 蓋塔位的虛線圈也畫在這片綠色上，字直接寫上去會跟它們糊在一起，
+    // 所以墊一塊深色底再寫。
+    c2d.font = 'bold 30px system-ui, sans-serif'
+    c2d.textAlign = 'center'; c2d.textBaseline = 'middle'
+    const t = '戰場載入中…'
+    const w = c2d.measureText(t).width + 56
+    c2d.fillStyle = 'rgba(20,30,20,.6)'
+    roundRect(W / 2 - w / 2, H / 2 - 27, w, 54, 27); c2d.fill()
+    c2d.fillStyle = '#fff'
+    c2d.fillText(t, W / 2, H / 2 + 1)
+    c2d.restore()
+  }
+
   function draw() {
     if (!terrain && img.tiles) buildTerrain()
     if (terrain) c2d.drawImage(terrain, 0, 0)
-    else { c2d.fillStyle = '#3f6b39'; c2d.fillRect(0, 0, W, H) }
+    else drawLoadingField()
 
     drawGuardZone('me')
     drawGuardZone('foe')
@@ -1068,7 +1091,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     if (w) speak(w.word)
   })
 
-  void loadArt().then((a) => { img = a; terrain = null })
+  void loadArt()
 
   // 開發模式下把內部狀態開出來，自動測試才打得完一場。
   // 正式版 build 會整段消失（import.meta.env.DEV 在 production 是 false）。
@@ -1105,6 +1128,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       ctx.audio.pauseMusic(on)
     },
     destroy() {
+      unArt()
       cancelAnimationFrame(raf)
       // 中途離開也要把音樂收掉，不然回到選關畫面還在放。
       ctx.audio.playMusic(null)

@@ -1,7 +1,7 @@
 import { CRYSTAL, FOCUS_MAX, FOCUS_STEP, SOLDIER_REACH, SOLDIER_SLOW, TOWERS, refundOf } from '@/data/towers'
 import { JOB_EFFECT } from '@/data/jobs'
 import type { GameContext, GameHandle, LevelData, Point, Word } from '@/core/types'
-import { loadArt } from './art'
+import { ART, TERRAIN_KEYS, loadArt, onArt } from './art'
 import { PLATE_RULES, layoutPlates as runPlateLayout, plateY } from './plates'
 
 const W = 1088
@@ -151,8 +151,11 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   const elToast = $<HTMLElement>('.td-toast')
   const elBuffs = $<HTMLElement>('.td-buffs')
 
-  let img: Record<string, HTMLImageElement> = {}
+  // 素材是一張一張進來的，ART 這個物件會就地長大，所以拿參考就好，不用重新指派。
+  const img = ART
   let terrain: HTMLCanvasElement | null = null
+  // 地形先畫在暫存畫布上再整張貼；地形用到的圖後到的話得把它作廢重畫。
+  const unArt = onArt((k) => { if (TERRAIN_KEYS.includes(k)) terrain = null })
   let raf = 0
   let dead = false
   let paused = false
@@ -712,10 +715,30 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     c2d.fillStyle = color; c2d.fillRect(x, y, Math.max(0, w * pct), h)
   }
 
+  /**
+   * 地圖還沒下載完的時候畫這個。以前這裡只是一塊純綠色，看起來就像壞掉的地圖，
+   * 小朋友會以為關卡本來就長這樣；寫一句話出來才知道是在等。
+   */
+  function drawLoadingField() {
+    c2d.fillStyle = '#6ea84f'; c2d.fillRect(0, 0, W, H)
+    c2d.save()
+    // 蓋塔位的虛線圈也畫在這片綠色上，字直接寫上去會跟它們糊在一起，
+    // 所以墊一塊深色底再寫。
+    c2d.font = 'bold 30px system-ui, sans-serif'
+    c2d.textAlign = 'center'; c2d.textBaseline = 'middle'
+    const t = '地圖載入中…'
+    const w = c2d.measureText(t).width + 56
+    c2d.fillStyle = 'rgba(20,30,20,.6)'
+    roundRect(W / 2 - w / 2, H / 2 - 27, w, 54, 27); c2d.fill()
+    c2d.fillStyle = '#fff'
+    c2d.fillText(t, W / 2, H / 2 + 1)
+    c2d.restore()
+  }
+
   function draw() {
-    if (!terrain && img.tiles?.complete) buildTerrain()
+    if (!terrain && img.tiles) buildTerrain()
     if (terrain) c2d.drawImage(terrain, 0, 0)
-    else { c2d.fillStyle = '#6ea84f'; c2d.fillRect(0, 0, W, H) }
+    else drawLoadingField()
 
     if (S.phase === 'build') drawBuildHints()
     drawFrost() // 地面那一層要壓在人和塔底下，所以畫在排序之前
@@ -1021,17 +1044,21 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
 
   // ---------------------------------------------------------------- 主迴圈
   let last = performance.now()
+  let artKick = last
   function loop(now: number) {
     if (dead) return
     const dt = Math.min(0.05, (now - last) / 1000)
     last = now
     if (S.phase !== 'done' && !paused) update(dt)
+    // 地圖的圖還沒到就每三秒再敲一次。loadArt 正在跑就跟著同一趟，
+    // 上一趟放棄了才會重開，所以在關卡裡也救得回來，不用退出去重進。
+    if (!img.tiles && now - artKick > 3000) { artKick = now; void loadArt() }
     syncBuffs()
     draw()
     raf = requestAnimationFrame(loop)
   }
 
-  void loadArt().then((a) => { img = a })
+  void loadArt()
 
   // 開發模式下把內部狀態開出來，自動測試才驗得到難度曲線與出題漏洞。
   // 正式版 build 會整段消失（import.meta.env.DEV 在 production 是 false）。
@@ -1053,6 +1080,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     },
     destroy() {
       dead = true
+      unArt()
       cancelAnimationFrame(raf)
       cv.removeEventListener('pointerdown', onPointerDown)
       try { speechSynthesis.cancel() } catch { /* 有些瀏覽器沒有 */ }

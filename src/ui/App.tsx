@@ -11,6 +11,7 @@ import { botOpponent } from '@/core/opponent'
 import { LEVELS } from '@/data/levels'
 import { WORDS, WORDS_BY_ID, wordsOfThemes } from '@/data/words'
 import { towerDefense, tugOfWar } from '@/games'
+import { loadArt } from '@/games/tower-defense/art'
 import { repo } from '@/net'
 import type { SavedResult } from '@/net/repository'
 import { audio } from '@/audio'
@@ -100,6 +101,17 @@ export function App() {
     // 還沒選過職業和頭像的人先去創角，不然他永遠不知道自己可以選
     setScreen(needsCreation(c) ? 'create' : 'select')
   }, [])
+
+  /**
+   * 選關畫面一出現就先去抓地圖素材。
+   *
+   * 以前是進關卡的那一刻才開始抓，46 張圖在手機上要好幾秒，
+   * 這幾秒地圖就是一塊純綠色——Chuck 回報的就是這個。
+   * 挑關卡的那段時間網路本來就是閒的，先抓完進去就直接有圖。
+   */
+  useEffect(() => {
+    if (screen === 'select') void loadArt()
+  }, [screen])
 
   /**
    * 開機時接回上次的身分。
