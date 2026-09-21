@@ -6,6 +6,16 @@
 
 角色、建築、地形、UI 與特效素材皆出自此素材包。作者授權可自由用於個人與商業專案並可修改，且不強制標註；此處仍列出以示感謝。
 
+**game-icons.net 徽記** — [game-icons.net](https://game-icons.net/)
+
+授權為 [Creative Commons BY 3.0](https://creativecommons.org/licenses/by/3.0/)：可自由使用、修改與再散布，**但必須署名**。`src/ui/icons.ts` 內嵌的 42 個成就徽章圖示出自此站（只取路徑資料，顏色改由畫面控制）。哪一張是誰畫的標在 `src/ui/icons.ts` 每一張上面，也可用 `tools/gen-badge-icons.py` 重新抓取。作者：
+
+- **Lorc** — https://lorcblog.blogspot.com/ （24 張）
+- **Delapouite** — https://delapouite.com/ （14 張）
+- **Skoll** （2 張）
+- **Carl Olsen** — https://twitter.com/unstoppableCarl （1 張）
+- **Caro Asercion** （1 張）
+
 ## 單字題庫
 
 **十二年國民基本教育課程綱要 語文領域－英語文**，中華民國教育部。

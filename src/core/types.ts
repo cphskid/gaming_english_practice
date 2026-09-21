@@ -216,6 +216,20 @@ export interface GameOutcome {
   survival: number
   /** 給結算畫面看的一句話 */
   detail: string
+  /**
+   * 對戰才有的戰報。容器拿它去記戰績（versus_matches），成就那邊要用——
+   * 「三線通吃」「頂階降臨」「逆轉勝」從答題事件是看不出來的。
+   */
+  versus?: {
+    /** 前線最後推到哪，0＝自己城牆、1＝對方城堡 */
+    front: number
+    /** 整場最落後的時候。逆轉勝要用。 */
+    lowestFront: number
+    /** 用過哪幾條兵種線 */
+    linesUsed: Skill[]
+    /** 這一場推出過的最高兵階 */
+    topTier: number
+  }
 }
 
 export interface GameHandle {
