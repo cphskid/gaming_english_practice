@@ -52,6 +52,8 @@ export interface BattleRules {
   towerRange: number
   /** 塔每秒打掉多少血 */
   towerDps: number
+  /** 多久射一箭。總傷害不變（每箭 towerDps × towerEvery），只是改成看得見的一下一下。 */
+  towerEvery: number
   /** 答對一次，自己的塔對那隻敵兵開一槍打掉多少血 */
   strike: number
   /** 一場幾秒 */
@@ -63,12 +65,19 @@ export interface BattleRules {
 export const RULES: BattleRules = {
   homeMe: 116, homeFoe: 972, castleHp: 100,
   reach: 30, spacing: 34,
-  // 塔的火力是**防守方優勢**那一條旋鈕，不是隨便填的：
-  // tools/test/tug-balance.mjs --tune 掃過 0~20，低於 7 的時候
-  // 落後的孩子有 75~100% 的場次會在時間到之前就被打爆城堡（也就是他不玩了）；
-  // 10 開始那個數字是 0%，而且他被壓在家門口的時間從 28 秒掉到 11 秒，
-  // 同時快的人照樣贏 94~100%。改這個數字一定要重跑那支。
-  towerRange: 250, towerDps: 10,
+  // 箭塔是**防守方優勢**那一條旋鈕，不是隨便填的。改任何一個都要重跑
+  // tools/test/tug-balance.mjs。
+  //
+  // towerDps 10：低於 7 的時候，落後的孩子大半場次會在時間到之前就被打爆城堡
+  // （也就是他不玩了）；10 讓那個數字降到 0%，而快的人照樣贏九成以上。
+  //
+  // towerRange 200：第一版是 250，但那是在「答對可以直接打城堡」的錯規則下訂的。
+  // 規則改對之後量出來，250 讓兵根本走不到對方城堡——強弱懸殊也只有 13% 的場次
+  // 碰得到城堡，同程度是 0%，兩個城堡的血從頭到尾不會動，HUD 上那兩個數字等於裝飾。
+  // 200 的時候強弱懸殊有一半的場次打得到城堡（血會掉、勝負真的由城堡決定），
+  // 但還是 0% 破城，落後的人被壓在家門口的時間只有 23 秒。
+  // 再往下 160 會開始出現破城（8%，都在第 150 秒之後），壓制時間跳到 41 秒——不划算。
+  towerRange: 200, towerDps: 10, towerEvery: 0.5,
   strike: 8,
   seconds: 180, openingUnits: 2,
 }
@@ -88,6 +97,8 @@ export interface Unit {
 
 export interface BattleState {
   t: number
+  /** 兩座箭塔各自距離下一箭還有多久 */
+  towerCd: Record<Side, number>
   units: Unit[]
   castleHp: Record<Side, number>
   /** 前線在哪。兩邊最前面那隻的中點，沒有兵就用城堡算。 */
@@ -98,13 +109,22 @@ export interface BattleState {
   reason: 'castle' | 'time' | null
 }
 
-export interface Hit { x: number; side: Side; killed: boolean }
+export interface Hit {
+  x: number
+  side: Side
+  killed: boolean
+  /** 這一下是城堡旁邊的箭塔射的。畫面靠它畫箭，玩家才看得到守備火力存在。 */
+  tower?: boolean
+  /** 箭是從哪裡射出來的（只有 tower 的時候有） */
+  from?: number
+}
 
 let nextId = 1
 
 export function newBattle(r: BattleRules = RULES): BattleState {
   const s: BattleState = {
-    t: 0, units: [], castleHp: { me: r.castleHp, foe: r.castleHp },
+    t: 0, towerCd: { me: r.towerEvery, foe: r.towerEvery },
+    units: [], castleHp: { me: r.castleHp, foe: r.castleHp },
     front: (r.homeMe + r.homeFoe) / 2, over: false, winner: null, reason: null,
   }
   for (let i = 0; i < r.openingUnits; i++) {
@@ -197,8 +217,13 @@ export function step(s: BattleState, dt: number, r: BattleRules = RULES): Hit[] 
     u.x += spec.speed * dir(u.side) * dt
   }
 
-  // --- 塔。只罩得到自己這半邊，所以越深入敵陣越難推。
+  // --- 箭塔。只罩得到自己這半邊，所以越深入敵陣越難推。
+  // 一波一波射而不是連續扣血：總傷害一樣，但畫面上有一支箭可以畫。
+  // 「有效果、看不到」是 Chuck 第一次試玩就抓到的毛病。
   for (const side of ['me', 'foe'] as Side[]) {
+    s.towerCd[side] -= dt
+    if (s.towerCd[side] > 0) continue
+    s.towerCd[side] += r.towerEvery
     const home = homeOf(side, r)
     let target: Unit | null = null
     for (const o of s.units) {
@@ -207,9 +232,9 @@ export function step(s: BattleState, dt: number, r: BattleRules = RULES): Hit[] 
       if (d <= r.towerRange && (!target || Math.abs(target.x - home) > d)) target = o
     }
     if (target) {
-      target.hp -= r.towerDps * dt
+      target.hp -= r.towerDps * r.towerEvery
       target.hurt = 0.12
-      hits.push({ x: target.x, side: target.side, killed: target.hp <= 0 })
+      hits.push({ x: target.x, side: target.side, killed: target.hp <= 0, tower: true, from: home })
     }
   }
 
@@ -244,23 +269,25 @@ export function judge(s: BattleState, r: BattleRules = RULES): Side | null {
 }
 
 /**
- * 答對的那一槍。
+ * 答對的那一槍，打在你點的那個東西上。
  *
- * 答對只召喚一隻兵的話，點哪一隻敵兵就沒差別了，畫面上也看不出「我剛剛打到你」——
- * 那正是 Chuck 說「看著別人的數值跳動稍嫌無趣」的毛病。所以答對同時開一槍，
- * 打在你點的那隻身上；敵方沒有兵的時候就打在他的城堡上。
+ * 答對只召喚一隻兵的話，點哪一隻敵兵就沒差別了，畫面上也看不出「我剛剛打到你」。
+ * 所以答對同時開一槍。
+ *
+ * **這一槍絕對不會打到城堡。** 第一版寫成「沒有兵可打就打城堡」，而畫面上
+ * 敵方城堡前永遠掛著兩塊字牌，所以抽到那兩塊就是直接扣城堡血——13 題就能
+ * 繞過整個兵推把城堡推倒。Chuck 第一次試玩就說「感覺是直接扣城堡的血」，
+ * 他是對的。**城堡的血只能被兵啃掉**（見 step 裡打城堡那一段），
+ * 這樣兵推才是兵推。
  *
  * **這一槍有算進平衡量測裡**（tools/test/tug-balance.mjs），改傷害要重跑。
  */
-export function strike(s: BattleState, side: Side, target: Unit | null, r: BattleRules = RULES): void {
+export function strike(s: BattleState, _side: Side, target: Unit | null, r: BattleRules = RULES): void {
   if (s.over) return
-  if (target && target.hp > 0) {
-    target.hp -= r.strike
-    target.hurt = 0.18
-    if (target.hp <= 0) s.units = s.units.filter((u) => u.hp > 0)
-    return
-  }
-  s.castleHp[OTHER[side]] -= r.strike
+  if (!target || target.hp <= 0) return
+  target.hp -= r.strike
+  target.hurt = 0.18
+  if (target.hp <= 0) s.units = s.units.filter((u) => u.hp > 0)
 }
 
 /** 對方最前面那隻（離我最近的那隻）。答對那一槍預設打它。 */

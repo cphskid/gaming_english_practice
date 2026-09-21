@@ -3,6 +3,7 @@ import type { Character, Job, Student } from '@/core/types'
 import { repo } from '@/net'
 import { JOB_NAME } from '@/core/character'
 import { AVATARS, JOB_BLURB, avatarSrc } from '@/data/jobs'
+import { audio } from '@/audio'
 
 /**
  * 學生自己的設定：改密碼、改暱稱、換班。
@@ -32,6 +33,8 @@ export function Settings({
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // 音樂開關記在這台裝置上，跟帳號無關——同一個孩子換一台就是另一個環境。
+  const [music, setMusic] = useState(audio.isMusicOn)
 
   async function run(what: () => Promise<string>) {
     setBusy(true); setError(null); setNote(null)
@@ -55,6 +58,18 @@ export function Settings({
       <h1>我的設定</h1>
       {error && <p className="error">{error}</p>}
       {note && <p className="note">{note}</p>}
+
+      <div className="form panel">
+        <h2>聲音</h2>
+        <label className="switch">
+          <input type="checkbox" checked={music}
+            onChange={(e) => { setMusic(e.target.checked); audio.unlock(); audio.setMusicEnabled(e.target.checked) }} />
+          <span>對戰時播放音樂</span>
+        </label>
+        <p className="hint">
+          只有兵推對戰那三分鐘會有音樂，關卡裡不會。在教室裡覺得吵就關掉，答對答錯的音效不受影響。
+        </p>
+      </div>
 
       <div className="form panel">
         <h2>換職業、換長相</h2>

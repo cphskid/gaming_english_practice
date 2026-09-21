@@ -3,7 +3,7 @@ import { makeFeeder } from '@/core/opponent'
 import { loadArt } from '../tower-defense/art'
 import { PLATE_RULES, layoutPlates, plateY, type Plate } from '../tower-defense/plates'
 import {
-  RANKS, RULES, frontUnitOf, newBattle, pushed, step, strike, summon, type Unit,
+  RANKS, RULES, newBattle, pushed, step, strike, summon, type Unit,
 } from './battle'
 
 const W = 1088
@@ -14,7 +14,19 @@ const ROAD_Y = 402
 const LAND = { r0: 2, r1: 6 }
 /** 答完一題到下一題之間的冷卻。**比的是英文不是手速**，所以這個不能拿掉。 */
 const ANSWER_COOLDOWN = 0.3
+/**
+ * 場上同時掛幾塊字牌。
+ *
+ * 第一版每隻敵兵都掛一塊，兵一擠在一起（間隔 34px，比牌子還窄）牌子就排不下，
+ * 一直換位置——Chuck 說的「字母會飄」。只掛最前面幾隻就不擠了，
+ * 而且「點對的那一隻」才重新有意義。三塊是為了還有得選，不會只剩一個答案。
+ */
+const TAPPABLE = 3
 const PRESS = 0.22
+/** 一支箭在空中的時間。太短就變成一閃而過，孩子會以為什麼都沒發生。 */
+const ARROW_LIFE = 0.32
+/** 剩下這麼多秒的時候，音樂開始變快。Chuck 要的「最後三十秒節奏變急」。 */
+const RUSH_AT = 30
 
 const SHELL = `
 <div class="td-hud">
@@ -34,7 +46,7 @@ const SHELL = `
   <div class="td-toast"></div>
 </div>`
 
-/** 場上一個點得到的東西：敵方的兵，或敵方城堡前的兩面護盾。 */
+/** 場上一個點得到的東西：敵方最前面那幾隻兵，或敵方城牆上的守衛。 */
 interface Target extends Plate {
   id: string
   word: Word
@@ -78,8 +90,15 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     correct: 0,
     combo: 0,
     cooldown: 0,
-    /** 敵方城堡前的兩面護盾。沒有它，對手兵被清光時就沒有東西可以點了。 */
-    shieldWords: [null, null] as (Word | null)[],
+    /**
+     * 敵方城牆上的守衛。對手兵太少的時候補上來，不然沒有東西可以點。
+     * **打掉守衛不會扣城堡的血**，只是換你一隻兵——城堡的血只能被兵啃掉。
+     */
+    shieldWords: [null, null, null] as (Word | null)[],
+    /** 箭塔射出去的箭，只是畫面 */
+    arrows: [] as { x0: number; y0: number; x1: number; y1: number; life: number }[],
+    /** 最後三十秒的音樂加速只做一次 */
+    rushed: false,
     pops: [] as { x: number; y: number; text: string; color: string; life: number }[],
     flashes: [] as { x: number; life: number }[],
     done: false,
@@ -93,9 +112,27 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   const mine = (key: string) => img[key + ctx.color] ?? img[key]
   const theirs = (key: string) => img[key + foeSuffix] ?? img[key]
 
+  /** 某一邊最前面那幾隻（＝畫面上掛得到字牌、點得到的那幾隻） */
+  function tappable(side: 'me' | 'foe') {
+    const d = side === 'foe' ? 1 : -1
+    return S.battle.units
+      .filter((u) => u.side === side && u.hp > 0)
+      .sort((a, b) => (a.x - b.x) * d)
+      .slice(0, TAPPABLE)
+  }
+
+  /**
+   * 對手答對了。
+   *
+   * 他那一槍**要跟人一樣會落空**：人看到的是場上 TAPPABLE 個目標，兵不夠的時候
+   * 補城牆守衛，抽到守衛那一槍就沒打到東西。電腦如果一律打中我最前面那隻，
+   * 它就比人多一份火力——實測會變成三十秒把人的城堡打到剩 16 血，
+   * 而平衡量測（那邊兩邊都有算落空）說不該發生。引擎跟平衡量測要跑同一套規則。
+   */
   const feed = makeFeeder(foe, (rank) => {
     summon(S.battle, 'foe', rank, R)
-    strike(S.battle, 'foe', frontUnitOf(S.battle, 'me'), R)
+    const mine = tappable('me')
+    strike(S.battle, 'foe', mine[(Math.random() * TAPPABLE) | 0] ?? null, R)
   })
 
   // ------------------------------------------------------------------ 題目
@@ -104,12 +141,28 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     return q ? q.word : null
   }
 
-  /** 場上所有點得到的東西，每一格重建一次（兵會死、會出生）。 */
+  /**
+   * 場上所有點得到的東西，每一格重建一次（兵會死、會出生）。
+   *
+   * 只有**最前面 TAPPABLE 隻**敵兵掛得到字牌，後面那一長串不掛——
+   * 這是「字母會飄」的解法，見 TAPPABLE 的說明。
+   * 正在問的那一題就算掉出前幾名也留著，不然字會在你正要點的時候換掉。
+   */
   function syncTargets() {
     const seen = new Set<string>()
 
+    // 正在問的那一隻排第一位，剩下的名額才給最前面的——這樣總數仍然是 TAPPABLE，
+    // 而且字不會在你正要點下去的時候換掉。
+    const asked = S.target?.startsWith('u') ? Number(S.target.slice(1)) : -1
+    const show = new Set<number>()
+    if (S.battle.units.some((u) => u.id === asked && u.side === 'foe')) show.add(asked)
+    for (const u of tappable('foe')) {
+      if (show.size >= TAPPABLE) break
+      show.add(u.id)
+    }
+
     for (const u of S.battle.units) {
-      if (u.side !== 'foe') continue
+      if (u.side !== 'foe' || !show.has(u.id)) continue
       const id = 'u' + u.id
       seen.add(id)
       let t = S.targets.get(id)
@@ -127,16 +180,18 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       t.y = ROAD_Y - 74
     }
 
-    // 城堡前的護盾。對手被清光的時候，你點的就是它——也就是直接打城堡。
-    for (let i = 0; i < 2; i++) {
+    // 城牆上的守衛。只在敵兵不夠的時候補上來，把場上湊滿 TAPPABLE 個選項。
+    // **打掉它不扣城堡的血**（strike 已經不准打城堡了），只是換你一隻兵。
+    const guards = Math.max(0, TAPPABLE - seen.size)
+    for (let i = 0; i < guards; i++) {
       const id = 's' + i
       seen.add(id)
       if (!S.shieldWords[i]) S.shieldWords[i] = freshWord()
       const w = S.shieldWords[i]
       if (!w) continue
       let t = S.targets.get(id)
-      const x = R.homeFoe + (i === 0 ? -6 : 46)
-      const y = ROAD_Y - (i === 0 ? 136 : 96)
+      const x = R.homeFoe + [-34, 18, 58][i]
+      const y = ROAD_Y - [142, 108, 150][i]
       if (!t) {
         t = {
           id, word: w, unit: null, press: 0, good: 0, bad: 0, shake: 0,
@@ -166,7 +221,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     if (t) {
       elEmoji.textContent = t.word.emoji
       elZh.textContent = t.word.zh
-      elHint.textContent = `（${t.word.pos}）點出寫著這個字的敵人`
+      elHint.textContent = `（${t.word.pos}）點出寫著這個字的目標`
     } else {
       elEmoji.textContent = '⚔️'
       elZh.textContent = '準備開打'
@@ -209,11 +264,12 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       buzz(14)
       ctx.audio.play('answer-correct')
       // 答對做兩件看得見的事：派一隻兵出去，順手對你點的那個開一槍。
+      // 那一槍**打不到城堡**（見 battle.ts 的 strike），城堡的血只能被兵啃掉。
       summon(S.battle, 'me', 0, R)
       strike(S.battle, 'me', t.unit, R)
       S.flashes.push({ x: t.x, life: 0.22 })
       S.pops.push({ x: R.homeMe + 40, y: ROAD_Y - 80, text: '＋1 兵', color: '#a8e07a', life: 0.9 })
-      if (!t.unit) S.shieldWords[Number(t.id.slice(1))] = null   // 護盾被打破就換一個字
+      if (!t.unit) S.shieldWords[Number(t.id.slice(1))] = null   // 守衛被打掉就換一個字
       speak(t.word.word)
     } else {
       S.combo = 0
@@ -244,8 +300,16 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   // ------------------------------------------------------------------ 迴圈
   function update(dt: number) {
     if (S.cooldown > 0) S.cooldown -= dt
+    if (!S.rushed && R.seconds - S.battle.t <= RUSH_AT) {
+      S.rushed = true
+      ctx.audio.setMusicRate(1.12)
+    }
     feed(S.battle.t)
-    step(S.battle, dt, R)
+    for (const h of step(S.battle, dt, R)) {
+      if (!h.tower || h.from === undefined) continue
+      const from = h.side === 'me' ? towerX('foe') : towerX('me')
+      S.arrows.push({ x0: from, y0: ROAD_Y - 92, x1: h.x, y1: ROAD_Y - 28, life: ARROW_LIFE })
+    }
     syncTargets()
     if (!S.target) pickQuestion()
 
@@ -256,6 +320,8 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     S.pops = S.pops.filter((p) => p.life > 0)
     for (const f of S.flashes) f.life -= dt
     S.flashes = S.flashes.filter((f) => f.life > 0)
+    for (const a of S.arrows) a.life -= dt
+    S.arrows = S.arrows.filter((a) => a.life > 0)
 
     if (S.battle.over && !S.done) finish()
   }
@@ -264,6 +330,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     S.done = true
     const b = S.battle
     const win = b.winner === 'me'
+    ctx.audio.playMusic(null)          // 先把 BGM 收掉，勝負那一聲才聽得清楚
     ctx.audio.play(win ? 'victory' : 'defeat')
     const acc = S.asked ? Math.round((S.correct / S.asked) * 100) : 0
     const pct = Math.round(pushed(b, R) * 100)
@@ -377,6 +444,53 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       Math.max(0, S.battle.castleHp[side]) / R.castleHp, side === 'me' ? '#6fbf4a' : '#d4504a')
   }
 
+  /**
+   * 城堡旁邊的箭塔。
+   *
+   * 這一座在第一版是**隱形的**：規則裡寫著「城堡周圍 towerRange 內會對最近的
+   * 敵兵扣血」，畫面上卻什麼都沒有，所以 Chuck 問「城堡不會攻擊吧？為何有塔的
+   * 火力？」。它是擋滾雪球最關鍵的一條（沒有它，快的孩子九十秒就把慢的城堡打爛），
+   * 所以不能拿掉，只能畫出來。
+   */
+  function towerX(side: 'me' | 'foe') {
+    // 離城堡遠一點，不然看起來像城堡的一部分，孩子不會知道是它在射。
+    return side === 'me' ? R.homeMe + 118 : R.homeFoe - 118
+  }
+
+  function drawTower(side: 'me' | 'foe') {
+    const x = towerX(side)
+    const im = side === 'me' ? mine('archery') : theirs('archery')
+    shadow(x, ROAD_Y - 6, 40)
+    c2d.save()
+    if (side === 'foe') { c2d.translate(x * 2, 0); c2d.scale(-1, 1) }
+    if (im?.complete) c2d.drawImage(im, x - 52, ROAD_Y - 116, 104, 112)
+    c2d.restore()
+  }
+
+  /**
+   * 守備範圍：地上一層漸淡的光，越靠近自己家越亮，邊界畫一條虛線。
+   * 不寫字，讓孩子自己看出來「推過這條線就會被射」。
+   */
+  function drawGuardZone(side: 'me' | 'foe') {
+    const home = side === 'me' ? R.homeMe : R.homeFoe
+    const edge = side === 'me' ? home + R.towerRange : home - R.towerRange
+    // 只鋪在路的上下，不要整片草地都染色——整片會看起來像地圖破圖，
+    // 而且兵本來就只走在路上，守備範圍畫在路上才看得懂。
+    const top = ROAD_Y - 78
+    const h = 118
+    const g = c2d.createLinearGradient(home, 0, edge, 0)
+    const tint = side === 'me' ? '111,191,74' : '212,80,74'
+    g.addColorStop(0, `rgba(${tint},.3)`)
+    g.addColorStop(1, `rgba(${tint},0)`)
+    c2d.fillStyle = g
+    c2d.fillRect(Math.min(home, edge), top, R.towerRange, h)
+    c2d.save()
+    c2d.setLineDash([5, 9])
+    c2d.strokeStyle = `rgba(${tint},.45)`; c2d.lineWidth = 2
+    c2d.beginPath(); c2d.moveTo(edge, top); c2d.lineTo(edge, top + h); c2d.stroke()
+    c2d.restore()
+  }
+
   /** 前線那條線。整場最重要的一個東西——它就是「我推到哪了」。 */
   function drawFront() {
     const x = S.battle.front
@@ -424,14 +538,37 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     c2d.restore()
   }
 
+  /** 箭塔射出去的箭。飛在半路上，讓人看得出是誰射的、射到誰。 */
+  function drawArrows() {
+    for (const a of S.arrows) {
+      const k = 1 - a.life / ARROW_LIFE
+      const x = a.x0 + (a.x1 - a.x0) * k
+      const y = a.y0 + (a.y1 - a.y0) * k
+      const ang = Math.atan2(a.y1 - a.y0, a.x1 - a.x0)
+      c2d.save()
+      c2d.translate(x, y); c2d.rotate(ang)
+      c2d.strokeStyle = 'rgba(30,22,12,.55)'; c2d.lineWidth = 5; c2d.lineCap = 'round'
+      c2d.beginPath(); c2d.moveTo(-13, 0); c2d.lineTo(9, 0); c2d.stroke()
+      c2d.strokeStyle = 'rgba(255,246,214,1)'; c2d.lineWidth = 2.5
+      c2d.beginPath(); c2d.moveTo(-13, 0); c2d.lineTo(9, 0); c2d.stroke()
+      c2d.beginPath(); c2d.moveTo(9, 0); c2d.lineTo(2, -4.5); c2d.moveTo(9, 0); c2d.lineTo(2, 4.5); c2d.stroke()
+      c2d.restore()
+    }
+  }
+
   function draw() {
     if (!terrain && img.tiles) buildTerrain()
     if (terrain) c2d.drawImage(terrain, 0, 0)
     else { c2d.fillStyle = '#3f6b39'; c2d.fillRect(0, 0, W, H) }
 
+    drawGuardZone('me')
+    drawGuardZone('foe')
     drawCastle('me')
     drawCastle('foe')
+    drawTower('me')
+    drawTower('foe')
     for (const u of [...S.battle.units].sort((a, b) => laneY(a) - laneY(b))) drawUnit(u)
+    drawArrows()
     drawFront()
 
     // 字牌排版跟守塔共用同一支（純幾何，量得出來，見 plates.ts）
@@ -488,7 +625,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   // 正式版 build 會整段消失（import.meta.env.DEV 在 production 是 false）。
   if (import.meta.env.DEV) {
     ;(window as unknown as { __tug?: unknown }).__tug = {
-      S, RULES: R,
+      S, RULES: R, PLATES: PLATE_RULES,
       /** 點某一個目標；測試用它模擬小朋友的正確率 */
       tapId: (id: string) => { const t = S.targets.get(id); if (t) tap(t) },
       ids: () => [...S.targets.keys()],
@@ -499,12 +636,24 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   pickQuestion()
   syncUI()
   toast(foe.isBot ? `對手是電腦：${foe.name}` : `對手：${foe.name}`)
+  // 開戰的儀式感：號角先響，熱血 BGM 跟上。
+  // 進到這個畫面之前一定點過「開打」，所以 iOS 的解鎖已經拿到了。
+  ctx.audio.unlock()
+  ctx.audio.play('battle-horn')
+  ctx.audio.playMusic('battle')
   raf = requestAnimationFrame(loop)
 
   return {
-    setPaused(on: boolean) { paused = on; if (!on) last = performance.now() },
+    setPaused(on: boolean) {
+      paused = on
+      if (!on) last = performance.now()
+      // 暫停（按了「離開」在問你確定嗎）的時候音樂也停，但不要從頭開始。
+      ctx.audio.pauseMusic(on)
+    },
     destroy() {
       cancelAnimationFrame(raf)
+      // 中途離開也要把音樂收掉，不然回到選關畫面還在放。
+      ctx.audio.playMusic(null)
       cv.removeEventListener('pointerdown', onDown)
       try { speechSynthesis.cancel() } catch { /* 沒有就算了 */ }
       root.innerHTML = ''

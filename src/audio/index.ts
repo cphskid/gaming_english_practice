@@ -1,4 +1,4 @@
-import type { AudioBus, SfxName } from '@/core/types'
+import type { AudioBus, MusicName, SfxName } from '@/core/types'
 
 /**
  * 音訊模組。遊戲只會叫 audio.play('volley')，不管聲音是檔案還是合成的。
@@ -6,7 +6,10 @@ import type { AudioBus, SfxName } from '@/core/types'
  * 三件骨架就要做完的事：
  * 1. iOS Safari 不准使用者互動前播聲音 → 第一次播放必須綁在使用者的某一下點擊
  * 2. 缺的音效先用 Web Audio 合成，之後補檔案不用改任何呼叫端
- * 3. 教室預設值：音效開、音樂關（一整班同時放音樂會很吵，老師多半會關掉）
+ * 3. 教室吵不吵：音效一律開；**音樂只在對戰那三分鐘放**，關卡裡不放。
+ *    一整班同時放十幾分鐘的背景音樂老師一定關掉，但一場三分鐘的對決
+ *    需要那個儀式感（Chuck 的原話：開戰號角、熱血 BGM）。
+ *    開關記在這台裝置上，孩子自己在「我的設定」關得掉。
  */
 
 /** 有檔案的音效。檔名對應表見 assets/audio/README.md */
@@ -24,6 +27,7 @@ const FILES: Partial<Record<SfxName, string[]>> = {
   coin: ['coin.wav'],
   'ui-tap': ['ui-tap.wav'],
   explosion: ['explosion.wav'],
+  'battle-horn': ['battle-horn.ogg'],
   // victory 與 defeat 還沒有檔案，下面用合成的頂著
 }
 
@@ -31,6 +35,18 @@ const FILES: Partial<Record<SfxName, string[]>> = {
 const SYNTH: Partial<Record<SfxName, [number, number, number][]>> = {
   victory: [[523, 0, 0.14], [659, 0.13, 0.14], [784, 0.26, 0.14], [1046, 0.39, 0.34]],
   defeat: [[392, 0, 0.18], [330, 0.17, 0.2], [247, 0.36, 0.42]],
+}
+
+/** 開關記在這台裝置上。讀不到（無痕、擋了儲存）就用預設值，不要讓遊戲掛掉。 */
+function readFlag(key: string, fallback: boolean): boolean {
+  try {
+    const v = localStorage.getItem('audio.' + key)
+    return v === null ? fallback : v === '1'
+  } catch { return fallback }
+}
+
+function writeFlag(key: string, on: boolean): void {
+  try { localStorage.setItem('audio.' + key, on ? '1' : '0') } catch { /* 記不起來就算了 */ }
 }
 
 const BASE = import.meta.env.BASE_URL || '/'
@@ -41,8 +57,9 @@ export class WebAudioBus implements AudioBus {
   private buffers = new Map<string, AudioBuffer>()
   private unlocked = false
   private sfxOn = true
-  private musicOn = false // 教室預設關
+  private musicOn = readFlag('music', true)
   private music: HTMLAudioElement | null = null
+  private track: MusicName | null = null
 
   /** 綁在使用者的第一下點擊。重複呼叫沒有副作用。 */
   unlock(): void {
@@ -139,20 +156,53 @@ export class WebAudioBus implements AudioBus {
 
   setMusicEnabled(on: boolean): void {
     this.musicOn = on
-    if (!on) {
-      this.music?.pause()
-      return
-    }
+    writeFlag('music', on)
+    if (!on) this.stopMusic()
+    else if (this.track) this.playMusic(this.track)
+  }
+
+  /**
+   * 換一首，或停掉。
+   *
+   * 音樂走 HTMLAudioElement 不走 Web Audio：曲子是邊下載邊播的，
+   * 不用像音效那樣先整個抓下來解碼（學校共用 WiFi，那首曲子快一 MB）。
+   */
+  playMusic(track: MusicName | null): void {
+    this.track = track
+    if (!track) return this.stopMusic()
+    if (!this.musicOn) return
     try {
+      const src = `${BASE}audio/music/${track}.ogg`.replace(/\/{2,}/g, '/')
       if (!this.music) {
-        this.music = new Audio(`${BASE}audio/music/adventure.mp3`.replace(/\/{2,}/g, '/'))
+        this.music = new Audio(src)
         this.music.loop = true
-        this.music.volume = 0.32
+        this.music.volume = 0.3
+      } else if (!this.music.src.endsWith(`${track}.ogg`)) {
+        this.music.src = src
       }
+      this.music.playbackRate = 1
+      this.music.currentTime = 0    // 新的一場從頭放；暫停／繼續走 pauseMusic
       void this.music.play().catch(() => undefined)
     } catch {
-      /* 音樂不是必要的 */
+      /* 音樂不是必要的，播不出來也要照玩 */
     }
+  }
+
+  pauseMusic(on: boolean): void {
+    if (!this.music || !this.musicOn || !this.track) return
+    try {
+      if (on) this.music.pause()
+      else void this.music.play().catch(() => undefined)
+    } catch { /* 同上 */ }
+  }
+
+  setMusicRate(rate: number): void {
+    if (!this.music) return
+    try { this.music.playbackRate = rate } catch { /* 不支援就算了 */ }
+  }
+
+  private stopMusic(): void {
+    try { this.music?.pause() } catch { /* 同上 */ }
   }
 
   get isMusicOn(): boolean {

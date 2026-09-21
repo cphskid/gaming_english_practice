@@ -246,7 +246,10 @@ export interface GameModule {
 export type SfxName =
   | 'answer-correct' | 'answer-wrong' | 'volley' | 'enemy-hit' | 'enemy-die'
   | 'castle-hit' | 'tower-build' | 'tower-sell' | 'wave-start' | 'star'
-  | 'coin' | 'ui-tap' | 'explosion' | 'victory' | 'defeat'
+  | 'coin' | 'ui-tap' | 'explosion' | 'victory' | 'defeat' | 'battle-horn'
+
+/** 有哪幾首曲子。對戰才放音樂，關卡裡不放（一整班同時放會吵到老師）。 */
+export type MusicName = 'battle'
 
 export interface AudioBus {
   play(name: SfxName): void
@@ -254,6 +257,13 @@ export interface AudioBus {
   unlock(): void
   setSfxEnabled(on: boolean): void
   setMusicEnabled(on: boolean): void
+  /** 換一首，或傳 null 把音樂停掉。音樂總開關是關的時候這支什麼都不做。 */
+  playMusic(track: MusicName | null): void
+  /** 把音樂放快一點。對戰最後三十秒用它把節奏催起來。 */
+  setMusicRate(rate: number): void
+  /** 暫停／繼續，**不會從頭開始**。按「離開」在問你確定嗎的時候用。 */
+  pauseMusic(on: boolean): void
+  readonly isMusicOn: boolean
 }
 
 // ---------------------------------------------------------------------------

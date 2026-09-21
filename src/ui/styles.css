@@ -414,3 +414,9 @@ h2.sec small{font-size:12px;font-weight:400;color:var(--muted)}
 /* 對戰的上面那一條：兩座城堡的血和對手是誰 */
 .tw-foe{font-size:13px;color:var(--muted);white-space:nowrap;flex:none}
 @media (max-height:520px){ .tw-foe{display:none} }
+
+/* 設定裡的開關。.form label 本來是小灰字（欄位標題），開關要看得清楚所以蓋掉。 */
+.switch{display:flex;align-items:center;gap:10px;font-size:16px;color:var(--ink);cursor:pointer;
+  padding:4px 0;min-height:44px}
+.switch input{width:22px;height:22px;flex:none;accent-color:var(--gold);margin:0}
+.hint{margin:2px 0 0;font-size:12.5px;line-height:1.5;color:var(--muted)}

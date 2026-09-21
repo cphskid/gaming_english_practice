@@ -80,7 +80,10 @@ export function plateY(p: Plate, r: PlateRules = PLATE_RULES): number {
  */
 export function layoutPlates(list: Plate[], r: PlateRules = PLATE_RULES): void {
   if (!list.length) return
-  for (const p of list) if (!p.laid) { p.laid = true; p.px = p.x; p.ptx = p.x }
+  // 這一格才第一次排到的牌子。它們不跟著慢慢挪，直接就位——
+  // 不然剛出現的那一格會停在本體正上方，跟旁邊那塊疊到（量得到：兵推那邊 0.3% 的畫面）。
+  const fresh = new Set<Plate>()
+  for (const p of list) if (!p.laid) { p.laid = true; fresh.add(p); p.px = p.x; p.ptx = p.x }
 
   // 推開要照左右順序算；**排層數不可以**——那是舊版本會飄的原因：
   // 兩隻怪一超車，前後順序就換，層數跟著整排翻。層數照傳進來的順序排
@@ -112,7 +115,8 @@ export function layoutPlates(list: Plate[], r: PlateRules = PLATE_RULES): void {
   // 慢慢挪過去。怪一直在動，目標本來就一直在變，直接套上去就是抖。
   // 追過去的過程中也不准離本體太遠，不然轉角那一下會被甩出去。
   for (const p of order) {
-    p.px += (p.ptx - p.px) * r.ease
+    if (fresh.has(p)) p.px = p.ptx
+    else p.px += (p.ptx - p.px) * r.ease
     p.px = Math.max(p.x - r.reach, Math.min(p.x + r.reach, p.px))
   }
 
