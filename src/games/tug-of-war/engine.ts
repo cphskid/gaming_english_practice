@@ -1,10 +1,9 @@
 import type { GameContext, GameHandle, Opponent, Word } from '@/core/types'
 import { makeFeeder } from '@/core/opponent'
 import { loadArt } from '../tower-defense/art'
-import { PLATE_RULES, layoutPlates, plateY, type Plate } from '../tower-defense/plates'
 import {
-  LINES, LINE_IDS, MAX_TIER, RULES, nextCost, newBattle, pushed, statsOf, step, strike,
-  summon, upgrade, type Line, type Unit,
+  LINES, LINE_COST, LINE_IDS, MAX_TIER, RULES, nextCost, newBattle, pushed, statsOf, step,
+  strike, summon, upgrade, type Line, type Unit,
 } from './battle'
 
 const W = 1088
@@ -57,18 +56,46 @@ const SHELL = `
   </div>
 </div>`
 
-/** 場上一個點得到的東西：敵方最前面那幾隻兵，或敵方城牆上的守衛。 */
-interface Target extends Plate {
+/**
+ * 場上一個點得到的東西：敵方最前面那幾隻兵，或敵方城牆上的守衛。
+ *
+ * **字牌不再黏在兵身上。** 第一版黏著，於是兵一移動字就跟著飄，而且為了
+ * 塞得下只能寫很小——Chuck 在手機上「不是不會，是點錯」講的就是這個。
+ * 現在字牌是上方三塊固定不動的大木牌，兵身上只留一面同色的旗子，
+ * 點木牌或點那隻兵都算數。
+ */
+interface Target {
   id: string
   word: Word
-  /** 牌子上真正寫的字。認字與聽音是整個單字，拼字是一個字母。 */
+  /** 木牌上寫的字 */
   label: string
   unit: Unit | null
+  /** 佔上方哪一塊木牌（0~2），決定位置與顏色 */
+  slot: number
+  /** 這個目標在戰場上的位置（畫旗子與連線用） */
+  x: number
+  y: number
   press: number
   good: number
   bad: number
   shake: number
 }
+
+/**
+ * 拼字題的版面：中間一排空格，下面一排木頭字母磚。
+ *
+ * **這是真的把整個字拼出來，不是選擇題。** 第一版做成「挖掉一個字母選一個」，
+ * 快是快，但那練不到拼寫，Chuck 一看就說「怎麼變成填空題」。
+ *
+ * 字母磚 76px 寬，手機上約 45 CSS px，大拇指按得到（44 是底線）。
+ */
+const SPELL = { slotY: 100, slotW: 48, slotH: 58, slotGap: 8, bankY: 462, bankW: 76, bankH: 66, bankGap: 12 }
+
+/** 三塊木牌的位置與顏色。顏色是木牌與兵身上旗子的對應關係，所以要夠不一樣。 */
+const BOARD = { y: 86, h: 46, w: 258, gap: 22 }
+const SLOT_COLOR = ['#e0963a', '#4fa3cf', '#ab7ad2']
+const slotX = (i: number) =>
+  (W - (BOARD.w * 3 + BOARD.gap * 2)) / 2 + i * (BOARD.w + BOARD.gap) + BOARD.w / 2
 
 export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   root.innerHTML = SHELL
@@ -123,11 +150,28 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
      * **答錯不會整個沒收，是結算成目前累積到的階**，不然沒有人敢賭四個字。
      */
     pending: 0,
-    /** 拼字題挖掉第幾個字母 */
-    blank: 0,
+    /**
+     * 拼字題的狀態。跟認字／聽音完全不同一套：那兩種是點場上的目標，
+     * 拼字是點下面的字母磚把整個字拼出來。
+     */
+    spell: {
+      word: null as Word | null,
+      /** 還要拼幾個字母才完成 */
+      filled: 0,
+      /** 下面那一排字母磚 */
+      bank: [] as { ch: string; used: boolean; press: number; bad: number }[],
+      /** 這個字拼到現在按錯幾次。全對才算答對。 */
+      slips: 0,
+    },
     /** 電腦對手的累積與現在走哪條線 */
     botPending: 0,
     botLine: 'recognize' as Line,
+    /**
+     * 電腦答題的時間存款。對手的答題串是「認字一題」的節奏產生的，
+     * 但拼一個字要花三倍時間，所以走拼字線的時候要存夠三筆才換到一題。
+     * 少了這個，電腦用拼字線會用認字的速度丟出三倍強的兵。
+     */
+    botCredit: 0,
     /** 最後三十秒的音樂加速只做一次 */
     rushed: false,
     pops: [] as { x: number; y: number; text: string; color: string; life: number }[],
@@ -164,6 +208,13 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     // **電腦跟人跑同一套規則**：一樣要累積、一樣有水晶、一樣被上限拖慢出兵速度，
     // 答錯一樣把累積的結算出去。少了任何一條，平衡量測量到的就不是玩家會遇到的東西。
     // 這段跟 tools/test/tug-balance.mjs 的 act() 必須逐行對得上。
+    //
+    // 每 45 秒換一條線，讓小朋友三種兵都看得到、也都被打過。
+    S.botLine = LINE_IDS[Math.floor(S.battle.t / 45) % LINE_IDS.length]
+    // 拼字一題要花三倍時間，所以要存夠三筆才算答完一題。
+    S.botCredit += 1
+    if (S.botCredit < LINE_COST[S.botLine]) return
+    S.botCredit -= LINE_COST[S.botLine]
     if (!correct) {
       if (S.botPending > 0) {
         summon(S.battle, 'foe', S.botLine, Math.min(S.botPending, S.battle.tier.foe), R)
@@ -179,8 +230,6 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     }
     // 有錢就升階。不是最佳解（升階會拖慢出兵），但夠當個老實的對手。
     upgrade(S.battle, 'foe')
-    // 每 45 秒換一條線，讓小朋友三種兵都看得到、也都被打過。
-    S.botLine = LINE_IDS[Math.floor(S.battle.t / 45) % LINE_IDS.length]
     const mine = tappable('me')
     strike(S.battle, 'foe', mine[(Math.random() * TAPPABLE) | 0] ?? null, R)
   })
@@ -192,34 +241,54 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     return q ? q.word : null
   }
 
-  /**
-   * 重寫每塊牌子上要顯示什麼。
-   *
-   * 認字與聽音：牌子上是整個英文單字，點出題目問的那一個。
-   * 拼字：題目把單字挖掉一個字母，**牌子上改成單獨一個字母**，點正確的那個。
-   *
-   * 為什麼拼字不做成用鍵盤打：橫式戰場上叫出鍵盤會蓋掉半個畫面，而且
-   * 三條線最好共用同一種操作——全部都是「點一隻兵」，小朋友只要學一次。
-   * 單獨一個字母也比一整個單字好點，剛好治 Chuck 說的「字很小會點錯」。
-   */
+  /** 木牌上寫的就是整個英文單字。拼字線不走木牌，走下面的字母磚。 */
   function relabel() {
-    const list = [...S.targets.values()]
-    const asked = S.target ? S.targets.get(S.target) : null
-    if (S.line !== 'spell' || !asked) {
-      for (const t of list) t.label = t.word.word
-      return
+    for (const t of S.targets.values()) t.label = t.word.word
+  }
+
+  /**
+   * 開一個新的拼字題。
+   *
+   * 字母磚 ＝ 這個字的字母（含重複的）＋ 幾個混淆用的，洗牌後排在下面。
+   * 混淆的數量讓磚數落在 5~8 之間：太少用猜的就會中，太多在手機上排不下。
+   */
+  function newSpellWord() {
+    const w = freshWord()
+    S.spell.word = w
+    S.spell.filled = 0
+    S.spell.slips = 0
+    S.spell.bank = []
+    if (!w) return
+    const letters = w.word.toLowerCase().split('')
+    const want = Math.min(8, Math.max(5, letters.length + 2))
+    const pool = [...letters]
+    while (pool.length < want) {
+      const c = LETTERS[(Math.random() * 26) | 0]
+      // 混淆字母不要跟字裡的重複，不然玩家點下去會被判錯，看起來像程式壞了
+      if (!letters.includes(c) && !pool.includes(c)) pool.push(c)
     }
-    const w = asked.word.word
-    const i = Math.min(S.blank, w.length - 1)
-    const right = w[i].toLowerCase()
-    const used = new Set([right])
-    for (const t of list) {
-      if (t === asked) { t.label = right.toUpperCase(); continue }
-      let c = right
-      for (let tries = 0; tries < 40 && used.has(c); tries++) c = LETTERS[(Math.random() * 26) | 0]
-      used.add(c)
-      t.label = c.toUpperCase()
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0
+      ;[pool[i], pool[j]] = [pool[j], pool[i]]
     }
+    S.spell.bank = pool.map((ch) => ({ ch, used: false, press: 0, bad: 0 }))
+    S.asked++
+    S.askedAt = performance.now()
+    syncQuiz()
+  }
+
+  /** 字母磚在畫面上的位置 */
+  function bankX(i: number) {
+    const n = S.spell.bank.length
+    const total = n * SPELL.bankW + (n - 1) * SPELL.bankGap
+    return (W - total) / 2 + i * (SPELL.bankW + SPELL.bankGap)
+  }
+
+  /** 空格在畫面上的位置 */
+  function slotXi(i: number) {
+    const n = S.spell.word?.word.length ?? 0
+    const total = n * SPELL.slotW + (n - 1) * SPELL.slotGap
+    return (W - total) / 2 + i * (SPELL.slotW + SPELL.slotGap)
   }
 
   /**
@@ -230,6 +299,14 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
    * 正在問的那一題就算掉出前幾名也留著，不然字會在你正要點的時候換掉。
    */
   function syncTargets() {
+    // 拼字線不用場上的目標——作答是點下面的字母磚。留著舊的木牌會變成
+    // 「畫面上有三個字但點了沒反應」，比沒有還糟。
+    if (S.line === 'spell') {
+      S.targets.clear()
+      S.shieldWords = [null, null, null]
+      S.target = null
+      return
+    }
     const seen = new Set<string>()
 
     // 正在問的那一隻排第一位，剩下的名額才給最前面的——這樣總數仍然是 TAPPABLE，
@@ -250,10 +327,8 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       if (!t) {
         const w = freshWord()
         if (!w) continue
-        t = {
-          id, word: w, label: w.word, unit: u, press: 0, good: 0, bad: 0, shake: 0,
-          x: u.x, y: ROAD_Y - 74, pw: 0, px: u.x, ptx: u.x, tier: 0, laid: false, hold: 0,
-        }
+        t = { id, word: w, label: w.word, unit: u, slot: -1, x: u.x, y: ROAD_Y - 74,
+          press: 0, good: 0, bad: 0, shake: 0 }
         S.targets.set(id, t)
       }
       t.unit = u
@@ -274,10 +349,8 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       const x = R.homeFoe + [-34, 18, 58][i]
       const y = ROAD_Y - [142, 108, 150][i]
       if (!t) {
-        t = {
-          id, word: w, label: w.word, unit: null, press: 0, good: 0, bad: 0, shake: 0,
-          x, y, pw: 0, px: x, ptx: x, tier: 0, laid: false, hold: 0,
-        }
+        t = { id, word: w, label: w.word, unit: null, slot: -1, x, y,
+          press: 0, good: 0, bad: 0, shake: 0 }
         S.targets.set(id, t)
       }
       t.word = w
@@ -285,28 +358,60 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     }
 
     for (const id of [...S.targets.keys()]) if (!seen.has(id)) S.targets.delete(id)
+    assignSlots()
     if (S.target && !S.targets.has(S.target)) pickQuestion()
     else relabel()   // 這一格新生的牌子還寫著整個單字，拼字題要換成字母
   }
 
+  /**
+   * 把每個目標配到上方三塊木牌的其中一塊。
+   *
+   * **已經有位子的不准換位子**——木牌是固定的，如果兵一死就把剩下的往前擠，
+   * 玩家正要點的那塊會在手指底下換成別的字，等於又回到「點錯」那個毛病。
+   */
+  function assignSlots() {
+    const list = [...S.targets.values()]
+    const taken = new Set<number>()
+    for (const t of list) {
+      if (t.slot >= 0 && t.slot < TAPPABLE && !taken.has(t.slot)) taken.add(t.slot)
+      else t.slot = -1
+    }
+    for (const t of list) {
+      if (t.slot >= 0) continue
+      for (let i = 0; i < TAPPABLE; i++) {
+        if (taken.has(i)) continue
+        t.slot = i; taken.add(i); break
+      }
+    }
+  }
+
   function pickQuestion() {
+    if (S.line === 'spell') return newSpellWord()
     const list = [...S.targets.values()]
     if (!list.length) { S.target = null; return syncQuiz() }
     const pick = list[(Math.random() * list.length) | 0]
     S.target = pick.id
-    // 拼字題挖掉一個字母。第一個字母不挖——挖了幾乎等於直接問「這個字怎麼開頭」，
-    // 太好猜，而且看不出有沒有真的會拼。
-    const w = pick.word.word
-    S.blank = w.length > 1 ? 1 + ((Math.random() * (w.length - 1)) | 0) : 0
     S.asked++
     S.askedAt = performance.now()
     relabel()
     syncQuiz()
     // 聽音題的題目本身就是聲音，所以出題就唸。
-    if (S.line === 'listen') speak(w)
+    if (S.line === 'listen') speak(pick.word.word)
   }
 
   function syncQuiz() {
+    const need = S.battle.tier.me
+    const step = need > 1 ? `（${S.pending + 1}/${need}）` : ''
+    if (S.line === 'spell') {
+      const w = S.spell.word
+      elEmoji.textContent = w?.emoji ?? '✍️'
+      elZh.textContent = w ? w.zh : '拼字'
+      elHint.textContent = w
+        ? `${step}用下面的字母磚把「${w.zh}」拼出來`
+        : '題庫用完了'
+      elSay.disabled = !w
+      return
+    }
     const t = S.target ? S.targets.get(S.target) : null
     if (!t) {
       elEmoji.textContent = '⚔️'
@@ -315,19 +420,11 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       elSay.disabled = true
       return
     }
-    const need = S.battle.tier.me
-    const step = need > 1 ? `（${S.pending + 1}/${need}）` : ''
     if (S.line === 'listen') {
       // 中文不給看，不然用看的就答完了，根本沒在聽。
       elEmoji.textContent = '👂'
       elZh.textContent = '聽聽看'
       elHint.textContent = `${step}點出你聽到的那個字`
-    } else if (S.line === 'spell') {
-      const w = t.word.word
-      const i = Math.min(S.blank, w.length - 1)
-      elEmoji.textContent = t.word.emoji
-      elZh.textContent = w.slice(0, i) + '＿' + w.slice(i + 1)
-      elHint.textContent = `${step}${t.word.zh}：補上缺的字母`
     } else {
       elEmoji.textContent = t.word.emoji
       elZh.textContent = t.word.zh
@@ -409,42 +506,38 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   elUp.addEventListener('click', buyTier)
 
   // ------------------------------------------------------------------ 作答
-  function tap(t: Target) {
-    if (S.done || paused || !S.target || S.cooldown > 0) return
-    t.press = PRESS
-    const correct = t.id === S.target
-    const asked = S.targets.get(S.target)
-    S.cooldown = ANSWER_COOLDOWN
-
+  /**
+   * 一題的結果，三條線共用這一段。
+   *
+   * 拆出來是因為拼字線的作答方式完全不同（點下面的字母磚拼完整個字），
+   * 但「答對之後發生什麼事」必須一模一樣，不然三條線會慢慢長成三套規則。
+   */
+  function settle(correct: boolean, word: Word, target: Unit | null, at: { x: number; y: number }) {
     ctx.report({
-      wordId: asked!.word.id, skill: LINES[S.line].skill, correct,
+      wordId: word.id, skill: LINES[S.line].skill, correct,
       ms: Math.round(performance.now() - S.askedAt), combo: S.combo,
     })
-
     if (correct) {
       S.correct++; S.combo++
-      t.good = 0.45
       buzz(14)
       ctx.audio.play('answer-correct')
-      // 答對一定做的事：對你點的那個開一槍（打不到城堡，見 battle.ts 的 strike）、
-      // 拿水晶。**出不出兵要看累積夠了沒**——兵階上限是幾，就要連對幾題。
-      strike(S.battle, 'me', t.unit, R)
+      // 答對一定做的事：開一槍（打不到城堡，見 battle.ts 的 strike）、拿水晶。
+      // **出不出兵要看累積夠了沒**——兵階上限是幾，就要連對幾題。
+      strike(S.battle, 'me', target, R)
       S.battle.crystal.me += R.answerCrystal
-      S.flashes.push({ x: t.x, life: 0.22 })
+      S.flashes.push({ x: at.x, life: 0.22 })
       S.pending++
       if (S.pending >= S.battle.tier.me) cashOut()
       else S.pops.push({
         x: R.homeMe + 40, y: ROAD_Y - 80,
         text: `${S.pending}/${S.battle.tier.me}`, color: '#ffd76a', life: 0.9,
       })
-      if (!t.unit) S.shieldWords[Number(t.id.slice(1))] = null   // 守衛被打掉就換一個字
-      speak(t.word.word)
+      speak(word.word)
     } else {
       S.combo = 0
-      t.bad = 0.5; t.shake = 0.35
       buzz(55)
       ctx.audio.play('answer-wrong')
-      S.pops.push({ x: t.x, y: t.y - 10, text: '✗', color: '#ffb4b0', life: 0.8 })
+      S.pops.push({ x: at.x, y: at.y - 10, text: '✗', color: '#ffb4b0', life: 0.8 })
       // **答錯不會把累積的全部沒收**，結算成目前這一階。
       // 沒有這條的話，上限四階等於要連對四題才有兵，沒有人敢按升階。
       cashOut()
@@ -453,6 +546,53 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     pickQuestion()
     syncUI()
     syncBar()
+  }
+
+  /** 認字與聽音：點上面的木牌（或點那隻兵）。 */
+  function tap(t: Target) {
+    if (S.done || paused || !S.target || S.cooldown > 0) return
+    t.press = PRESS
+    const correct = t.id === S.target
+    const asked = S.targets.get(S.target)!
+    S.cooldown = ANSWER_COOLDOWN
+    if (correct) t.good = 0.45
+    else { t.bad = 0.5; t.shake = 0.35 }
+    if (correct && !t.unit) S.shieldWords[Number(t.id.slice(1))] = null  // 守衛打掉就換字
+    settle(correct, asked.word, t.unit, { x: t.x, y: t.y })
+  }
+
+  /**
+   * 拼字：點下面的字母磚。
+   *
+   * **按錯不會直接判定整題答錯**，只記一筆、磚子抖一下，這個字繼續拼完。
+   * 理由是一個字要點五六下，按錯一下就整題作廢的話，小朋友會不敢拼長的字——
+   * 跟「拼到一半錯不整個沒收」是同一個道理。全部拼完的時候，
+   * 沒按錯過才算答對。
+   */
+  function tapLetter(i: number) {
+    if (S.done || paused || S.cooldown > 0) return
+    const w = S.spell.word
+    const tile = S.spell.bank[i]
+    if (!w || !tile || tile.used) return
+    const need = w.word.toLowerCase()
+    if (tile.ch !== need[S.spell.filled]) {
+      tile.bad = 0.45
+      S.spell.slips++
+      buzz(35)
+      ctx.audio.play('answer-wrong')
+      return
+    }
+    tile.used = true
+    tile.press = PRESS
+    S.spell.filled++
+    if (S.spell.filled < need.length) {
+      ctx.audio.play('ui-tap')
+      return
+    }
+    // 整個字拼完了，這才算一題
+    S.cooldown = ANSWER_COOLDOWN
+    const front = tappable('foe')[0] ?? null
+    settle(S.spell.slips === 0, w, front, { x: W / 2, y: SPELL.slotY + SPELL.slotH })
   }
 
   function buzz(ms: number) {
@@ -483,7 +623,11 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       S.arrows.push({ x0: from, y0: ROAD_Y - 92, x1: h.x, y1: ROAD_Y - 28, life: ARROW_LIFE })
     }
     syncTargets()
-    if (!S.target) pickQuestion()
+    for (const tile of S.spell.bank) {
+      if (tile.press > 0) tile.press -= dt
+      if (tile.bad > 0) tile.bad -= dt
+    }
+    if (S.line !== 'spell' && !S.target) pickQuestion()
 
     for (const t of S.targets.values()) {
       for (const k of ['press', 'good', 'bad', 'shake'] as const) if (t[k] > 0) t[k] -= dt
@@ -592,23 +736,39 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
    */
   const UNIT_DRAW = 147
 
+  /** 畫一個人。squad 裡每一個都走這裡，只是位置與縮放不同。 */
+  function drawFigure(im: HTMLImageElement | undefined, x: number, y: number, sc: number, flip: boolean) {
+    if (!im?.complete) return
+    c2d.save()
+    if (flip) { c2d.translate(x * 2, 0); c2d.scale(-1, 1) }   // 對面的兵要朝左
+    c2d.translate(x, y); c2d.scale(sc, sc); c2d.translate(-x, -y)
+    c2d.drawImage(im, x - UNIT_DRAW / 2, y - 94, UNIT_DRAW, UNIT_DRAW)
+    c2d.restore()
+  }
+
   function drawUnit(u: Unit) {
     const spec = statsOf(u.line, u.rank)
     const y = laneY(u)
     const art = LINES[u.line].art
     const im = u.side === 'me' ? mine(art) : theirs(art)
+    const flip = u.side === 'foe'
+    const back = u.side === 'me' ? -1 : 1      // 「後面」是朝自己城堡那一邊
+
+    // **幾階就畫幾個人。** 體型級距（每階 +25%）在手機上還是不夠明顯，
+    // 但「一個人 vs 四個人排成一小隊」隔多遠都看得出來，而且剛好對上
+    // 「隊長」「將軍」這些名字。機制上仍然只有一隻兵、一條血條——
+    // 跟班只是畫出來的，不會多打一下也不會多挨一下。
+    for (let i = u.rank - 1; i >= 1; i--) {
+      const fx = u.x + back * i * 17
+      const fy = y + (i % 2 === 0 ? 7 : -7)
+      shadow(fx, fy + 2, 15 * spec.size)
+      drawFigure(im, fx, fy, spec.size * 0.72, flip)
+    }
     shadow(u.x, y + 2, 20 * spec.size)
-    c2d.save()
-    if (u.side === 'foe') { c2d.translate(u.x * 2, 0); c2d.scale(-1, 1) }  // 對面的兵要朝左
-    const sc = spec.size
-    c2d.translate(u.x, y); c2d.scale(sc, sc); c2d.translate(-u.x, -y)
-    if (im?.complete) c2d.drawImage(im, u.x - UNIT_DRAW / 2, y - 94, UNIT_DRAW, UNIT_DRAW)
-    c2d.restore()
-    // 軍階標記：二階一槓、三階兩槓、四階一顆星。體型之外再給一個記號，
-    // 因為手機上 1.15 跟 1.3 的差別其實不明顯。
-    //
-    // **畫在縮放之外**，高度跟血條一樣固定。跟著體型縮放的話，四階那顆星
-    // 會被推到頭頂上方老遠，看起來像飄在半空中的另一個東西。
+    drawFigure(im, u.x, y, spec.size, flip)
+
+    // 軍階標記：二階一槓、三階兩槓、四階一顆星。畫在縮放之外，高度跟血條一樣固定，
+    // 跟著體型縮放的話四階那顆星會被推到頭頂上方老遠。
     if (u.rank > 1) {
       c2d.fillStyle = u.side === 'me' ? '#ffe08a' : '#ffc0bc'
       if (u.rank === MAX_TIER) {
@@ -709,29 +869,107 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     c2d.fillText('前線 ' + Math.round(p * 100) + '%', W / 2, y + 30)
   }
 
-  function drawPlate(t: Target) {
-    const py = plateY(t, PLATE_RULES)
-    const w = t.pw
-    const sh = t.shake > 0 ? Math.sin(t.shake * 70) * 4 : 0
-    const cx = t.px + sh
-    const x = cx - w / 2
-    if (Math.abs(t.px - t.x) > 5 || t.tier > 0) {
-      c2d.strokeStyle = 'rgba(24,18,10,.5)'; c2d.lineWidth = 3
-      c2d.beginPath(); c2d.moveTo(t.x + sh, t.y + 18); c2d.lineTo(cx, py + 6); c2d.stroke()
-    }
-    const sc = 1 + (t.press > 0 ? Math.sin((t.press / PRESS) * Math.PI) * 0.16 : 0)
+  /**
+   * 上方那三塊固定的大木牌。
+   *
+   * 重點是**它不動、而且夠大**：258px 寬、字 30px，在手機上約 152×27 CSS px，
+   * 比舊版黏在兵身上的 16px 牌子大一個量級。每塊有自己的顏色，兵身上掛同色的
+   * 旗子，所以「這個字是誰身上的」用顏色對，不用把字擠到兵頭上。
+   */
+  function drawBoard(t: Target) {
+    const cx = slotX(t.slot) + (t.shake > 0 ? Math.sin(t.shake * 70) * 5 : 0)
+    const x = cx - BOARD.w / 2
+    const color = SLOT_COLOR[t.slot] ?? '#8a6b45'
+    const sc = 1 + (t.press > 0 ? Math.sin((t.press / PRESS) * Math.PI) * 0.1 : 0)
     c2d.save()
-    c2d.translate(cx, py + 14); c2d.scale(sc, sc); c2d.translate(-cx, -(py + 14))
-    c2d.fillStyle = 'rgba(0,0,0,.28)'; roundRect(x, py + 3, w, 28, 9); c2d.fill()
-    c2d.fillStyle = t.good > 0 ? '#3f7a34' : t.bad > 0 ? '#8c3730' : t.unit ? '#2f2519' : '#3a2f4d'
-    roundRect(x, py, w, 28, 9); c2d.fill()
-    c2d.strokeStyle = t.good > 0 ? '#a8e07a' : t.bad > 0 ? '#ff9a94' : '#8a6b45'
-    c2d.lineWidth = 2.5; c2d.stroke()
+    c2d.translate(cx, BOARD.y + BOARD.h / 2); c2d.scale(sc, sc)
+    c2d.translate(-cx, -(BOARD.y + BOARD.h / 2))
+    c2d.fillStyle = 'rgba(0,0,0,.3)'; roundRect(x, BOARD.y + 5, BOARD.w, BOARD.h, 11); c2d.fill()
+    c2d.fillStyle = t.good > 0 ? '#3f7a34' : t.bad > 0 ? '#8c3730' : '#2b2117'
+    roundRect(x, BOARD.y, BOARD.w, BOARD.h, 11); c2d.fill()
+    c2d.strokeStyle = t.good > 0 ? '#a8e07a' : t.bad > 0 ? '#ff9a94' : color
+    c2d.lineWidth = 4; c2d.stroke()
     c2d.fillStyle = '#fff'
-    c2d.font = 'bold 17px system-ui, "Segoe UI", sans-serif'
+    c2d.font = 'bold 30px system-ui, "Segoe UI", sans-serif'
     c2d.textAlign = 'center'; c2d.textBaseline = 'middle'
-    c2d.fillText(t.label, cx, py + 15)
+    c2d.fillText(t.label, cx, BOARD.y + BOARD.h / 2 + 1)
     c2d.restore()
+  }
+
+  /**
+   * 兵身上那面旗子。顏色對應上面哪一塊木牌，所以不用把整個單字寫在兵頭上。
+   * 沒有兵的（城牆守衛）就畫在它自己的位置上。
+   */
+  function drawPennant(t: Target) {
+    const color = SLOT_COLOR[t.slot] ?? '#8a6b45'
+    const x = t.x + (t.shake > 0 ? Math.sin(t.shake * 70) * 4 : 0)
+    const top = t.y - 34
+    c2d.strokeStyle = 'rgba(28,20,12,.75)'; c2d.lineWidth = 3
+    c2d.beginPath(); c2d.moveTo(x, t.y + 6); c2d.lineTo(x, top); c2d.stroke()
+    c2d.fillStyle = color
+    c2d.beginPath()
+    c2d.moveTo(x, top); c2d.lineTo(x + 26, top + 9); c2d.lineTo(x, top + 18); c2d.closePath()
+    c2d.fill()
+    c2d.strokeStyle = 'rgba(28,20,12,.75)'; c2d.lineWidth = 2; c2d.stroke()
+    if (t.good > 0 || t.bad > 0) {
+      c2d.fillStyle = t.good > 0 ? 'rgba(168,224,122,.9)' : 'rgba(255,154,148,.9)'
+      c2d.beginPath(); c2d.arc(x, t.y - 4, 20, 0, 7); c2d.fill()
+    }
+  }
+
+  /**
+   * 拼字題的畫面：中間一排空格（拼到哪裡看得出來），下面一排木頭字母磚。
+   *
+   * 空格用綠色填、還沒拼的留暗色，所以進度一眼看得到；已經用掉的磚變暗，
+   * 小朋友才不會一直去點同一塊。
+   */
+  function drawSpell() {
+    const w = S.spell.word
+    if (!w) return
+    const need = w.word
+
+    // 空格
+    for (let i = 0; i < need.length; i++) {
+      const x = slotXi(i)
+      const done = i < S.spell.filled
+      c2d.fillStyle = 'rgba(0,0,0,.3)'
+      roundRect(x, SPELL.slotY + 4, SPELL.slotW, SPELL.slotH, 9); c2d.fill()
+      c2d.fillStyle = done ? '#3f7a34' : '#241c12'
+      roundRect(x, SPELL.slotY, SPELL.slotW, SPELL.slotH, 9); c2d.fill()
+      c2d.strokeStyle = done ? '#a8e07a' : 'rgba(180,150,110,.55)'
+      c2d.lineWidth = 3; c2d.stroke()
+      if (done) {
+        c2d.fillStyle = '#fff'
+        c2d.font = 'bold 34px system-ui, "Segoe UI", sans-serif'
+        c2d.textAlign = 'center'; c2d.textBaseline = 'middle'
+        c2d.fillText(need[i], x + SPELL.slotW / 2, SPELL.slotY + SPELL.slotH / 2 + 1)
+      }
+    }
+
+    // 字母磚
+    for (let i = 0; i < S.spell.bank.length; i++) {
+      const tile = S.spell.bank[i]
+      const sh = tile.bad > 0 ? Math.sin(tile.bad * 70) * 5 : 0
+      const x = bankX(i) + sh
+      const sc = 1 + (tile.press > 0 ? Math.sin((tile.press / PRESS) * Math.PI) * 0.12 : 0)
+      const cx = x + SPELL.bankW / 2
+      const cy = SPELL.bankY + SPELL.bankH / 2
+      c2d.save()
+      c2d.translate(cx, cy); c2d.scale(sc, sc); c2d.translate(-cx, -cy)
+      c2d.globalAlpha = tile.used ? 0.3 : 1
+      c2d.fillStyle = 'rgba(0,0,0,.32)'
+      roundRect(x, SPELL.bankY + 5, SPELL.bankW, SPELL.bankH, 11); c2d.fill()
+      c2d.fillStyle = tile.bad > 0 ? '#8c3730' : '#5b4128'
+      roundRect(x, SPELL.bankY, SPELL.bankW, SPELL.bankH, 11); c2d.fill()
+      c2d.strokeStyle = tile.bad > 0 ? '#ff9a94' : '#8a6b45'
+      c2d.lineWidth = 3; c2d.stroke()
+      c2d.fillStyle = '#fff'
+      c2d.font = 'bold 36px system-ui, "Segoe UI", sans-serif'
+      c2d.textAlign = 'center'; c2d.textBaseline = 'middle'
+      c2d.fillText(tile.ch.toUpperCase(), cx, cy + 1)
+      c2d.globalAlpha = 1
+      c2d.restore()
+    }
   }
 
   /** 箭塔射出去的箭。飛在半路上，讓人看得出是誰射的、射到誰。 */
@@ -767,12 +1005,15 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     drawArrows()
     drawFront()
 
-    // 字牌排版跟守塔共用同一支（純幾何，量得出來，見 plates.ts）
-    c2d.font = 'bold 17px system-ui, "Segoe UI", sans-serif'
-    const list = [...S.targets.values()]
-    for (const t of list) t.pw = Math.max(58, c2d.measureText(t.label).width + 24)
-    layoutPlates(list, PLATE_RULES)
-    for (const t of [...list].sort((a, b) => a.tier - b.tier)) drawPlate(t)
+    // 木牌固定在上面、旗子在兵身上，兩者靠顏色配對。不用排版演算法了：
+    // 位置是固定的，所以不會飄，也就不需要 plates.ts 那套推擠。
+    if (S.line === 'spell') {
+      drawSpell()
+    } else {
+      const list = [...S.targets.values()]
+      for (const t of list) drawPennant(t)
+      for (const t of list) drawBoard(t)
+    }
 
     for (const f of S.flashes) {
       c2d.strokeStyle = `rgba(255,240,190,${f.life / 0.22})`
@@ -797,13 +1038,22 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
 
   function onDown(ev: PointerEvent) {
     const { x, y } = at(ev)
+    if (S.line === 'spell') {
+      for (let i = 0; i < S.spell.bank.length; i++) {
+        const bx = bankX(i)
+        if (x >= bx && x <= bx + SPELL.bankW &&
+          y >= SPELL.bankY - 6 && y <= SPELL.bankY + SPELL.bankH + 6) return tapLetter(i)
+      }
+      return
+    }
     let best: Target | null = null
     let bestD = 1e9
     for (const t of S.targets.values()) {
-      const py = plateY(t, PLATE_RULES)
-      const inPlate = x >= t.px - t.pw / 2 - 4 && x <= t.px + t.pw / 2 + 4 && y >= py - 4 && y <= py + 32
-      const d = inPlate ? 0 : Math.min(
-        Math.hypot(t.x - x, t.y - y), Math.hypot(t.px - x, py + 14 - y))
+      const cx = slotX(t.slot)
+      // 木牌是一塊大矩形，點進去就是零距離；點兵身上也算（有些孩子會直接點兵）。
+      const inBoard = x >= cx - BOARD.w / 2 && x <= cx + BOARD.w / 2 &&
+        y >= BOARD.y - 6 && y <= BOARD.y + BOARD.h + 6
+      const d = inBoard ? 0 : Math.hypot(t.x - x, t.y - y)
       if (d < bestD) { bestD = d; best = t }
     }
     if (best && bestD < 46) tap(best)
@@ -811,8 +1061,11 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
 
   cv.addEventListener('pointerdown', onDown)
   elSay.addEventListener('click', () => {
-    const t = S.target ? S.targets.get(S.target) : null
-    if (t) speak(t.word.word)
+    // 拼字線的題目在下面那一排，沒有 target，所以要各自取字
+    const w = S.line === 'spell'
+      ? S.spell.word
+      : (S.target ? S.targets.get(S.target)?.word ?? null : null)
+    if (w) speak(w.word)
   })
 
   void loadArt().then((a) => { img = a; terrain = null })
@@ -821,7 +1074,9 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   // 正式版 build 會整段消失（import.meta.env.DEV 在 production 是 false）。
   if (import.meta.env.DEV) {
     ;(window as unknown as { __tug?: unknown }).__tug = {
-      S, RULES: R, PLATES: PLATE_RULES, LINES,
+      S, RULES: R, BOARD, SPELL, LINES,
+      /** 點第幾塊字母磚，拼字測試用 */
+      tapLetter: (i: number) => tapLetter(i),
       /** 換兵種線／買升階，測試用 */
       setLine: (l: Line) => switchLine(l),
       buyTier: () => buyTier(),

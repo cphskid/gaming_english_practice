@@ -78,9 +78,15 @@ function match(meRate, foeRate, seed, rules, flip = false) {
   const TAPPABLE = 3
   const picks = { me: M.seeded(seed + 104729), foe: M.seeded(seed + 611953) }
   const pending = { me: 0, foe: 0 }
+  // 一筆答題事件只是「花了一題的時間」，不等於答完一題。拼字要挖三個字母才算一題，
+  // 聽音介於中間，所以要先存夠 LINE_COST 才結算一次。引擎的 feed 也是這樣寫的。
+  const credit = { me: 0, foe: 0 }
   const lineOf = (t) => M.LINE_IDS[Math.floor(t / 45) % M.LINE_IDS.length]
   const act = (side) => (correct) => {
     const line = lineOf(s.t)
+    credit[side] += 1
+    if (credit[side] < M.LINE_COST[line]) return
+    credit[side] -= M.LINE_COST[line]
     if (!correct) {
       if (pending[side] > 0) {
         M.summon(s, side, line, Math.min(pending[side], s.tier[side]), r)
