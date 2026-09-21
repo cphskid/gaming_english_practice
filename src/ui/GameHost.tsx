@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type {
-  GameContext, GameHandle, GameModule, GameOutcome, Job, LevelData, Opponent, Question,
+  GameContext, GameHandle, GameModule, GameOutcome, Job, LevelData, Opponent, Question, Skill,
 } from '@/core/types'
 import type { Session } from '@/core/session'
 import { audio } from '@/audio'
@@ -30,7 +30,7 @@ export function GameHost({
   color: string
   /** 背包裡的東西，key 是 item id。道具列就是從這裡長出來的。 */
   items: Record<string, number>
-  nextQuestion: () => Question | null
+  nextQuestion: (skill?: Skill) => Question | null
   onFinish: (o: GameOutcome) => void
   onLeave: () => void
   /** 遊戲說這個道具真的用掉了，容器才把它從背包扣掉 */
@@ -56,7 +56,7 @@ export function GameHost({
       job,
       color,
       opponent: opponent ?? null,
-      nextQuestion: () => nextRef.current(),
+      nextQuestion: (skill) => nextRef.current(skill),
       report: (r) => { session.report(studentId, { ...r, combo: session.comboOf(studentId) }) },
       audio,
       finish: (o) => { if (!done) { done = true; finishRef.current(o) } },

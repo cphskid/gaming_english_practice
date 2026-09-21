@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Quiz } from '@/core/quiz'
+import { Quiz, type QuizOptions } from '@/core/quiz'
 import { Session, type SessionResult } from '@/core/session'
 import { WordStat } from '@/core/wordStat'
 import { needsCreation } from '@/core/character'
 import { colorOf } from '@/data/cosmetics'
 import type {
-  Character, GameModule, GameOutcome, LevelData, LevelProgress, Opponent, Staff, Student,
+  Character, GameModule, GameOutcome, LevelData, LevelProgress, Opponent, Skill, Staff, Student,
 } from '@/core/types'
 import { botOpponent } from '@/core/opponent'
 import { LEVELS } from '@/data/levels'
@@ -37,7 +37,16 @@ interface Playing {
   level: LevelData | null
   game: GameModule
   session: Session
-  quiz: Quiz
+  /**
+   * 每種題型一份出題器，用到才開。
+   *
+   * 守塔只用得到一種（認得出來），兵推三種都用——三條兵種線就是三種題型。
+   * **分開存而不是共用一份**：出題器裡有「剛出過的字」與複習權重，
+   * 混在一起的話，剛用認字考過的字馬上又被拿來考拼寫，複習策略就亂了。
+   */
+  quizzes: Map<Skill, Quiz>
+  /** 開新出題器用的條件（題庫、關卡難度上限、掌握度） */
+  quizOpts: Omit<QuizOptions, 'skill'>
   /** 對戰模式才有 */
   opponent: Opponent | null
 }
@@ -138,12 +147,11 @@ export function App() {
     if (!student) return null
     audio.unlock()
     // 關卡描述地圖和怪，模式描述規則。這裡是 solo，但 Session 天生支援多人。
-    const quiz = new Quiz({
+    const quizOpts = {
       words: wordsOfThemes(level.themes),
-      skill: towerDefense.skill,
       maxWordLevel: level.maxWordLevel,
       stat,
-    })
+    }
     const session = new Session({
       mode: 'solo',
       gameId: towerDefense.id,
@@ -153,7 +161,7 @@ export function App() {
       stat,
       alreadyCleared: !!progress.get(level.id)?.clearedAt,
     })
-    setPlaying({ level, game: towerDefense, session, quiz, opponent: null })
+    setPlaying({ level, game: towerDefense, session, quizzes: new Map(), quizOpts, opponent: null })
     setScreen('play')
     return session
   }, [student, stat, progress])
@@ -208,7 +216,7 @@ export function App() {
     if (!student) return
     audio.unlock()
     const rate = Math.max(8, Math.min(30, Math.round(myRate() * hardness)))
-    const quiz = new Quiz({ words: WORDS, skill: tugOfWar.skill, stat })
+    const quizOpts = { words: WORDS, stat }
     const session = new Session({
       mode: 'versus',
       gameId: tugOfWar.id,
@@ -219,7 +227,7 @@ export function App() {
       alreadyCleared: false,
     })
     setPlaying({
-      level: null, game: tugOfWar, session, quiz,
+      level: null, game: tugOfWar, session, quizzes: new Map(), quizOpts,
       opponent: botOpponent({ name, rate, accuracy: 0.85, seed: Date.now() & 0xffff }),
     })
     setScreen('play')
@@ -356,7 +364,16 @@ export function App() {
     }
   }, [character])
 
-  const nextQuestion = useCallback(() => playing?.quiz.next() ?? null, [playing])
+  const nextQuestion = useCallback((skill?: Skill) => {
+    if (!playing) return null
+    const want = skill ?? playing.game.skill
+    let quiz = playing.quizzes.get(want)
+    if (!quiz) {
+      quiz = new Quiz({ ...playing.quizOpts, skill: want })
+      playing.quizzes.set(want, quiz)
+    }
+    return quiz.next()
+  }, [playing])
 
   return (
     <>

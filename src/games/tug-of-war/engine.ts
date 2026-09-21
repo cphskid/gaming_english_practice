@@ -3,7 +3,8 @@ import { makeFeeder } from '@/core/opponent'
 import { loadArt } from '../tower-defense/art'
 import { PLATE_RULES, layoutPlates, plateY, type Plate } from '../tower-defense/plates'
 import {
-  RANKS, RULES, newBattle, pushed, step, strike, summon, type Unit,
+  LINES, LINE_IDS, MAX_TIER, RULES, nextCost, newBattle, pushed, statsOf, step, strike,
+  summon, upgrade, type Line, type Unit,
 } from './battle'
 
 const W = 1088
@@ -22,6 +23,9 @@ const ANSWER_COOLDOWN = 0.3
  * 而且「點對的那一隻」才重新有意義。三塊是為了還有得選，不會只剩一個答案。
  */
 const TAPPABLE = 3
+
+/** 拼字題的錯誤選項從這裡抽。母音也放進去，不然一眼就看得出哪個是答案。 */
+const LETTERS = 'abcdefghijklmnopqrstuvwxyz'
 const PRESS = 0.22
 /** 一支箭在空中的時間。太短就變成一閃而過，孩子會以為什麼都沒發生。 */
 const ARROW_LIFE = 0.32
@@ -44,12 +48,21 @@ const SHELL = `
 <div class="td-stage">
   <canvas class="td-cv" width="1088" height="576"></canvas>
   <div class="td-toast"></div>
+  <div class="tw-bar">
+    <button class="tw-line" data-line="recognize">👁️<b>認字</b></button>
+    <button class="tw-line" data-line="listen">👂<b>聽音</b></button>
+    <button class="tw-line" data-line="spell">✍️<b>拼字</b></button>
+    <button class="tw-up">⬆️<b>升階</b><i></i></button>
+    <span class="tw-crystal">💎 0</span>
+  </div>
 </div>`
 
 /** 場上一個點得到的東西：敵方最前面那幾隻兵，或敵方城牆上的守衛。 */
 interface Target extends Plate {
   id: string
   word: Word
+  /** 牌子上真正寫的字。認字與聽音是整個單字，拼字是一個字母。 */
+  label: string
   unit: Unit | null
   press: number
   good: number
@@ -70,6 +83,10 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   const elZh = $('.td-qzh')
   const elHint = $('.td-qhint')
   const elSay = $<HTMLButtonElement>('.td-say')
+  const elLines = [...root.querySelectorAll<HTMLButtonElement>('.tw-line')]
+  const elUp = $<HTMLButtonElement>('.tw-up')
+  const elUpCost = $('.tw-up i')
+  const elCrystal = $('.tw-crystal')
   const elToast = $('.td-toast')
 
   // 對手一定要有，不然這個遊戲沒有意義；容器負責給。
@@ -97,6 +114,20 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     shieldWords: [null, null, null] as (Word | null)[],
     /** 箭塔射出去的箭，只是畫面 */
     arrows: [] as { x0: number; y0: number; x1: number; y1: number; life: number }[],
+    /**
+     * 現在用哪一條兵種線。換線就是換題型——這是玩家在戰場上唯一要做的選擇。
+     */
+    line: 'recognize' as Line,
+    /**
+     * 這條線已經連對幾題。滿了兵階上限就出一隻該階的兵。
+     * **答錯不會整個沒收，是結算成目前累積到的階**，不然沒有人敢賭四個字。
+     */
+    pending: 0,
+    /** 拼字題挖掉第幾個字母 */
+    blank: 0,
+    /** 電腦對手的累積與現在走哪條線 */
+    botPending: 0,
+    botLine: 'recognize' as Line,
     /** 最後三十秒的音樂加速只做一次 */
     rushed: false,
     pops: [] as { x: number; y: number; text: string; color: string; life: number }[],
@@ -129,16 +160,66 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
    * 它就比人多一份火力——實測會變成三十秒把人的城堡打到剩 16 血，
    * 而平衡量測（那邊兩邊都有算落空）說不該發生。引擎跟平衡量測要跑同一套規則。
    */
-  const feed = makeFeeder(foe, (rank) => {
-    summon(S.battle, 'foe', rank, R)
+  const feed = makeFeeder(foe, (correct) => {
+    // **電腦跟人跑同一套規則**：一樣要累積、一樣有水晶、一樣被上限拖慢出兵速度，
+    // 答錯一樣把累積的結算出去。少了任何一條，平衡量測量到的就不是玩家會遇到的東西。
+    // 這段跟 tools/test/tug-balance.mjs 的 act() 必須逐行對得上。
+    if (!correct) {
+      if (S.botPending > 0) {
+        summon(S.battle, 'foe', S.botLine, Math.min(S.botPending, S.battle.tier.foe), R)
+        S.botPending = 0
+      }
+      return
+    }
+    S.battle.crystal.foe += R.answerCrystal
+    S.botPending++
+    if (S.botPending >= S.battle.tier.foe) {
+      summon(S.battle, 'foe', S.botLine, S.battle.tier.foe, R)
+      S.botPending = 0
+    }
+    // 有錢就升階。不是最佳解（升階會拖慢出兵），但夠當個老實的對手。
+    upgrade(S.battle, 'foe')
+    // 每 45 秒換一條線，讓小朋友三種兵都看得到、也都被打過。
+    S.botLine = LINE_IDS[Math.floor(S.battle.t / 45) % LINE_IDS.length]
     const mine = tappable('me')
     strike(S.battle, 'foe', mine[(Math.random() * TAPPABLE) | 0] ?? null, R)
   })
 
   // ------------------------------------------------------------------ 題目
   function freshWord(): Word | null {
-    const q = ctx.nextQuestion()
+    // 題型跟著兵種線走。容器會照題型各開一份出題器，所以複習權重不會混在一起。
+    const q = ctx.nextQuestion(LINES[S.line].skill)
     return q ? q.word : null
+  }
+
+  /**
+   * 重寫每塊牌子上要顯示什麼。
+   *
+   * 認字與聽音：牌子上是整個英文單字，點出題目問的那一個。
+   * 拼字：題目把單字挖掉一個字母，**牌子上改成單獨一個字母**，點正確的那個。
+   *
+   * 為什麼拼字不做成用鍵盤打：橫式戰場上叫出鍵盤會蓋掉半個畫面，而且
+   * 三條線最好共用同一種操作——全部都是「點一隻兵」，小朋友只要學一次。
+   * 單獨一個字母也比一整個單字好點，剛好治 Chuck 說的「字很小會點錯」。
+   */
+  function relabel() {
+    const list = [...S.targets.values()]
+    const asked = S.target ? S.targets.get(S.target) : null
+    if (S.line !== 'spell' || !asked) {
+      for (const t of list) t.label = t.word.word
+      return
+    }
+    const w = asked.word.word
+    const i = Math.min(S.blank, w.length - 1)
+    const right = w[i].toLowerCase()
+    const used = new Set([right])
+    for (const t of list) {
+      if (t === asked) { t.label = right.toUpperCase(); continue }
+      let c = right
+      for (let tries = 0; tries < 40 && used.has(c); tries++) c = LETTERS[(Math.random() * 26) | 0]
+      used.add(c)
+      t.label = c.toUpperCase()
+    }
   }
 
   /**
@@ -170,7 +251,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
         const w = freshWord()
         if (!w) continue
         t = {
-          id, word: w, unit: u, press: 0, good: 0, bad: 0, shake: 0,
+          id, word: w, label: w.word, unit: u, press: 0, good: 0, bad: 0, shake: 0,
           x: u.x, y: ROAD_Y - 74, pw: 0, px: u.x, ptx: u.x, tier: 0, laid: false, hold: 0,
         }
         S.targets.set(id, t)
@@ -194,7 +275,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       const y = ROAD_Y - [142, 108, 150][i]
       if (!t) {
         t = {
-          id, word: w, unit: null, press: 0, good: 0, bad: 0, shake: 0,
+          id, word: w, label: w.word, unit: null, press: 0, good: 0, bad: 0, shake: 0,
           x, y, pw: 0, px: x, ptx: x, tier: 0, laid: false, hold: 0,
         }
         S.targets.set(id, t)
@@ -205,29 +286,54 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
 
     for (const id of [...S.targets.keys()]) if (!seen.has(id)) S.targets.delete(id)
     if (S.target && !S.targets.has(S.target)) pickQuestion()
+    else relabel()   // 這一格新生的牌子還寫著整個單字，拼字題要換成字母
   }
 
   function pickQuestion() {
     const list = [...S.targets.values()]
     if (!list.length) { S.target = null; return syncQuiz() }
-    S.target = list[(Math.random() * list.length) | 0].id
+    const pick = list[(Math.random() * list.length) | 0]
+    S.target = pick.id
+    // 拼字題挖掉一個字母。第一個字母不挖——挖了幾乎等於直接問「這個字怎麼開頭」，
+    // 太好猜，而且看不出有沒有真的會拼。
+    const w = pick.word.word
+    S.blank = w.length > 1 ? 1 + ((Math.random() * (w.length - 1)) | 0) : 0
     S.asked++
     S.askedAt = performance.now()
+    relabel()
     syncQuiz()
+    // 聽音題的題目本身就是聲音，所以出題就唸。
+    if (S.line === 'listen') speak(w)
   }
 
   function syncQuiz() {
     const t = S.target ? S.targets.get(S.target) : null
-    if (t) {
-      elEmoji.textContent = t.word.emoji
-      elZh.textContent = t.word.zh
-      elHint.textContent = `（${t.word.pos}）點出寫著這個字的目標`
-    } else {
+    if (!t) {
       elEmoji.textContent = '⚔️'
       elZh.textContent = '準備開打'
       elHint.textContent = ''
+      elSay.disabled = true
+      return
     }
-    elSay.disabled = !t
+    const need = S.battle.tier.me
+    const step = need > 1 ? `（${S.pending + 1}/${need}）` : ''
+    if (S.line === 'listen') {
+      // 中文不給看，不然用看的就答完了，根本沒在聽。
+      elEmoji.textContent = '👂'
+      elZh.textContent = '聽聽看'
+      elHint.textContent = `${step}點出你聽到的那個字`
+    } else if (S.line === 'spell') {
+      const w = t.word.word
+      const i = Math.min(S.blank, w.length - 1)
+      elEmoji.textContent = t.word.emoji
+      elZh.textContent = w.slice(0, i) + '＿' + w.slice(i + 1)
+      elHint.textContent = `${step}${t.word.zh}：補上缺的字母`
+    } else {
+      elEmoji.textContent = t.word.emoji
+      elZh.textContent = t.word.zh
+      elHint.textContent = `${step}（${t.word.pos}）點出寫著這個字的目標`
+    }
+    elSay.disabled = false
   }
 
   function syncUI() {
@@ -245,6 +351,63 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     setTimeout(() => elToast.classList.remove('on'), 1600)
   }
 
+  /**
+   * 把累積的答題換成一隻兵。
+   *
+   * 累積滿上限時叫它（出滿階的兵），答錯時也叫它（出目前累積到的階）。
+   * 累積是 0 就什麼都不出。
+   */
+  function cashOut() {
+    if (S.pending <= 0) return
+    const rank = Math.min(S.pending, S.battle.tier.me)
+    const u = summon(S.battle, 'me', S.line, rank, R)
+    S.pending = 0
+    S.pops.push({
+      x: R.homeMe + 40, y: ROAD_Y - 80,
+      text: statsOf(u.line, u.rank).name, color: '#a8e07a', life: 1.0,
+    })
+  }
+
+  /** 換一條兵種線。累積到一半的先結算出去，不然換線等於白答。 */
+  function switchLine(line: Line) {
+    if (S.done || paused || line === S.line) return
+    cashOut()
+    S.line = line
+    // 題型換了，場上那些牌子的字是舊題型抽的，整批換掉才對得上。
+    S.targets.clear()
+    S.shieldWords = [null, null, null]
+    S.target = null
+    syncTargets()
+    pickQuestion()
+    syncBar()
+    ctx.audio.play('ui-tap')
+  }
+
+  /** 按升階。水晶不夠就沒反應（鈕本來就是暗的）。 */
+  function buyTier() {
+    if (S.done || paused) return
+    if (!upgrade(S.battle, 'me')) return
+    ctx.audio.play('tower-build')
+    toast(`兵階升到 ${S.battle.tier.me} 階，現在要連對 ${S.battle.tier.me} 題才出一隻`)
+    syncQuiz()
+    syncBar()
+  }
+
+  /** 底下那一排：哪條線亮著、升階多少錢、水晶剩多少 */
+  function syncBar() {
+    for (const b of elLines) b.classList.toggle('on', b.dataset.line === S.line)
+    const cost = nextCost(S.battle, 'me')
+    const can = cost !== null && S.battle.crystal.me >= cost
+    elUp.disabled = !can
+    elUpCost.textContent = cost === null ? `已滿 ${MAX_TIER} 階` : `💎 ${cost}`
+    elCrystal.textContent = `💎 ${Math.floor(S.battle.crystal.me)}　${S.battle.tier.me} 階`
+  }
+
+  for (const b of elLines) {
+    b.addEventListener('click', () => switchLine(b.dataset.line as Line))
+  }
+  elUp.addEventListener('click', buyTier)
+
   // ------------------------------------------------------------------ 作答
   function tap(t: Target) {
     if (S.done || paused || !S.target || S.cooldown > 0) return
@@ -254,7 +417,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     S.cooldown = ANSWER_COOLDOWN
 
     ctx.report({
-      wordId: asked!.word.id, skill: 'recognize', correct,
+      wordId: asked!.word.id, skill: LINES[S.line].skill, correct,
       ms: Math.round(performance.now() - S.askedAt), combo: S.combo,
     })
 
@@ -263,12 +426,17 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       t.good = 0.45
       buzz(14)
       ctx.audio.play('answer-correct')
-      // 答對做兩件看得見的事：派一隻兵出去，順手對你點的那個開一槍。
-      // 那一槍**打不到城堡**（見 battle.ts 的 strike），城堡的血只能被兵啃掉。
-      summon(S.battle, 'me', 0, R)
+      // 答對一定做的事：對你點的那個開一槍（打不到城堡，見 battle.ts 的 strike）、
+      // 拿水晶。**出不出兵要看累積夠了沒**——兵階上限是幾，就要連對幾題。
       strike(S.battle, 'me', t.unit, R)
+      S.battle.crystal.me += R.answerCrystal
       S.flashes.push({ x: t.x, life: 0.22 })
-      S.pops.push({ x: R.homeMe + 40, y: ROAD_Y - 80, text: '＋1 兵', color: '#a8e07a', life: 0.9 })
+      S.pending++
+      if (S.pending >= S.battle.tier.me) cashOut()
+      else S.pops.push({
+        x: R.homeMe + 40, y: ROAD_Y - 80,
+        text: `${S.pending}/${S.battle.tier.me}`, color: '#ffd76a', life: 0.9,
+      })
       if (!t.unit) S.shieldWords[Number(t.id.slice(1))] = null   // 守衛被打掉就換一個字
       speak(t.word.word)
     } else {
@@ -277,10 +445,14 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       buzz(55)
       ctx.audio.play('answer-wrong')
       S.pops.push({ x: t.x, y: t.y - 10, text: '✗', color: '#ffb4b0', life: 0.8 })
+      // **答錯不會把累積的全部沒收**，結算成目前這一階。
+      // 沒有這條的話，上限四階等於要連對四題才有兵，沒有人敢按升階。
+      cashOut()
     }
     syncTargets()
     pickQuestion()
     syncUI()
+    syncBar()
   }
 
   function buzz(ms: number) {
@@ -351,6 +523,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     if (!S.done && !paused) update(dt)
     draw()
     syncUI()
+    syncBar()
     raf = requestAnimationFrame(loop)
   }
 
@@ -412,17 +585,40 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   /** 兵站的高度稍微錯開，一整排才不會看起來像同一隻 */
   const laneY = (u: Unit) => ROAD_Y + ((u.id * 7) % 3) * 9 - 9
 
+  /**
+   * 三條線的圖都是 112×112 的方框，人物置中、腳底對齊（見 tools/build-td-art.py）。
+   * 畫成 147 寬的時候，腳底剛好落在 y-3，跟舊的 84 寬 warrior 一樣高，
+   * 所以換圖不會讓整排兵浮起來或陷進地裡。
+   */
+  const UNIT_DRAW = 147
+
   function drawUnit(u: Unit) {
-    const spec = RANKS[Math.min(u.rank, RANKS.length - 1)]
+    const spec = statsOf(u.line, u.rank)
     const y = laneY(u)
-    const im = u.side === 'me' ? mine('warrior') : theirs('warrior')
+    const art = LINES[u.line].art
+    const im = u.side === 'me' ? mine(art) : theirs(art)
     shadow(u.x, y + 2, 20 * spec.size)
     c2d.save()
     if (u.side === 'foe') { c2d.translate(u.x * 2, 0); c2d.scale(-1, 1) }  // 對面的兵要朝左
     const sc = spec.size
     c2d.translate(u.x, y); c2d.scale(sc, sc); c2d.translate(-u.x, -y)
-    if (im?.complete) c2d.drawImage(im, u.x - 42, y - 63, 84, 84)
+    if (im?.complete) c2d.drawImage(im, u.x - UNIT_DRAW / 2, y - 94, UNIT_DRAW, UNIT_DRAW)
     c2d.restore()
+    // 軍階標記：二階一槓、三階兩槓、四階一顆星。體型之外再給一個記號，
+    // 因為手機上 1.15 跟 1.3 的差別其實不明顯。
+    //
+    // **畫在縮放之外**，高度跟血條一樣固定。跟著體型縮放的話，四階那顆星
+    // 會被推到頭頂上方老遠，看起來像飄在半空中的另一個東西。
+    if (u.rank > 1) {
+      c2d.fillStyle = u.side === 'me' ? '#ffe08a' : '#ffc0bc'
+      if (u.rank === MAX_TIER) {
+        c2d.font = 'bold 13px system-ui'
+        c2d.textAlign = 'center'
+        c2d.fillText('★', u.x, y - 56)
+      } else {
+        for (let i = 0; i < u.rank - 1; i++) c2d.fillRect(u.x - 8 + i * 9, y - 61, 6, 3)
+      }
+    }
     if (u.hurt > 0) {
       c2d.globalAlpha = Math.min(0.5, u.hurt * 3)
       c2d.fillStyle = '#d43c32'
@@ -534,7 +730,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     c2d.fillStyle = '#fff'
     c2d.font = 'bold 17px system-ui, "Segoe UI", sans-serif'
     c2d.textAlign = 'center'; c2d.textBaseline = 'middle'
-    c2d.fillText(t.word.word, cx, py + 15)
+    c2d.fillText(t.label, cx, py + 15)
     c2d.restore()
   }
 
@@ -574,7 +770,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     // 字牌排版跟守塔共用同一支（純幾何，量得出來，見 plates.ts）
     c2d.font = 'bold 17px system-ui, "Segoe UI", sans-serif'
     const list = [...S.targets.values()]
-    for (const t of list) t.pw = Math.max(58, c2d.measureText(t.word.word).width + 24)
+    for (const t of list) t.pw = Math.max(58, c2d.measureText(t.label).width + 24)
     layoutPlates(list, PLATE_RULES)
     for (const t of [...list].sort((a, b) => a.tier - b.tier)) drawPlate(t)
 
@@ -625,7 +821,10 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   // 正式版 build 會整段消失（import.meta.env.DEV 在 production 是 false）。
   if (import.meta.env.DEV) {
     ;(window as unknown as { __tug?: unknown }).__tug = {
-      S, RULES: R, PLATES: PLATE_RULES,
+      S, RULES: R, PLATES: PLATE_RULES, LINES,
+      /** 換兵種線／買升階，測試用 */
+      setLine: (l: Line) => switchLine(l),
+      buyTier: () => buyTier(),
       /** 點某一個目標；測試用它模擬小朋友的正確率 */
       tapId: (id: string) => { const t = S.targets.get(id); if (t) tap(t) },
       ids: () => [...S.targets.keys()],

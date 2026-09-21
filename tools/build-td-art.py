@@ -65,6 +65,32 @@ def main():
         w = Image.open(B + 'free-pack/Units/%s Units/Warrior/Warrior_Idle.png' % color)
         put('warrior' + suffix, w.crop((0, 0, 192, 192)).resize((64, 64), Image.LANCZOS))
 
+    # 兵推的三條兵種線。**跟守塔的 warrior 分開存**，因為這三張要互相對齊：
+    #
+    # 三條線＝三種英文技能（認字／聽音／拼字），所以一眼要分得出是哪一種。
+    # 靠的是剪影不是顏色（顏色被陣營佔用了）：長槍是一條橫線、弓手是圓的、
+    # 盾劍士有一面盾。素材包三種都有，而且五色都有，一張新圖都不用畫。
+    #
+    # 難處是三張圖的格子大小不一樣（長槍兵 320，另外兩個 192），直接縮到同樣
+    # 寬高的話人會一大一小。作法是**一律縮成三分之一再置中貼進 112 的方框**，
+    # 這樣三張的人物比例一致，腳底也自動對齊（實測差 1 像素）。
+    UNIT_BOX = 112
+    for color in COLORS:
+        suffix = '' if color == 'Blue' else '_' + color.lower()
+        for key, path, cell in [
+            # 認字線：便宜、快、成群。長槍的橫線剪影在小尺寸最好認。
+            ('u_spear', 'Lancer/Lancer_Right_Defence.png', 320),
+            # 聽音線：遠程。素材包沒有法師，弓手是唯一的遠程兵。
+            ('u_bow', 'Archer/Archer_Idle.png', 192),
+            # 拼字線：耐打。盾牌加盔甲，三張裡看起來最重的一個。
+            ('u_shield', 'Warrior/Warrior_Idle.png', 192),
+        ]:
+            src = Image.open(B + 'free-pack/Units/%s Units/%s' % (color, path))
+            frame = src.crop((0, 0, cell, cell)).resize((cell // 3, cell // 3), Image.LANCZOS)
+            box = Image.new('RGBA', (UNIT_BOX, UNIT_BOX), (0, 0, 0, 0))
+            box.paste(frame, ((UNIT_BOX - frame.width) // 2, (UNIT_BOX - frame.height) // 2), frame)
+            put(key + suffix, box)
+
     # 治療特效：修士的 Heal_Effect 是 11 格 192×192 的綠色爆開，
     # 拿來當「城牆修補」道具的特效，不用另外找素材。
     heal = Image.open(B + 'free-pack/Units/Blue Units/Monk/Heal_Effect.png')

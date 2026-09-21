@@ -192,8 +192,14 @@ export interface GameContext {
    * 這是裝飾品唯一會進到遊戲裡的東西，而且**只能改外觀，不准改數值**。
    */
   color: string
-  /** 下一題。回傳 null 代表題庫用完了。 */
-  nextQuestion(): Question | null
+  /**
+   * 下一題。回傳 null 代表題庫用完了。
+   *
+   * 不給題型就用遊戲自己的預設。**兵推要三種題型輪流用**（認字／聽音／拼字
+   * 各對應一條兵種線），所以這裡可以指定；容器會照題型各開一份出題器，
+   * 複習權重才不會混在一起。
+   */
+  nextQuestion(skill?: Skill): Question | null
   /** 唯一的回報管道 */
   report(r: AnswerReport): void
   audio: AudioBus

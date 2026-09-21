@@ -130,6 +130,28 @@ button{font-family:inherit}
 .td-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #4c8a33}
 .td-sell{background:var(--blood);box-shadow:0 3px 0 #8d302a}
 .td-sell:active{box-shadow:0 1px 0 #8d302a}
+/*
+  兵推底下那一排：換兵種與升階。
+
+  **跟守塔的道具列一樣放在畫布旁邊的一欄，不是蓋在戰場上。**
+  理由同上——手機橫拿的時候畫布是被高度卡住的，左右本來就有留白，
+  放在那裡不會壓到任何一隻點得到的兵。蓋在下緣的話，最前線的兵
+  剛好就在那一帶，等於把最常點的區域蓋掉。
+
+  每個鈕至少 44px 高：Chuck 都用手機直接玩，比這小的鈕大拇指按不準。
+*/
+.tw-bar{display:flex;flex-direction:column;justify-content:center;gap:6px;padding:7px;
+  flex:none;width:96px;max-height:100%;
+  background:var(--panel);border:3px solid var(--line);border-radius:12px}
+.tw-line,.tw-up{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  min-height:46px;border:2px solid var(--line);border-radius:10px;background:var(--panel2);
+  color:inherit;font-size:17px;cursor:pointer;padding:4px 2px}
+.tw-line b,.tw-up b{font-size:12px;font-weight:800}
+.tw-line.on{border-color:var(--gold);background:#5d4832}
+.tw-up{background:var(--leaf);border-color:#4c8a33}
+.tw-up i{font-style:normal;font-size:11px;color:#fff;opacity:.9}
+.tw-up:disabled{background:var(--panel2);border-color:var(--line);opacity:.5;cursor:default}
+.tw-crystal{text-align:center;font-size:12px;font-weight:800;color:var(--gold)}
 .td-toast{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(18,28,16,.92);
   padding:6px 15px;border-radius:99px;font-size:13px;font-weight:700;opacity:0;transition:.25s;
   pointer-events:none;z-index:4;white-space:nowrap}

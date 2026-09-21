@@ -19,25 +19,116 @@ export type Side = 'me' | 'foe'
 
 export const OTHER: Record<Side, Side> = { me: 'foe', foe: 'me' }
 
-/** 兵的階級。v1 只用得到第 0 階，但形狀先留著——拼字要召喚更強的兵。 */
-export interface RankSpec {
-  name: string
+/**
+ * 三條兵種線＝三種英文技能。**線決定你怎麼打，階決定你有多強。**
+ *
+ * ### 為什麼三條線一階的強度是一樣的
+ *
+ * 原本的設計是「花多少時間就值多少」：認字一題 2 秒、拼字 8 秒，所以拼字
+ * 一階應該抵四隻字母兵。**實作之後這條不成立了**——三種題型在畫面上都是
+ * 「點一隻兵」，拼字題只是把單字挖一個字母、點正確的那個，不是用鍵盤打字，
+ * 所以花的時間差不了四倍。量測也證實了：照 1：1.75：4 給，拼字線一題就
+ * 換到四倍戰力，懸殊對局 96% 的場次會提早破城（落後的孩子直接不玩）。
+ *
+ * 現在三條線一階的 **血 × 傷害** 都在 300 上下，差別全在**怎麼打**：
+ *   認字（長槍）  30/10  近戰、快、最均衡
+ *   聽音（弓手）  18/16  射程 150 加濺射，但一碰就死
+ *   拼字（盾劍）  60/5.5 最耐打、最慢、傷害最低——唯一撐得過箭塔的一階兵
+ *
+ * 強度尺用 血×傷害：射程 30、間距 34 的時候只有最前面那隻打得到人，
+ * 等於排隊單挑，所以兩隻兵誰贏是看 hp×dps 誰大，不是平方律。
+ *
+ * **「花多少時間就值多少」改由階級負責**：連對 N 題出一隻 N 階，
+ * 血和傷害各乘 √N，hp×dps 剛好 N 倍。付出幾題，拿到幾倍，這條是準的。
+ */
+export type Line = 'recognize' | 'listen' | 'spell'
+
+export const LINE_IDS: Line[] = ['recognize', 'listen', 'spell']
+
+export interface LineSpec {
+  /** 四階的名字，一階在前。體型與軍階標記負責辨識，名字只負責有感。 */
+  names: [string, string, string, string]
+  /** 一階的血。二階以上乘 √階。 */
   hp: number
-  /** 每秒打掉多少血 */
+  /** 一階每秒打掉多少血。二階以上乘 √階。 */
   dps: number
   /** 走多快，px/s */
   speed: number
-  /** 畫多大，1 是基本兵 */
+  /** 打得到多遠。弓手站著射，另外兩種要貼上去。 */
+  reach: number
+  /** 濺射半徑，0 代表只打單體。濺到的吃三成，最多三隻。 */
+  splash: number
+  /** 體型的線別修正，乘在階級的體型上 */
+  sizeMul: number
+  /** 畫面用 public/td-art 裡的哪張圖 */
+  art: 'u_spear' | 'u_bow' | 'u_shield'
+  /** 這條線對應的題型，出題器照這個挑字 */
+  skill: 'recognize' | 'listen' | 'spell'
+}
+
+export const LINES: Record<Line, LineSpec> = {
+  // 認字：便宜、快、成群。長槍的橫線剪影在手機上最好認。
+  recognize: {
+    names: ['字母兵', '字母槍士', '字母隊長', '字母將軍'],
+    hp: 30, dps: 10, speed: 55, reach: 30, splash: 0,
+    sizeMul: 0.95, art: 'u_spear', skill: 'recognize',
+  },
+  // 聚焦：血只有 18，被近戰貼上去就沒了，要靠前面有人擋。
+  // 聽音：唯一的遠程。**射程 150 故意小於箭塔的 200**——不然弓手可以站在
+  // 塔打不到的地方慢慢拆城堡，防守方優勢就廢了，落後的孩子會被凌遲。
+  listen: {
+    names: ['音波弓手', '魔音弓手', '回音射手', '音闇神射'],
+    hp: 18, dps: 16, speed: 45, reach: 150, splash: 60,
+    sizeMul: 1.0, art: 'u_bow', skill: 'listen',
+  },
+  // 拼字：肉盾。傷害是三條線裡最低的，但**一階兵裡只有它撐得過箭塔那 200 格**
+  // （走完要吃約 59 點，牠有 60 血），所以「想敲對方城堡」這件事從它開始。
+  spell: {
+    names: ['拼字盾兵', '拼字鐵衛', '拼字聖騎', '拼字戰神'],
+    hp: 60, dps: 5.5, speed: 34, reach: 30, splash: 0,
+    sizeMul: 1.1, art: 'u_shield', skill: 'spell',
+  },
+}
+
+/** 階級的體型。最大的一隻（拼字四階）剛好是 1.45 × 1.1 ＝ 1.6，魔王的上限。 */
+export const RANK_SIZE = [1.0, 1.15, 1.3, 1.45]
+
+export const MAX_TIER = 4
+
+/** 從第 N 階升到第 N+1 階要幾顆水晶。索引 0 是升到二階。 */
+export const TIER_COST = [30, 70, 130]
+
+export interface UnitStats {
+  name: string
+  hp: number
+  dps: number
+  speed: number
+  reach: number
+  splash: number
   size: number
 }
 
-export const RANKS: RankSpec[] = [
-  { name: '字母兵', hp: 30, dps: 10, speed: 55, size: 1.0 },
-  { name: '拼字獸', hp: 60, dps: 14, speed: 48, size: 1.2 },
-  { name: '兵長', hp: 95, dps: 20, speed: 45, size: 1.2 },
-  { name: '隊長', hp: 150, dps: 28, speed: 42, size: 1.4 },
-  { name: '將軍', hp: 240, dps: 40, speed: 38, size: 1.6 },
-]
+/**
+ * 某條線的第 rank 階長什麼樣（rank 從 1 起算）。
+ *
+ * 血和傷害各乘 √rank，所以 hp×dps 剛好是 rank 倍——「連對四題出一隻四階」
+ * 跟「分四次出四隻一階」在戰力上等價，差的是**大隻的撐得過箭塔**。
+ * 高階走得慢一點（每階 -6%），一方面有重量感，一方面也讓對手有時間反應。
+ */
+export function statsOf(line: Line, rank: number): UnitStats {
+  const L = LINES[line]
+  const n = Math.max(1, Math.min(MAX_TIER, Math.round(rank)))
+  const k = Math.sqrt(n)
+  return {
+    name: L.names[n - 1],
+    hp: Math.round(L.hp * k),
+    dps: L.dps * k,
+    speed: L.speed * (1 - 0.06 * (n - 1)),
+    reach: L.reach,
+    splash: L.splash,
+    size: RANK_SIZE[n - 1] * L.sizeMul,
+  }
+}
 
 export interface BattleRules {
   /** 兩邊城堡的位置 */
@@ -56,6 +147,10 @@ export interface BattleRules {
   towerEvery: number
   /** 答對一次，自己的塔對那隻敵兵開一槍打掉多少血 */
   strike: number
+  /** 答對一次拿幾顆水晶 */
+  answerCrystal: number
+  /** 殺掉一隻敵兵拿幾顆水晶 */
+  killCrystal: number
   /** 一場幾秒 */
   seconds: number
   /** 開場兩邊各送幾隻，讓場上一開始就有東西可以點 */
@@ -77,14 +172,21 @@ export const RULES: BattleRules = {
   // 200 的時候強弱懸殊有一半的場次打得到城堡（血會掉、勝負真的由城堡決定），
   // 但還是 0% 破城，落後的人被壓在家門口的時間只有 23 秒。
   // 再往下 160 會開始出現破城（8%，都在第 150 秒之後），壓制時間跳到 41 秒——不划算。
-  towerRange: 200, towerDps: 10, towerEvery: 0.5,
+  towerRange: 200, towerDps: 16, towerEvery: 0.5,
   strike: 8,
+  // 水晶的來源比照守塔，小朋友不用學第二套規則。
+  // 一場三分鐘、大約答 45 題、殺 20~40 隻，所以一場大概進帳 250~350 顆，
+  // 剛好夠把兵階從一路頂到四（30＋70＋130＝230）再剩一點。
+  answerCrystal: 3, killCrystal: 5,
   seconds: 180, openingUnits: 2,
 }
 
 export interface Unit {
   id: number
   side: Side
+  /** 哪一條線（＝用哪種題型召出來的） */
+  line: Line
+  /** 第幾階，1 起算 */
   rank: number
   x: number
   hp: number
@@ -107,6 +209,13 @@ export interface BattleState {
   winner: Side | null
   /** 為什麼結束：城堡破了，還是時間到 */
   reason: 'castle' | 'time' | null
+  /**
+   * 這一場的水晶。**每場歸零，跟角色的金幣完全分開**——金幣只能從答對來、
+   * 由伺服器重算，戰場上的東西一毛都不能碰它。
+   */
+  crystal: Record<Side, number>
+  /** 兵階上限，1~4。三條線共用同一個上限：一顆鈕，沒有第三層選單。 */
+  tier: Record<Side, number>
 }
 
 export interface Hit {
@@ -126,19 +235,44 @@ export function newBattle(r: BattleRules = RULES): BattleState {
     t: 0, towerCd: { me: r.towerEvery, foe: r.towerEvery },
     units: [], castleHp: { me: r.castleHp, foe: r.castleHp },
     front: (r.homeMe + r.homeFoe) / 2, over: false, winner: null, reason: null,
+    crystal: { me: 0, foe: 0 }, tier: { me: 1, foe: 1 },
   }
   for (let i = 0; i < r.openingUnits; i++) {
-    summon(s, 'me', 0, r)
-    summon(s, 'foe', 0, r)
+    summon(s, 'me', 'recognize', 1, r)
+    summon(s, 'foe', 'recognize', 1, r)
   }
   return s
 }
 
-/** 派一隻兵。答對就叫這個，電腦對手也叫這個。 */
-export function summon(s: BattleState, side: Side, rank: number, r: BattleRules = RULES): Unit {
-  const spec = RANKS[Math.min(rank, RANKS.length - 1)]
+/**
+ * 升一階。水晶不夠就回 false，畫面據此把鈕畫成暗的。
+ *
+ * **升階不是「變強」那麼單純**：上限升到 N 之後，召喚一隻兵要連對 N 題，
+ * 出兵速度直接砍成 1/N。所以「有錢就買」不見得對——這就是那個決定。
+ */
+export function upgrade(s: BattleState, side: Side): boolean {
+  const tier = s.tier[side]
+  if (tier >= MAX_TIER) return false
+  const cost = TIER_COST[tier - 1]
+  if (s.crystal[side] < cost) return false
+  s.crystal[side] -= cost
+  s.tier[side] = tier + 1
+  return true
+}
+
+/** 下一階要多少水晶，已經頂了就回 null */
+export function nextCost(s: BattleState, side: Side): number | null {
+  const tier = s.tier[side]
+  return tier >= MAX_TIER ? null : TIER_COST[tier - 1]
+}
+
+/** 派一隻兵。答對累積夠了就叫這個，電腦對手也叫這個。 */
+export function summon(
+  s: BattleState, side: Side, line: Line, rank: number, r: BattleRules = RULES,
+): Unit {
+  const spec = statsOf(line, rank)
   const u: Unit = {
-    id: nextId++, side, rank,
+    id: nextId++, side, line, rank: Math.max(1, Math.min(MAX_TIER, rank)),
     x: side === 'me' ? r.homeMe : r.homeFoe,
     hp: spec.hp, maxHp: spec.hp, fighting: false, hurt: 0,
   }
@@ -182,15 +316,16 @@ export function step(s: BattleState, dt: number, r: BattleRules = RULES): Hit[] 
   // --- 打架：打得到的就停下來打，打不到就往前走
   for (const u of s.units) {
     if (u.hurt > 0) u.hurt -= dt
-    const spec = RANKS[Math.min(u.rank, RANKS.length - 1)]
+    const spec = statsOf(u.line, u.rank)
     const foeSide = OTHER[u.side]
 
-    // 最近的敵兵
+    // 最近的敵兵。**射程是每隻兵自己的**——弓手站在 150 外就開打，
+    // 長槍兵和盾劍士要走到 30 以內。遠程的便宜就在這段免費輸出。
     let target: Unit | null = null
     for (const o of s.units) {
       if (o.side === u.side || o.hp <= 0) continue
       const gap = (o.x - u.x) * dir(u.side)
-      if (gap >= -r.reach && gap <= r.reach && (!target || gap < (target.x - u.x) * dir(u.side))) target = o
+      if (gap >= -spec.reach && gap <= spec.reach && (!target || gap < (target.x - u.x) * dir(u.side))) target = o
     }
 
     if (target) {
@@ -198,12 +333,28 @@ export function step(s: BattleState, dt: number, r: BattleRules = RULES): Hit[] 
       target.hp -= spec.dps * dt
       target.hurt = 0.12
       hits.push({ x: target.x, side: target.side, killed: target.hp <= 0 })
+      // 濺射：只有弓手線有。濺到的吃三成、最多三隻，跟守塔的法師同一套數字，
+      // 所以「一發打一片」這件事小朋友在兩個遊戲裡學一次就好。
+      // 三成是刻意壓低的——拼字線那隻大的不能被一發濺射掃掉，
+      // 不然花八秒拼出來的兵三秒就沒了，沒有人會想拼。
+      if (spec.splash > 0) {
+        let splashed = 0
+        for (const o of s.units) {
+          if (splashed >= 3) break
+          if (o === target || o.side === u.side || o.hp <= 0) continue
+          if (Math.abs(o.x - target.x) > spec.splash) continue
+          o.hp -= spec.dps * dt * 0.3
+          o.hurt = 0.12
+          splashed++
+          hits.push({ x: o.x, side: o.side, killed: o.hp <= 0 })
+        }
+      }
       continue
     }
 
     // 打得到對方城堡就打城堡
     const home = homeOf(foeSide, r)
-    if ((home - u.x) * dir(u.side) <= r.reach) {
+    if ((home - u.x) * dir(u.side) <= spec.reach) {
       u.fighting = true
       s.castleHp[foeSide] -= spec.dps * dt
       hits.push({ x: home, side: foeSide, killed: false })
@@ -238,6 +389,8 @@ export function step(s: BattleState, dt: number, r: BattleRules = RULES): Hit[] 
     }
   }
 
+  // 殺掉一隻給對手方水晶。**水晶只在這場有效**，跟金幣無關。
+  for (const u of s.units) if (u.hp <= 0) s.crystal[OTHER[u.side]] += r.killCrystal
   s.units = s.units.filter((u) => u.hp > 0)
   s.front = (frontOf(s, 'me', r) + frontOf(s, 'foe', r)) / 2
 
@@ -287,7 +440,10 @@ export function strike(s: BattleState, _side: Side, target: Unit | null, r: Batt
   if (!target || target.hp <= 0) return
   target.hp -= r.strike
   target.hurt = 0.18
-  if (target.hp <= 0) s.units = s.units.filter((u) => u.hp > 0)
+  if (target.hp <= 0) {
+    s.crystal[OTHER[target.side]] += r.killCrystal
+    s.units = s.units.filter((u) => u.hp > 0)
+  }
 }
 
 /** 對方最前面那隻（離我最近的那隻）。答對那一槍預設打它。 */

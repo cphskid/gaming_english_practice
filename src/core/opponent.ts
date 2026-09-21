@@ -78,14 +78,13 @@ export function replayOpponent(name: string, moves: Move[]): Opponent {
  * 記住餵到第幾筆，所以每一格只會處理新出現的那幾筆——
  * 對手是誰、是真人還是電腦，戰場完全不知道也不需要知道。
  */
-export function makeFeeder(o: Opponent, onSummon: (rank: number) => void) {
+export function makeFeeder(o: Opponent, onMove: (correct: boolean) => void) {
   let done = 0
   return (t: number) => {
     const all = o.movesUntil(t)
-    for (let i = done; i < all.length; i++) {
-      const m = all[i]
-      if (m.correct && m.rank !== null) onSummon(m.rank)
-    }
+    // **答錯也要往下送。** 兵階上限開始之後，答錯代表「把累積到一半的結算出去」，
+    // 少送這一筆的話，量測裡的對手就永遠不會出半階的兵，跟畫面上玩到的不是同一個遊戲。
+    for (let i = done; i < all.length; i++) onMove(all[i].correct)
     done = all.length
   }
 }
