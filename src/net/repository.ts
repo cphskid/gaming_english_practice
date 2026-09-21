@@ -117,25 +117,35 @@ export interface Repository {
   /**
    * 老師開一場：全班同一關、同時開始。
    *
-   * **學生不用輸入房間代碼。** 一個班同時只有一場還沒結束的房間，
-   * 學生在選關畫面就看得到「老師開了一場」——叫小朋友抄一組四位數字，
-   * 得到的只會是一批「我打不進去」的手。再開一場就是換一關重開，舊的自動收掉。
+   * **沒有房間代碼。** 房間掛在班級上，同班的人在選關畫面就看得到現在開著哪幾場，
+   * 按一下就進去——叫三十個小朋友抄一組四位數字，得到的只會是一批
+   * 「我打不進去」的手。老師再開一場就是換一關重開，老師自己的舊場自動收掉。
    */
   openRoom(classCode: string, levelId: string, mode: Mode): Promise<string>
-  /** 人到齊了，大家一起開始 */
+  /**
+   * 學生自己揪一場。上課是老師開場，下課和回家是誰想打誰開，同一套機制。
+   * 開完就算他已經進來了，而且一個人同時只能開一場。
+   */
+  studentOpenRoom(levelId: string, mode: Mode): Promise<string>
+  /** 人到齊了，大家一起開始。老師或開這一場的學生才按得動。 */
   startRoom(roomId: string): Promise<void>
-  /** 收掉這一場。收掉之後學生那邊就看不到了。 */
+  /** 收掉這一場。收掉之後就從班上的清單消失了。 */
   closeRoom(roomId: string): Promise<void>
 
-  /** 加入自己班上那一場。回傳房間 id。已經開始的也進得去（遲到的人照樣要能玩）。 */
-  joinRoom(): Promise<string>
-  leaveRoom(roomId: string): Promise<void>
   /**
-   * 現在這一場長什麼樣。學生跟老師都是問這一支，每幾秒一次。
-   * 順便當心跳：關掉分頁的人 here 會變成 false。
-   * 老師要傳班級代碼，學生不用傳（看的就是自己那一班）。
+   * 加入班上的某一場，回傳房間 id。已經開始的也進得去（遲到的人照樣要能玩）。
+   * 不指定就進老師那場，沒有老師的場就進最新的一場。
    */
-  roomState(classCode?: string): Promise<RoomState | null>
+  joinRoom(roomId?: string): Promise<string>
+  /** 離開。開這一場的人離開就等於收掉，不然會留下一個沒人按得了開始的房間。 */
+  leaveRoom(roomId: string): Promise<void>
+  /** 班上現在開著哪幾場。老師開的排最前面。老師要傳班級代碼，學生不用。 */
+  roomList(classCode?: string): Promise<RoomBrief[]>
+  /**
+   * 某一場現在長什麼樣。等待室與老師的面板都是問這一支，每幾秒一次。
+   * 順便當心跳：關掉分頁的人 here 會變成 false。已經收掉的場回 null。
+   */
+  roomState(roomId: string): Promise<RoomState | null>
   /** 我開打了，這是我這一場的 Session.id。分數之後從答題事件算，靠它對起來。 */
   roomPlaying(roomId: string, sessionId: string): Promise<void>
   roomFinished(roomId: string): Promise<void>
@@ -190,21 +200,42 @@ export interface LeaderRow {
   me: boolean
 }
 
+/** 班上開著的一場，清單上那一列。 */
+export interface RoomBrief {
+  id: string
+  levelId: string
+  mode: Mode
+  status: 'lobby' | 'playing'
+  /** 開這一場的人。老師開的是空字串。 */
+  hostName: string
+  /** 老師開的那場要一眼認得出來，不然小朋友會跑去跟同學那場。 */
+  byTeacher: boolean
+  /** 我已經在這一場裡了 */
+  mine: boolean
+  /** 現在有幾個人在線上 */
+  here: number
+}
+
 /** 現在這一場。房間只管「誰在、什麼時候一起開始」，分數不存在這裡。 */
 export interface RoomState {
   id: string
   classCode: string
   levelId: string
   mode: Mode
-  /** lobby＝在等人，playing＝開打了，done＝收掉了（收掉就讀不到了，所以不會出現） */
+  /** lobby＝在等人，playing＝開打了。收掉的場讀不到，所以不會有 done。 */
   status: 'lobby' | 'playing' | 'done'
   startedAt: number | null
+  byTeacher: boolean
+  /** 這一場是我作主的：老師看自己班的每一場，學生看自己開的那場。 */
+  mine: boolean
   members: RoomMember[]
 }
 
 export interface RoomMember {
   studentId: string
   nickname: string
+  /** 開這一場的人 */
+  host: boolean
   /** 團隊模式才有 */
   team: string | null
   avatar: string

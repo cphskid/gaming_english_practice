@@ -1,6 +1,9 @@
 /**
- * 房間走一遍真的 Supabase：老師開一場 → 兩個小朋友進來 → 老師按開始 →
- * 兩邊都自己進到關卡裡 → 老師看得到誰在打 → 有人中途離開就從名單上消失。
+ * 房間走一遍真的 Supabase。兩段：
+ *   一、老師開一場 → 兩個小朋友進來 → 老師按開始 → 兩邊都自己進到關卡裡 →
+ *       老師看得到誰在打 → 有人中途離開就從名單上消失。
+ *   二、學生自己揪一場 → 同學在「一起玩」那一頁看得到並加入 →
+ *       開場的人自己按開始 → 開場的人離開，那一場就收掉。
  *
  * 房間是整個專案第一個「同一時間有兩個人」的功能，本機的 localStorage 版
  * 永遠只有一個人，所以這件事非得打真的資料庫不可。三個瀏覽器分頁各自是
@@ -49,6 +52,7 @@ async function newKid(who) {
   await page.locator('.avatars .av').nth(3).click()
   await page.locator('button.btn.big').click()
   await page.waitForSelector('.levels', { timeout: 30000 })
+  page.nick = nick   // 後面要拿來認「現在這一場是誰作主」
   return page
 }
 
@@ -91,11 +95,11 @@ try {
   await a.screenshot({ path: '/tmp/room-banner.png' })
 
   await a.locator('.roomcall').click()
-  await waitFor(a, 'text=等老師按開始', '甲進到等待室')
+  await waitFor(a, '.screen .topbar >> text=先不玩了', '甲進到等待室')
 
   await waitFor(c, '.roomcall', '乙也看得到那一條')
   await c.locator('.roomcall').click()
-  await waitFor(c, 'text=等老師按開始', '乙也進到等待室')
+  await waitFor(c, '.screen .topbar >> text=先不玩了', '乙也進到等待室')
 
   await waitFor(a, '.board .rank:nth-child(2)', '甲在等待室看得到乙也在')
   const mine = await a.locator('.board .rank.me').count()
@@ -140,6 +144,61 @@ try {
   const banner = await a.locator('.roomcall').count()
   banner === 0 ? ok('收掉之後學生那邊的那一條也不見了')
     : fail('那一條還掛在學生的選關畫面上')
+
+  // ── 第二段：學生自己揪一場
+  console.log('── 學生自己揪一場')
+  // 乙還停在剛剛那一關裡，先讓他離開回到選關畫面。
+  await c.locator('.rotate').click().catch(() => {})
+  await c.locator('.leavebar button.leave').click()
+  await c.locator('.confirm-btns button', { hasText: '離開' }).click()
+  await waitFor(c, '.levels', '乙也離開回到選關畫面')
+  await a.getByRole('button', { name: '一起玩' }).click()
+  await waitFor(a, 'text=我要開一場', '「一起玩」那一頁打得開')
+  // 剛註冊的小朋友只解得開第一關，下拉裡就該只有那一關。
+  const picks = await a.locator('.row select option').count()
+  picks === 1 ? ok('只揪得了自己解得開的關（下拉只有一關）')
+    : fail('下拉裡有 ' + picks + ' 關，沒有擋住還沒解開的')
+  await a.locator('.row button', { hasText: '開一場' }).click()
+  await waitFor(a, 'text=人到齊就按開始', '甲開了一場，而且是他作主的')
+  const crown = await a.locator('.board .rank.me .nm').innerText()
+  crown.includes('👑') ? ok('名單上標出他是開場的人：' + crown.trim())
+    : fail('沒有標出開場的人：' + crown)
+
+  // 同學在清單上看得到並加入
+  await c.getByRole('button', { name: '一起玩' }).click()
+  await waitFor(c, '.board .rank', '乙在「一起玩」那一頁看得到甲開的場')
+  const row = await c.locator('.board .rank').first().innerText()
+  row.includes('開的') ? ok('清單上寫得出是誰開的：' + row.replace(/\s+/g, ' ').trim())
+    : fail('清單上看不出是誰開的：' + row)
+  await c.locator('.board .rank button', { hasText: '加入' }).first().click()
+  await waitFor(c, '.screen .topbar >> text=先不玩了', '乙進到等待室')
+  await waitFor(a, '.board .rank:nth-child(2)', '甲看得到乙進來了')
+
+  // 開場的學生自己按得了開始
+  await a.locator('.row button', { hasText: '大家一起開始' }).click()
+  await waitFor(a, '.play canvas', '甲自己進到關卡了')
+  await waitFor(c, '.play canvas', '乙也被帶進去了')
+  for (const pg of [a, c]) await pg.locator('.rotate').click().catch(() => {})
+
+  // 開場的人離開：場不能跟著收掉，不然還在打的人會被一起踢出去。
+  // 主人要交給留下來的那個，他才按得了開始、收得掉場。
+  await a.locator('.leavebar button.leave').click()
+  await a.locator('.confirm-btns button', { hasText: '離開' }).click()
+  await waitFor(a, '.levels', '甲離開回到選關畫面')
+  await a.waitForTimeout(5000)
+  const after = await a.locator('.roomcall').count()
+    ? (await a.locator('.roomcall').innerText()).replace(/\s+/g, ' ').trim() : ''
+  after.includes(c.nick) ? ok('開場的人走了，那一場還在，主人換成乙：' + after)
+    : fail('主人沒有交接：' + (after || '整場被收掉了'))
+
+  // 最後一個人也走了才收掉
+  await c.locator('.leavebar button.leave').click()
+  await c.locator('.confirm-btns button', { hasText: '離開' }).click()
+  await waitFor(c, '.levels', '乙也離開了')
+  await a.waitForTimeout(5000)
+  const gone = await a.locator('.roomcall').count()
+  gone === 0 ? ok('一個人都不剩，那一場就收掉了')
+    : fail('那一場還掛在清單上：' + await a.locator('.roomcall').innerText())
 } finally {
   await b.close()
   console.log(process.exitCode ? '\n有項目沒過' : '\n房間這一輪全過')

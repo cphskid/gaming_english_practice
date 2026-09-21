@@ -10,8 +10,8 @@ import type {
   TeacherRow, WordStatEntry,
 } from '@/core/types'
 import type {
-  AddedTeacher, ClassRosterRow, LeaderRow, LevelResult, Repository, RoomMember, RoomState,
-  SavedResult,
+  AddedTeacher, ClassRosterRow, LeaderRow, LevelResult, Repository, RoomBrief, RoomMember,
+  RoomState, SavedResult,
 } from './repository'
 
 /** 本地版存下來的一場。跟 RoomState 差在沒有 here／me，那兩個是讀的時候才算的。 */
@@ -22,6 +22,9 @@ interface StoredRoom {
   mode: Mode
   status: 'lobby' | 'playing' | 'done'
   startedAt: number | null
+  /** 開這一場的學生。null＝老師開的。 */
+  hostStudent: string | null
+  hostName: string
   members: Omit<RoomMember, 'here' | 'me'>[]
 }
 
@@ -45,7 +48,7 @@ const k = {
   password: (id: string) => `${NS}.pw.${id}`,
   session: `${NS}.session`,
   classes: `${NS}.classes`,
-  room: (code: string) => `${NS}.room.${code}`,
+  rooms: (code: string) => `${NS}.rooms.${code}`,
   staff: `${NS}.staff`,
 }
 
@@ -303,35 +306,62 @@ export class LocalRepository implements Repository {
 
   // ------------------------------------------------------------------ 房間
   //
-  // 本地版只有一個人，所以房間在這裡沒什麼戲唱：開得起來、進得去、
-  // 狀態會變，就夠讓選關畫面與老師後台在沒有後端的情況下也跑得動
-  // （keyless 的開發伺服器與版面測試都靠這個）。真正的多人在 Supabase 版。
+  // 本地版只有一個人，所以房間在這裡沒什麼戲唱：開得起來、進得去、狀態會變，
+  // 就夠讓選關畫面與老師後台在沒有後端的情況下也跑得動（keyless 的開發伺服器
+  // 與版面測試都靠這個）。真正的多人在 Supabase 版，要測就得打真的資料庫。
+
+  private rooms(code: string): StoredRoom[] {
+    return read<StoredRoom[]>(k.rooms(code), []).filter((r) => r.status !== 'done')
+  }
+
+  private putRooms(code: string, rooms: StoredRoom[]): void {
+    write(k.rooms(code), rooms)
+  }
+
+  /** 房間是照班級存的，但外面拿在手上的是房間 id，所以要先找出是哪一班的。 */
+  private async classOfRoom(roomId: string): Promise<string | null> {
+    const codes = [...read<ClassRoom[]>(k.classes, []).map((c) => c.code),
+                   (await this.currentStudent())?.classCode ?? '']
+    for (const code of codes) {
+      if (code && this.rooms(code).some((r) => r.id === roomId)) return code
+    }
+    return null
+  }
+
+  private async patchRoom(roomId: string, f: (r: StoredRoom) => StoredRoom): Promise<void> {
+    const code = await this.classOfRoom(roomId)
+    if (!code) return
+    this.putRooms(code, this.rooms(code).map((r) => (r.id === roomId ? f(r) : r)))
+  }
+
+  private newRoom(code: string, levelId: string, mode: Mode, host: string | null): StoredRoom {
+    return {
+      id: 'room-' + Math.random().toString(36).slice(2, 10),
+      classCode: code, levelId, mode, status: 'lobby', startedAt: null,
+      hostStudent: host, hostName: '', members: [],
+    }
+  }
 
   async openRoom(classCode: string, levelId: string, mode: Mode): Promise<string> {
     const code = classCode.trim().toUpperCase()
-    const room: StoredRoom = {
-      id: 'room-' + Date.now().toString(36),
-      classCode: code,
-      levelId,
-      mode,
-      status: 'lobby',
-      startedAt: null,
-      members: [],
-    }
-    write(k.room(code), room)
+    const room = this.newRoom(code, levelId, mode, null)
+    // 老師再開一場就是換一關重開，收掉的只有老師自己那場。
+    this.putRooms(code, [...this.rooms(code).filter((r) => r.hostStudent), room])
     return room.id
   }
 
-  private roomOf(code: string | null): StoredRoom | null {
-    if (!code) return null
-    const room = read<StoredRoom | null>(k.room(code), null)
-    return room && room.status !== 'done' ? room : null
-  }
-
-  private async myRoom(): Promise<{ room: StoredRoom; me: Student } | null> {
+  async studentOpenRoom(levelId: string, mode: Mode): Promise<string> {
     const me = await this.currentStudent()
-    const room = this.roomOf(me?.classCode ?? null)
-    return room && me ? { room, me } : null
+    if (!me?.classCode) throw new Error('還沒加入班級，沒辦法揪人')
+    const c = await this.loadCharacter(me.id)
+    const room = this.newRoom(me.classCode, levelId, mode, me.id)
+    room.hostName = me.nickname
+    room.members = [{
+      studentId: me.id, nickname: me.nickname, host: true, team: null,
+      avatar: c.avatar, equipped: c.equipped, finished: false,
+    }]
+    this.putRooms(me.classCode, [...this.rooms(me.classCode).filter((r) => r.hostStudent !== me.id), room])
+    return room.id
   }
 
   async startRoom(roomId: string): Promise<void> {
@@ -342,36 +372,63 @@ export class LocalRepository implements Repository {
     await this.patchRoom(roomId, (r) => ({ ...r, status: 'done' }))
   }
 
-  async joinRoom(): Promise<string> {
-    const found = await this.myRoom()
-    if (!found) throw new Error('老師還沒開一場')
-    const { room, me } = found
+  async joinRoom(roomId?: string): Promise<string> {
+    const me = await this.currentStudent()
+    if (!me?.classCode) throw new Error('還沒加入班級')
+    const open = this.rooms(me.classCode)
+    // 不指定就進老師那場，沒有就進最新的一場。
+    const room = roomId ? open.find((r) => r.id === roomId)
+      : open.find((r) => !r.hostStudent) ?? open[open.length - 1]
+    if (!room) throw new Error('這一場已經結束了')
     if (!room.members.some((m) => m.studentId === me.id)) {
       const c = await this.loadCharacter(me.id)
       room.members.push({
-        studentId: me.id, nickname: me.nickname, team: null,
-        avatar: c.avatar, equipped: c.equipped, finished: false,
+        studentId: me.id, nickname: me.nickname, host: room.hostStudent === me.id,
+        team: null, avatar: c.avatar, equipped: c.equipped, finished: false,
       })
-      write(k.room(room.classCode), room)
     }
+    // 同時只在一場裡
+    this.putRooms(me.classCode, open.map((r) => (r.id === room.id ? room : {
+      ...r, members: r.members.filter((m) => m.studentId !== me.id),
+    })))
     return room.id
   }
 
   async leaveRoom(roomId: string): Promise<void> {
     const me = await this.currentStudent()
-    await this.patchRoom(roomId, (r) => ({
-      ...r, members: r.members.filter((m) => m.studentId !== me?.id),
-    }))
+    await this.patchRoom(roomId, (r) => (
+      r.hostStudent && r.hostStudent === me?.id
+        ? { ...r, status: 'done' }
+        : { ...r, members: r.members.filter((m) => m.studentId !== me?.id) }
+    ))
   }
 
-  async roomState(classCode?: string): Promise<RoomState | null> {
+  async roomList(classCode?: string): Promise<RoomBrief[]> {
     const me = await this.currentStudent()
     const code = classCode ? classCode.trim().toUpperCase() : me?.classCode ?? null
-    const room = this.roomOf(code)
+    if (!code) return []
+    return this.rooms(code)
+      .map((r) => ({
+        id: r.id, levelId: r.levelId, mode: r.mode,
+        status: r.status as 'lobby' | 'playing',
+        hostName: r.hostName, byTeacher: !r.hostStudent,
+        mine: r.members.some((m) => m.studentId === me?.id),
+        here: r.members.length,
+      }))
+      .sort((a, b) => Number(b.byTeacher) - Number(a.byTeacher))
+  }
+
+  async roomState(roomId: string): Promise<RoomState | null> {
+    const me = await this.currentStudent()
+    const code = await this.classOfRoom(roomId)
+    const room = code ? this.rooms(code).find((r) => r.id === roomId) : null
     if (!room) return null
     return {
       id: room.id, classCode: room.classCode, levelId: room.levelId,
       mode: room.mode, status: room.status, startedAt: room.startedAt,
+      byTeacher: !room.hostStudent,
+      // 本地版沒有老師與學生之分，開得了就作得了主。
+      mine: true,
       // 本地版沒有別台裝置，所以在不在線上永遠是「在」。
       members: room.members.map((m) => ({ ...m, here: true, me: m.studentId === me?.id })),
     }
@@ -391,17 +448,6 @@ export class LocalRepository implements Repository {
       ...r,
       members: r.members.map((m) => (m.studentId === me?.id ? { ...m, finished } : m)),
     }))
-  }
-
-  /** 房間是照班級存的，但外面拿在手上的是房間 id，所以要先找出是哪一班的。 */
-  private async patchRoom(roomId: string, f: (r: StoredRoom) => StoredRoom): Promise<void> {
-    const codes = [...read<ClassRoom[]>(k.classes, []).map((c) => c.code),
-                   (await this.currentStudent())?.classCode ?? '']
-    for (const code of codes) {
-      if (!code) continue
-      const room = read<StoredRoom | null>(k.room(code), null)
-      if (room?.id === roomId) { write(k.room(code), f(room)); return }
-    }
   }
 
   // ------------------------------------------------------------ 老師與管理員

@@ -4,8 +4,8 @@ import type {
   Student, TeacherRow, WordStatEntry,
 } from '@/core/types'
 import type {
-  AddedTeacher, ClassRosterRow, LeaderRow, LevelResult, Repository, RoomMember, RoomState,
-  SavedResult,
+  AddedTeacher, ClassRosterRow, LeaderRow, LevelResult, Repository, RoomBrief, RoomMember,
+  RoomState, SavedResult,
 } from './repository'
 
 /**
@@ -344,9 +344,9 @@ export class SupabaseRepository implements Repository {
 
   // ------------------------------------------------------------------ 房間
   //
-  // 全部走一支 room_state 輪詢。Supabase 有 Realtime 可以推播，但一個班三十個人、
-  // 幾秒一次的查詢對資料庫來說是小事，而輪詢在教室的 wifi 斷一下再回來時
-  // 會自己接上——長連線斷掉要自己處理重連，那才是真的會在上課中出事的地方。
+  // 全部走輪詢。Supabase 有 Realtime 可以推播，但一個班三十個人、幾秒一次的
+  // 查詢對資料庫來說是小事，而輪詢在教室的 wifi 斷一下再回來時會自己接上——
+  // 長連線斷掉要自己處理重連，那才是真的會在上課中出事的地方。
 
   async openRoom(classCode: string, levelId: string, mode: Mode): Promise<string> {
     const { data, error } = await this.db.rpc('open_room', {
@@ -355,6 +355,14 @@ export class SupabaseRepository implements Repository {
       p_mode: mode,
     })
     fail('開一場失敗', error)
+    return String(data)
+  }
+
+  async studentOpenRoom(levelId: string, mode: Mode): Promise<string> {
+    const { data, error } = await this.db.rpc('student_open_room', {
+      p_level_id: levelId, p_mode: mode,
+    })
+    fail('揪不成一場', error)
     return String(data)
   }
 
@@ -368,8 +376,8 @@ export class SupabaseRepository implements Repository {
     fail('結束這一場失敗', error)
   }
 
-  async joinRoom(): Promise<string> {
-    const { data, error } = await this.db.rpc('join_room')
+  async joinRoom(roomId?: string): Promise<string> {
+    const { data, error } = await this.db.rpc('join_room', { p_room: roomId ?? null })
     fail('加入失敗', error)
     return String(data)
   }
@@ -379,23 +387,26 @@ export class SupabaseRepository implements Repository {
     fail('離開失敗', error)
   }
 
-  async roomState(classCode?: string): Promise<RoomState | null> {
-    const { data, error } = await this.db.rpc('room_state', {
+  async roomList(classCode?: string): Promise<RoomBrief[]> {
+    const { data, error } = await this.db.rpc('room_list', {
       p_class_code: classCode ? classCode.trim().toUpperCase() : null,
     })
+    fail('讀取場次失敗', error)
+    return ((data as RoomBrief[] | null) ?? []).map((r) => ({ ...r, here: Number(r.here) }))
+  }
+
+  async roomState(roomId: string): Promise<RoomState | null> {
+    const { data, error } = await this.db.rpc('room_state', { p_room: roomId })
     fail('讀取這一場失敗', error)
-    type Row = {
-      room: {
-        id: string; classCode: string; levelId: string; mode: Mode
-        status: 'lobby' | 'playing' | 'done'; startedAt: string | null
-      } | null
+    type Row = Omit<RoomState, 'startedAt' | 'members'> & {
+      startedAt: string | null
       members: RoomMember[] | null
     }
     const row = data as Row | null
-    if (!row?.room) return null
+    if (!row) return null
     return {
-      ...row.room,
-      startedAt: row.room.startedAt ? ms(row.room.startedAt) : null,
+      ...row,
+      startedAt: row.startedAt ? ms(row.startedAt) : null,
       members: (row.members ?? []).map((m) => ({ ...m, equipped: m.equipped ?? [] })),
     }
   }

@@ -22,3 +22,9 @@ select 'ZZ9TST', '（測試用，可刪）', t.user_id, true
 --  where l.user_id = u.id and l.student_id = s.id and s.class_code = 'ZZ9TST';
 -- delete from public.students where class_code = 'ZZ9TST';
 -- delete from public.classes where code = 'ZZ9TST';
+
+-- ── 每次測試前先清場 ──────────────────────────────────────────────────
+-- 上一輪沒跑完會留下開著的房間，下一輪的清單就不只一場，
+-- 「按那一條會進哪一場」就不確定了，測試會莫名其妙地飄。
+-- update public.rooms set status = 'done', ended_at = now()
+--  where class_code = 'ZZ9ROOM' and status <> 'done';

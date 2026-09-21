@@ -23,11 +23,11 @@ import { Settings } from './Settings'
 import { CreateCharacter } from './CreateCharacter'
 import { Shop } from './Shop'
 import { Leaderboard } from './Leaderboard'
-import { RoomLobby, useRoom } from './Room'
+import { RoomList, RoomLobby, useRoomList, useRoomState } from './Room'
 
 type Screen =
   | 'login' | 'staff' | 'create' | 'select' | 'shop' | 'board'
-  | 'play' | 'result' | 'teacher' | 'admin' | 'settings' | 'lobby'
+  | 'play' | 'result' | 'teacher' | 'admin' | 'settings' | 'rooms' | 'lobby'
 
 interface Playing {
   level: LevelData
@@ -50,13 +50,14 @@ export function App() {
   const [roomId, setRoomId] = useState<string | null>(null)
 
   /**
-   * 老師開的那一場。只在選關與等待室問，玩的時候不問——
-   * 戰場那個迴圈不該被網路請求打斷，而且那時候也沒有東西需要更新。
+   * 班上開著哪幾場，以及我在的那一場。玩的時候都不問——戰場那個迴圈不該被
+   * 網路請求打斷，而且那時候也沒有東西需要更新。
    */
-  const { room } = useRoom(
+  const { rooms, refresh: refreshRooms } = useRoomList(
     student?.classCode ?? null,
-    !!student && (screen === 'select' || screen === 'lobby'),
+    !!student && (screen === 'select' || screen === 'rooms'),
   )
+  const { room, loaded: roomLoaded } = useRoomState(roomId, screen === 'lobby')
 
   /** 載入一位學生的全部東西並進到選關畫面。登入、註冊、換班都走這裡。 */
   const enter = useCallback(async (s: Student) => {
@@ -149,21 +150,34 @@ export function App() {
     if (session && roomId) void repo.roomPlaying(roomId, session.id).catch(() => {})
   }, [startLevel, roomId])
 
-  const joinRoom = useCallback(async () => {
-    // 已經在這一場裡的人按「進去」就只是回等待室。
-    // 比對的是房間 id 不是「有沒有值」——老師收掉再開一場的時候，
-    // 手上那個 id 是上一場的，那種情況要真的重新加入。
-    if (roomId !== room?.id) {
-      try { setRoomId(await repo.joinRoom()) }
-      catch { /* 那一場剛好被收掉了，下一次輪詢就會發現 */ }
+  /** 加入某一場。不指定就進老師那場（選關畫面那一條就是這樣用的）。 */
+  const joinRoom = useCallback(async (id?: string) => {
+    try {
+      setRoomId(await repo.joinRoom(id))
+      setScreen('lobby')
+    } catch {
+      // 那一場剛好被收掉了。回去看清單，下一次輪詢就會發現。
+      setScreen('rooms')
     }
-    setScreen('lobby')
-  }, [roomId, room])
+  }, [])
 
-  /** 老師把這一場收掉了。等待室就沒有東西好等，回選關畫面。 */
+  /** 自己揪一場。成功就直接進等待室，失敗把訊息交回畫面顯示。 */
+  const openRoom = useCallback(async (levelId: string): Promise<string | null> => {
+    try {
+      setRoomId(await repo.studentOpenRoom(levelId, 'solo'))
+      setScreen('lobby')
+      return null
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e)
+    }
+  }, [])
+
+  /** 這一場被收掉了（開場的人離開、老師按結束）。等待室沒東西好等，回選關畫面。 */
   useEffect(() => {
-    if (screen === 'lobby' && !room) { setRoomId(null); setScreen('select') }
-  }, [screen, room])
+    if (screen === 'lobby' && roomId && roomLoaded && !room) {
+      setRoomId(null); setScreen('select')
+    }
+  }, [screen, room, roomLoaded, roomId])
 
   const finish = useCallback(async (outcome: GameOutcome) => {
     if (!playing || !student || !character) return
@@ -322,6 +336,15 @@ export function App() {
         <Leaderboard student={student} onBack={() => setScreen('select')} />
       )}
 
+      {screen === 'rooms' && student && (
+        <RoomList
+          rooms={rooms} progress={progress} teacherOpen={teacherOpen}
+          onJoin={(id) => void joinRoom(id)}
+          onOpen={openRoom}
+          onBack={() => setScreen('select')}
+        />
+      )}
+
       {screen === 'lobby' && room && (
         <RoomLobby
           room={room}
@@ -329,6 +352,7 @@ export function App() {
           onLeave={() => void (async () => {
             if (roomId) await repo.leaveRoom(roomId).catch(() => {})
             setRoomId(null)
+            await refreshRooms()
             setScreen('select')
           })()}
         />
@@ -337,9 +361,15 @@ export function App() {
       {screen === 'select' && student && character && (
         <LevelSelect
           student={student} character={character} progress={progress}
-          teacherOpen={teacherOpen} room={room}
+          teacherOpen={teacherOpen} rooms={rooms}
           onPlay={(l) => { startLevel(l) }}
-          onRoom={() => void joinRoom()}
+          // 那一條寫的是哪一場，按下去就進哪一場——它上面就寫著「加入」，
+          // 按了卻跳到一份清單會讓人以為按錯了。要挑別場就按上面那顆「一起玩」。
+          onRoom={() => {
+            const top = rooms.find((r) => r.mine) ?? rooms[0]
+            if (top) void joinRoom(top.id)
+          }}
+          onRooms={() => setScreen('rooms')}
           onSettings={() => setScreen('settings')}
           onShop={() => setScreen('shop')}
           onBoard={() => setScreen('board')}
