@@ -394,3 +394,23 @@ h2.sec small{font-size:12px;font-weight:400;color:var(--muted)}
 /* 老師後台的關卡下拉。row 裡面的 input 有樣式，select 沒有，不設會變成系統預設的白底。 */
 .row select{background:var(--panel2);color:inherit;border:2px solid var(--line);
   border-radius:10px;padding:9px 10px;font:inherit;min-width:0;flex:1}
+
+/* 兵推對戰 */
+.vs-intro{max-width:620px;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.vs-intro p{margin:0;font-size:14px;line-height:1.9}
+.vs-intro .muted{color:var(--muted)}
+.vs-foes{display:flex;flex-direction:column;gap:10px;width:100%;max-width:620px}
+.vs-foe{display:flex;align-items:center;gap:12px;padding:12px 14px;text-align:left;
+  border:none;cursor:pointer;font:inherit;color:inherit;width:100%}
+.vs-foe:active{transform:translateY(1px)}
+.vs-foe .ic{font-size:26px;flex:none}
+.vs-foe .txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.vs-foe .txt b{font-size:16px}
+.vs-foe .txt small{font-size:12.5px;line-height:1.6}
+.vs-foe .txt .muted{color:var(--muted)}
+.vs-foe .go{flex:none;background:var(--leaf);color:#12240c;font-weight:700;
+  padding:7px 14px;border-radius:10px;font-size:14px}
+.vs-note{max-width:620px;font-size:12.5px;color:var(--muted);text-align:center;margin:0}
+/* 對戰的上面那一條：兩座城堡的血和對手是誰 */
+.tw-foe{font-size:13px;color:var(--muted);white-space:nowrap;flex:none}
+@media (max-height:520px){ .tw-foe{display:none} }

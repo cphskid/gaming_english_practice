@@ -5,11 +5,12 @@ import { WordStat } from '@/core/wordStat'
 import { needsCreation } from '@/core/character'
 import { colorOf } from '@/data/cosmetics'
 import type {
-  Character, GameOutcome, LevelData, LevelProgress, Staff, Student,
+  Character, GameModule, GameOutcome, LevelData, LevelProgress, Opponent, Staff, Student,
 } from '@/core/types'
+import { botOpponent } from '@/core/opponent'
 import { LEVELS } from '@/data/levels'
-import { WORDS_BY_ID, wordsOfThemes } from '@/data/words'
-import { towerDefense } from '@/games'
+import { WORDS, WORDS_BY_ID, wordsOfThemes } from '@/data/words'
+import { towerDefense, tugOfWar } from '@/games'
 import { repo } from '@/net'
 import type { SavedResult } from '@/net/repository'
 import { audio } from '@/audio'
@@ -25,15 +26,20 @@ import { CreateCharacter } from './CreateCharacter'
 import { Shop } from './Shop'
 import { Leaderboard } from './Leaderboard'
 import { RoomList, RoomLobby, useRoomList, useRoomState } from './Room'
+import { Versus } from './Versus'
 
 type Screen =
   | 'login' | 'staff' | 'create' | 'select' | 'shop' | 'board'
-  | 'play' | 'result' | 'teacher' | 'admin' | 'settings' | 'rooms' | 'lobby'
+  | 'play' | 'result' | 'teacher' | 'admin' | 'settings' | 'rooms' | 'lobby' | 'versus'
 
 interface Playing {
-  level: LevelData
+  /** 對戰沒有關卡 */
+  level: LevelData | null
+  game: GameModule
   session: Session
   quiz: Quiz
+  /** 對戰模式才有 */
+  opponent: Opponent | null
 }
 
 export function App() {
@@ -147,7 +153,7 @@ export function App() {
       stat,
       alreadyCleared: !!progress.get(level.id)?.clearedAt,
     })
-    setPlaying({ level, session, quiz })
+    setPlaying({ level, game: towerDefense, session, quiz, opponent: null })
     setScreen('play')
     return session
   }, [student, stat, progress])
@@ -182,6 +188,43 @@ export function App() {
     }
   }, [])
 
+  /**
+   * 我大概多快。拿自己答對過的字的平均反應時間回推「每分鐘答得完幾題」，
+   * 電腦對手的速度就照這個調。
+   *
+   * **為什麼不用固定難度**：量出來的結果是，一分鐘差四題勝率就到九成
+   * （tools/test/tug-balance.mjs）。固定難度等於讓快的孩子每場都輾過去、
+   * 慢的孩子每場都被輾，兩邊都不會想再玩。
+   */
+  const myRate = useCallback((): number => {
+    const seen = stat.entries().filter((e) => e.correct > 0 && e.avgMs > 0)
+    if (seen.length < 5) return 14      // 還沒資料就先當中等
+    const avg = seen.reduce((n, e) => n + e.avgMs, 0) / seen.length / 1000
+    return Math.max(8, Math.min(30, Math.round(60 / (avg + 0.6))))
+  }, [stat])
+
+  /** 開一場對戰。v1 只打電腦，但對手是一串答題，之後換成真人這裡只改一行。 */
+  const startVersus = useCallback((hardness: number, name: string) => {
+    if (!student) return
+    audio.unlock()
+    const rate = Math.max(8, Math.min(30, Math.round(myRate() * hardness)))
+    const quiz = new Quiz({ words: WORDS, skill: tugOfWar.skill, stat })
+    const session = new Session({
+      mode: 'versus',
+      gameId: tugOfWar.id,
+      level: null,
+      participants: [{ studentId: student.id, nickname: student.nickname }],
+      wordsById: WORDS_BY_ID,
+      stat,
+      alreadyCleared: false,
+    })
+    setPlaying({
+      level: null, game: tugOfWar, session, quiz,
+      opponent: botOpponent({ name, rate, accuracy: 0.85, seed: Date.now() & 0xffff }),
+    })
+    setScreen('play')
+  }, [student, stat, myRate])
+
   /** 這一場被收掉了（開場的人離開、老師按結束）。等待室沒東西好等，回選關畫面。 */
   useEffect(() => {
     if (screen === 'lobby' && roomId && roomLoaded && !room) {
@@ -211,9 +254,13 @@ export function App() {
       //
       // 星星、通關、首通獎金都由伺服器從這一場的答題事件算，畫面顯示的是它回的那份，
       // 不是我們自己算的。前端算出來的 r.stars 只拿來畫結算動畫。
+      //
+      // 對戰沒有關卡，所以沒有星星也沒有通關可存——但金幣、經驗、掌握度照算，
+      // 因為那三個本來就只從答對來，跟你在玩哪個遊戲無關。
+      const lv = playing.level
       const [saved, stats] = await Promise.all([
-        step.saved ?? repo.saveResult({
-          levelId: playing.level.id,
+        !lv ? null : step.saved ?? repo.saveResult({
+          levelId: lv.id,
           sessionId: playing.session.id,
           win: outcome.win,
           survival: outcome.survival,
@@ -226,19 +273,20 @@ export function App() {
         }),
       ])
       step.saved = saved
-      const nextProgress = saved.progress
+      const nextProgress = saved?.progress
 
       setStat(WordStat.fromEntries(stats))
       // 金幣以資料庫為準再讀一次回來。接了後端之後真正算數的是伺服器，
       // 前端那份只是為了讓數字立刻跳出來給小朋友看；兩邊算式一致（有對帳測試），
       // 萬一哪天漂移了，這一行會讓它立刻現形，而不是默默越差越多。
       setCharacter(await repo.loadCharacter(student.id))
-      setProgress((m) => new Map(m).set(playing.level.id, nextProgress))
+      if (lv && nextProgress) setProgress((m) => new Map(m).set(lv.id, nextProgress))
       // 結算畫面上的星星也要是伺服器那一份，不然畫面上三顆、選關畫面上一顆，
       // 小朋友只會覺得星星會不見。
+      const bonusCoins = saved?.bonusCoins ?? 0
       setResult({
-        r: { ...r, stars: nextProgress.stars, bonusCoins: saved.bonusCoins },
-        coins: me.coins + saved.bonusCoins, exp: me.exp,
+        r: { ...r, stars: nextProgress?.stars ?? 0, bonusCoins },
+        coins: me.coins + bonusCoins, exp: me.exp,
       })
       setSettling(null)
       setScreen('result')
@@ -411,9 +459,18 @@ export function App() {
             if (top) void joinRoom(top.id)
           }}
           onRooms={() => setScreen('rooms')}
+          onVersus={() => setScreen('versus')}
           onSettings={() => setScreen('settings')}
           onShop={() => setScreen('shop')}
           onBoard={() => setScreen('board')}
+        />
+      )}
+
+      {screen === 'versus' && student && (
+        <Versus
+          myRate={myRate()}
+          onStart={startVersus}
+          onBack={() => setScreen('select')}
         />
       )}
 
@@ -429,9 +486,10 @@ export function App() {
 
       {screen === 'play' && playing && student && character && (
         <GameHost
-          game={towerDefense} level={playing.level} session={playing.session}
+          game={playing.game} level={playing.level} session={playing.session}
           studentId={student.id} job={character.job}
           color={colorOf(character.equipped).suffix} items={character.items}
+          opponent={playing.opponent}
           nextQuestion={nextQuestion}
           onFinish={(o) => void finish(o)}
           onLeave={() => void leave()}
@@ -444,7 +502,11 @@ export function App() {
       {screen === 'result' && result && (
         <Result
           result={result.r} bonus={{ coins: result.coins, exp: result.exp }}
-          onRetry={() => playing && startLevel(playing.level)}
+          onRetry={() => {
+            if (!playing) return
+            if (playing.level) startLevel(playing.level)
+            else setScreen('versus')
+          }}
           onBack={() => setScreen('select')}
         />
       )}

@@ -8,7 +8,7 @@ import { Avatar } from './Avatar'
 
 export function LevelSelect({
   student, character, progress, teacherOpen, rooms,
-  onPlay, onRoom, onRooms, onSettings, onShop, onBoard,
+  onPlay, onRoom, onRooms, onVersus, onSettings, onShop, onBoard,
 }: {
   student: Student
   character: Character
@@ -24,6 +24,7 @@ export function LevelSelect({
   onSettings: () => void
   onShop: () => void
   onBoard: () => void
+  onVersus: () => void
 }) {
   const cleared = new Set([...progress.values()].filter((p) => p.clearedAt).map((p) => p.levelId))
   const lv = levelFromExp(character.exp)
@@ -37,6 +38,7 @@ export function LevelSelect({
         <span className="stat">{JOB_NAME[character.job]}　Lv.{lv}　{into}/{need} exp</span>
         <span className="spacer" />
         <span className="stat">🪙 {character.coins}</span>
+        <button className="btn ghost" onClick={onVersus}>對戰</button>
         <button className="btn ghost" onClick={onRooms}>一起玩</button>
         <button className="btn ghost" onClick={onBoard}>排行榜</button>
         <button className="btn ghost" onClick={onShop}>商店</button>

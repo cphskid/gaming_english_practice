@@ -152,6 +152,32 @@ export interface LevelData {
 // ---------------------------------------------------------------------------
 
 /** core 交給遊戲的東西。遊戲只看得到這些，不 import core。 */
+/**
+ * 對手在第 t 秒做了什麼。答錯也要記，不然看不出他其實在掙扎。
+ * 產生器在 core/opponent.ts。
+ */
+export interface Move {
+  /** 從開場算起第幾秒 */
+  t: number
+  correct: boolean
+  /** 答對時召喚出來的兵是第幾階；答錯是 null */
+  rank: number | null
+}
+
+/**
+ * 對戰的對手。
+ *
+ * **整個對戰模式的關鍵：對手是「一串照時間發生的答題」，不是「另一台連著線的裝置」。**
+ * 好友在線、好友的上一場紀錄、電腦、之後的跨班配對，四件事因此是同一套程式。
+ */
+export interface Opponent {
+  name: string
+  /** 電腦要老實寫出來。小孩被騙到會更不爽，而且輸給電腦不該記進戰績。 */
+  isBot: boolean
+  /** 到第 t 秒為止，對手做過的事（累計，可以重複問）。 */
+  movesUntil(t: number): Move[]
+}
+
 export interface GameContext {
   /** 沒有關卡的遊戲是 null */
   level: LevelData | null
@@ -171,6 +197,8 @@ export interface GameContext {
   /** 唯一的回報管道 */
   report(r: AnswerReport): void
   audio: AudioBus
+  /** 對戰模式才有。單人遊戲是 null。 */
+  opponent: Opponent | null
   /** 遊戲自己決定什麼時候結束 */
   finish(outcome: GameOutcome): void
 }
