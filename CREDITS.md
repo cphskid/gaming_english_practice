@@ -6,6 +6,14 @@
 
 角色、建築、地形、UI 與特效素材皆出自此素材包。作者授權可自由用於個人與商業專案並可修改，且不強制標註；此處仍列出以示感謝。
 
+**Treasure Hunters** — [Pixel Frog](https://pixelfrog-assets.itch.io/treasure-hunters)
+
+`assets/treasure-hunters/` 的海盜角色、船隻、陷阱、地形與 UI 出自此素材包。授權為 Creative Commons Zero (CC0)，不強制標註；此處仍列出以示感謝。
+
+**Kings and Pigs** — [Pixel Frog](https://pixelfrog-assets.itch.io/kings-and-pigs)
+
+`assets/kings-and-pigs/` 的豬兵、豬王、大砲與地形出自此素材包。授權為 Creative Commons Zero (CC0)，不強制標註；此處仍列出以示感謝。
+
 ## 單字題庫
 
 **十二年國民基本教育課程綱要 語文領域－英語文**，中華民國教育部。
