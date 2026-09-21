@@ -2,14 +2,14 @@ import { CRYSTAL, FOCUS_MAX, FOCUS_STEP, SOLDIER_REACH, SOLDIER_SLOW, TOWERS, re
 import { JOB_EFFECT } from '@/data/jobs'
 import type { GameContext, GameHandle, LevelData, Point, Word } from '@/core/types'
 import { loadArt } from './art'
+import { PLATE_RULES, layoutPlates as runPlateLayout, plateY } from './plates'
 
 const W = 1088
 const H = 576
 const TILE = 64
 const COLS = 17
 const PLATE_FONT = 'bold 17px system-ui, "Segoe UI", sans-serif'
-const PLATE_H = 28
-const TIER_GAP = 32
+const PLATE_H = PLATE_RULES.height
 const PRESS = 0.22
 
 /** 怪要完全走進畫面才算數。這一條是第一次試玩那個「狂點就得分」漏洞的修法。 */
@@ -47,8 +47,14 @@ interface Enemy {
   frame: number
   blocked: boolean
   px: number
+  /** 牌子這一格該去的位置。px 是慢慢追過去的，不是直接跳過去——見 layoutPlates */
+  ptx: number
   pw: number
   tier: number
+  /** 進場後第一次排版：牌子要直接出現在本體上，不能從畫面左邊滑進來 */
+  laid: boolean
+  /** 低的那一層已經空了幾格，見 plates.ts */
+  hold: number
   press: number
   good: number
   bad: number
@@ -278,7 +284,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       word, path: s.path, dist: headStart, hp: s.hp, maxHp: s.hp, speed: s.speed,
       art: s.art, scale: s.scale, boss: s.boss,
       frame: Math.random() * 7, blocked: false,
-      px: 0, pw: 0, tier: 0, press: 0, good: 0, bad: 0, shake: 0,
+      px: 0, ptx: 0, pw: 0, tier: 0, laid: false, hold: 0, press: 0, good: 0, bad: 0, shake: 0,
       x: p.x, y: p.y, entered: false,
     })
   }
@@ -635,36 +641,13 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   // ---------------------------------------------------------------- 字牌排版
+  // 規則本身在 plates.ts（純幾何，量得出來），這裡只負責量字寬和挑出該排的怪。
   function layoutPlates() {
     c2d.font = PLATE_FONT
-    for (const e of S.enemies) {
-      e.pw = Math.max(58, c2d.measureText(e.word.word).width + 24)
-      e.px = e.x
-      e.tier = 0
-    }
-    for (let lane = 0; lane < PATHS.length; lane++) {
-      const list = S.enemies.filter((e) => e.path === lane && e.entered).sort((a, b) => a.x - b.x)
-      for (let pass = 0; pass < 6; pass++) {
-        for (let i = 1; i < list.length; i++) {
-          const a = list[i - 1], b = list[i]
-          const need = (a.pw + b.pw) / 2 + 6
-          const gap = b.px - a.px
-          if (gap < need) { const push = (need - gap) / 2; a.px -= push; b.px += push }
-        }
-        for (const e of list) {
-          // 不能離本體太遠，也不能超出畫布——兩個夾限的順序很重要，
-          // 反過來的話牌子會被拉進畫面裡，變成本體還沒出現就看得到答案
-          e.px = Math.max(e.pw / 2 + 3, Math.min(W - e.pw / 2 - 3, e.px))
-          e.px = Math.max(e.x - 46, Math.min(e.x + 46, e.px))
-        }
-      }
-      for (let j = 1; j < list.length; j++) {
-        const p = list[j - 1], q = list[j]
-        if (q.px - p.px < (p.pw + q.pw) / 2) q.tier = (p.tier + 1) % 3
-      }
-    }
+    const list = S.enemies.filter((e) => e.entered)
+    for (const e of list) e.pw = Math.max(58, c2d.measureText(e.word.word).width + 24)
+    runPlateLayout(list, PLATE_RULES)
   }
-  const plateY = (e: Enemy) => e.y + 4 + e.tier * TIER_GAP
 
   // ---------------------------------------------------------------- 畫面
   function roundRect(x: number, y: number, w: number, h: number, r: number) {

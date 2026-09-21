@@ -83,6 +83,12 @@ export interface AnswerEvent extends AnswerReport {
    * 兜在一起——星星是這樣算出來的，不是前端說了算。
    */
   sessionId: string
+  /**
+   * 這是這一場的第幾題。存在的理由只有一個：**同一題不可以被算兩次錢**。
+   * 結算失敗時人可以按重試，重試會把整場的答題再送一次；伺服器靠
+   * (學生, 這一場, 第幾題) 把重複的擋掉。見 supabase/schema.sql 的 submit_answers。
+   */
+  ord: number
   /** epoch 毫秒 */
   at: number
 }

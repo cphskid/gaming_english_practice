@@ -276,7 +276,16 @@ export class LocalRepository implements Repository {
     }
     for (const [id, list] of byStudent) {
       const all = read<AnswerEvent[]>(k.events(id), [])
-      all.push(...list)
+      // 同一題不可以進來兩次。結算失敗時人可以按重試，重試會把整場再送一遍——
+      // 後端是靠 (學生, 這一場, 第幾題) 擋的，本機版也要擋，不然兩邊行為不一樣，
+      // 本機測起來對、上線是另一回事。
+      const seen = new Set(all.map((e) => `${e.sessionId}:${e.ord}`))
+      for (const e of list) {
+        const key = `${e.sessionId}:${e.ord}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        all.push(e)
+      }
       // 一個學生一年大概三萬列，本地只留最近的，老師報表要完整資料要接後端
       write(k.events(id), all.slice(-5000))
     }

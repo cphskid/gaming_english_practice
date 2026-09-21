@@ -112,6 +112,7 @@ export class Session {
       gameId: this.gameId,
       levelId: this.level?.id ?? null,
       sessionId: this.id,
+      ord: this.events.length,
       at: Date.now(),
     }
     this.events.push(event)

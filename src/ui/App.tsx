@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Quiz } from '@/core/quiz'
 import { Session, type SessionResult } from '@/core/session'
 import { WordStat } from '@/core/wordStat'
@@ -11,6 +11,7 @@ import { LEVELS } from '@/data/levels'
 import { WORDS_BY_ID, wordsOfThemes } from '@/data/words'
 import { towerDefense } from '@/games'
 import { repo } from '@/net'
+import type { SavedResult } from '@/net/repository'
 import { audio } from '@/audio'
 import { Login } from './Login'
 import { StaffAuth } from './StaffAuth'
@@ -58,6 +59,15 @@ export function App() {
     !!student && (screen === 'select' || screen === 'rooms'),
   )
   const { room, loaded: roomLoaded } = useRoomState(roomId, screen === 'lobby')
+
+  /**
+   * 結算中。打完一關要打好幾趟後端，這段時間遊戲已經停了、畫面是定住的，
+   * 以前什麼都不顯示——小朋友按掉最後一隻怪之後看到的就是一個當掉的畫面。
+   * error 不是 null 就是結算失敗，讓他按得了重試而不是被困在那裡。
+   */
+  const [settling, setSettling] = useState<{ error: string | null } | null>(null)
+  const retryRef = useRef<(() => void) | null>(null)
+  const settleRef = useRef<{ session: string; events: boolean; saved: SavedResult | null } | null>(null)
 
   /** 載入一位學生的全部東西並進到選關畫面。登入、註冊、換班都走這裡。 */
   const enter = useCallback(async (s: Student) => {
@@ -183,44 +193,63 @@ export function App() {
     if (!playing || !student || !character) return
     const r = playing.session.finish(outcome)
     const me = r.scores[0]
+    retryRef.current = () => void finish(outcome)
+    setSettling({ error: null })
 
-    // 事件先寫，其他一切都是從事件算出來的
-    await repo.appendEvents(r.events)
-    const nextStat = WordStat.fromEntries(await repo.loadWordStats(student.id))
+    // 重試時答題事件不能再送一次——submit_answers 是照單全收的，
+    // 送兩次金幣就變兩倍。所以記住送到哪一步了，重按只跑還沒成功的那幾步。
+    const step = settleRef.current?.session === playing.session.id
+      ? settleRef.current
+      : (settleRef.current = { session: playing.session.id, events: false, saved: null })
 
-    const nextChar: Character = {
-      ...character,
-      coins: character.coins + me.coins,
-      exp: character.exp + me.exp,
+    try {
+      // 事件先寫，其他一切都是從事件算出來的
+      if (!step.events) { await repo.appendEvents(r.events); step.events = true }
+
+      // 這三趟彼此不相干，一起送。本來是一趟等一趟，手機網路差的時候
+      // 小朋友要對著一個定住的畫面等上好幾秒。
+      //
+      // 星星、通關、首通獎金都由伺服器從這一場的答題事件算，畫面顯示的是它回的那份，
+      // 不是我們自己算的。前端算出來的 r.stars 只拿來畫結算動畫。
+      const [saved, stats] = await Promise.all([
+        step.saved ?? repo.saveResult({
+          levelId: playing.level.id,
+          sessionId: playing.session.id,
+          win: outcome.win,
+          survival: outcome.survival,
+        }),
+        repo.loadWordStats(student.id),
+        repo.saveCharacter({
+          ...character,
+          coins: character.coins + me.coins,
+          exp: character.exp + me.exp,
+        }),
+      ])
+      step.saved = saved
+      const nextProgress = saved.progress
+
+      setStat(WordStat.fromEntries(stats))
+      // 金幣以資料庫為準再讀一次回來。接了後端之後真正算數的是伺服器，
+      // 前端那份只是為了讓數字立刻跳出來給小朋友看；兩邊算式一致（有對帳測試），
+      // 萬一哪天漂移了，這一行會讓它立刻現形，而不是默默越差越多。
+      setCharacter(await repo.loadCharacter(student.id))
+      setProgress((m) => new Map(m).set(playing.level.id, nextProgress))
+      // 結算畫面上的星星也要是伺服器那一份，不然畫面上三顆、選關畫面上一顆，
+      // 小朋友只會覺得星星會不見。
+      setResult({
+        r: { ...r, stars: nextProgress.stars, bonusCoins: saved.bonusCoins },
+        coins: me.coins + saved.bonusCoins, exp: me.exp,
+      })
+      setSettling(null)
+      setScreen('result')
+      // 在房間裡的話，跟老師說我打完了。不等它——晚一點才看到沒關係，
+      // 但不能因為它慢就把結算畫面卡在後面。
+      if (roomId) void repo.roomFinished(roomId).catch(() => {})
+    } catch (e) {
+      // 這裡以前沒有 catch：後端一失敗，畫面就永遠定在那一格，
+      // 小朋友只看得到一個不會動的戰場。現在至少看得到發生什麼事、按得了重試。
+      setSettling({ error: e instanceof Error ? e.message : String(e) })
     }
-    await repo.saveCharacter(nextChar)
-
-    // 星星、通關、首通獎金都由伺服器從這一場的答題事件算，畫面顯示的是它回的那份，
-    // 不是我們自己算的。前端算出來的 r.stars 只拿來畫結算動畫。
-    const saved = await repo.saveResult({
-      levelId: playing.level.id,
-      sessionId: playing.session.id,
-      win: outcome.win,
-      survival: outcome.survival,
-    })
-    const nextProgress = saved.progress
-    const coins = me.coins + saved.bonusCoins
-
-    setStat(nextStat)
-    // 金幣以資料庫為準再讀一次回來。接了後端之後真正算數的是伺服器，
-    // nextChar 只是為了讓數字立刻跳出來給小朋友看；兩邊算式一致（有對帳測試），
-    // 萬一哪天漂移了，這一行會讓它立刻現形，而不是默默越差越多。
-    setCharacter(await repo.loadCharacter(student.id))
-    setProgress((m) => new Map(m).set(playing.level.id, nextProgress))
-    // 結算畫面上的星星也要是伺服器那一份，不然畫面上三顆、選關畫面上一顆，
-    // 小朋友只會覺得星星會不見。
-    setResult({
-      r: { ...r, stars: nextProgress.stars, bonusCoins: saved.bonusCoins },
-      coins, exp: me.exp,
-    })
-    // 在房間裡的話，跟老師說我打完了。失敗就算了，老師那邊頂多晚一點才看到。
-    if (roomId) await repo.roomFinished(roomId).catch(() => {})
-    setScreen('result')
   }, [playing, student, character, progress, roomId])
 
   /**
@@ -233,22 +262,34 @@ export function App() {
     const r = playing.session.finish({ win: false, survival: 0, detail: '中途離開' })
     const me = r.scores[0]
 
-    await repo.appendEvents(r.events)
-    const nextStat = WordStat.fromEntries(await repo.loadWordStats(student.id))
-    const nextChar: Character = {
-      ...character,
-      coins: character.coins + me.coins,
-      exp: character.exp + me.exp,
-    }
-    await repo.saveCharacter(nextChar)
+    retryRef.current = () => void leave()
+    setSettling({ error: null })
 
-    setStat(nextStat)
-    setCharacter(await repo.loadCharacter(student.id))
-    setPlaying(null)
-    // 中途離開就是退出這一場。掛在名單上顯示「進行中」卻其實沒在打，
-    // 老師會一直等他，不如直接消失，想玩再從選關畫面按一次加入。
-    if (roomId) { await repo.leaveRoom(roomId).catch(() => {}); setRoomId(null) }
-    setScreen('select')
+    const step = settleRef.current?.session === playing.session.id
+      ? settleRef.current
+      : (settleRef.current = { session: playing.session.id, events: false, saved: null })
+
+    try {
+      if (!step.events) { await repo.appendEvents(r.events); step.events = true }
+      const [stats] = await Promise.all([
+        repo.loadWordStats(student.id),
+        repo.saveCharacter({
+          ...character,
+          coins: character.coins + me.coins,
+          exp: character.exp + me.exp,
+        }),
+      ])
+      setStat(WordStat.fromEntries(stats))
+      setCharacter(await repo.loadCharacter(student.id))
+      setSettling(null)
+      setPlaying(null)
+      // 中途離開就是退出這一場。掛在名單上顯示「進行中」卻其實沒在打，
+      // 老師會一直等他，不如直接消失，想玩再從選關畫面按一次加入。
+      if (roomId) { void repo.leaveRoom(roomId).catch(() => {}); setRoomId(null) }
+      setScreen('select')
+    } catch (e) {
+      setSettling({ error: e instanceof Error ? e.message : String(e) })
+    }
   }, [playing, student, character, roomId])
 
   /**
@@ -398,6 +439,8 @@ export function App() {
         />
       )}
 
+      {screen === 'play' && settling && <Settling error={settling.error} onRetry={() => retryRef.current?.()} />}
+
       {screen === 'result' && result && (
         <Result
           result={result.r} bonus={{ coins: result.coins, exp: result.exp }}
@@ -424,5 +467,39 @@ export function App() {
         <Admin onBack={() => setScreen('teacher')} />
       )}
     </>
+  )
+}
+
+/**
+ * 「結算中」。
+ *
+ * 打完一關到結算畫面出現之間要打好幾趟後端。遊戲那一刻已經停了，畫面定在
+ * 最後一格——沒有這一層的話，小朋友按掉最後一隻怪看到的就是一個當掉的畫面
+ * （返回鍵還能按，因為那顆在容器上，更像當掉）。
+ *
+ * 失敗時不自己重試：網路不好的時候自動重試只會讓他繼續盯著同一個畫面。
+ * 直接告訴他發生什麼事，按鈕交給他。
+ */
+function Settling({ error, onRetry }: { error: string | null; onRetry: () => void }) {
+  return (
+    <div className="confirm settling" role="status" aria-live="polite">
+      <div className="confirm-box panel">
+        {error === null ? (
+          <>
+            <h2>結算中…</h2>
+            <p>正在算這一場的星星和金幣。</p>
+            <div className="dots"><i /><i /><i /></div>
+          </>
+        ) : (
+          <>
+            <h2>結算沒成功</h2>
+            <p>{error}<br />答題紀錄還在，按一下重試就好。</p>
+            <div className="confirm-btns">
+              <button className="btn" onClick={onRetry}>重試</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   )
 }

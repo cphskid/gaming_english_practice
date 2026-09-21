@@ -37,7 +37,7 @@ interface ProgressRow {
 interface EventRow {
   student_id: string; word_id: number; skill: Skill; correct: boolean
   ms: number; combo: number; game_id: string; level_id: string | null
-  session_id: string | null; at: string
+  session_id: string | null; ord: number | null; at: string
 }
 interface StatRow {
   word_id: number; skill: Skill; seen: number; correct: number; wrong: number
@@ -275,6 +275,8 @@ export class SupabaseRepository implements Repository {
         gameId: e.gameId,
         levelId: e.levelId,
         sessionId: e.sessionId,
+        // 重試送第二次時，伺服器靠這個把重複的擋掉
+        ord: e.ord,
       }))
       const { error } = await this.db.rpc('submit_answers', { p_events: chunk })
       fail('回報答題失敗', error)
@@ -284,7 +286,7 @@ export class SupabaseRepository implements Repository {
   async loadEvents(studentId: string): Promise<AnswerEvent[]> {
     const { data, error } = await this.db
       .from('answer_events')
-      .select('student_id, word_id, skill, correct, ms, combo, game_id, level_id, session_id, at')
+      .select('student_id, word_id, skill, correct, ms, combo, game_id, level_id, session_id, ord, at')
       .eq('student_id', studentId)
       .order('at', { ascending: true })
       .limit(CLASS_EVENT_LIMIT)
@@ -317,7 +319,7 @@ export class SupabaseRepository implements Repository {
   async loadClassEvents(classCode: string): Promise<AnswerEvent[]> {
     const { data, error } = await this.db
       .from('answer_events')
-      .select('student_id, word_id, skill, correct, ms, combo, game_id, level_id, session_id, at, students!inner(class_code)')
+      .select('student_id, word_id, skill, correct, ms, combo, game_id, level_id, session_id, ord, at, students!inner(class_code)')
       .eq('students.class_code', classCode.trim().toUpperCase())
       .order('at', { ascending: true })
       .limit(CLASS_EVENT_LIMIT)
@@ -674,6 +676,7 @@ function toEvent(r: EventRow): AnswerEvent {
     gameId: r.game_id,
     levelId: r.level_id,
     sessionId: r.session_id ?? '',
+    ord: r.ord ?? 0,
     at: ms(r.at),
   }
 }

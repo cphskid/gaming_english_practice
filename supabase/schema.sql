@@ -204,6 +204,16 @@ create table if not exists public.answer_events (
 -- 舊資料沒有這一欄，所以可以是 null。
 alter table public.answer_events add column if not exists session_id uuid;
 create index if not exists answer_events_session on public.answer_events(session_id);
+-- 這一題是這一場的第幾題。存在的理由只有一個：**同一題不可以被算兩次錢**。
+--
+-- 網路斷掉的時候，「伺服器沒收到」和「伺服器收到了但回不來」長得一模一樣，
+-- 客戶端分不出來。結算失敗讓人按重試（不讓他按，人就卡在一個定住的畫面上），
+-- 而重試一定會把整場的答題再送一次——沒有這個鍵，那一場的金幣就變兩倍。
+-- 有了它，送幾次都只算一次，客戶端可以放心重試。
+alter table public.answer_events add column if not exists ord smallint;
+create unique index if not exists answer_events_once
+  on public.answer_events(student_id, session_id, ord)
+  where session_id is not null and ord is not null;
 create index if not exists answer_events_student_at on public.answer_events(student_id, at desc);
 create index if not exists answer_events_level on public.answer_events(student_id, level_id, at desc);
 create index if not exists answer_events_word on public.answer_events(word_id);
@@ -678,6 +688,7 @@ declare
   v_ms      int;
   v_combo   int;
   v_prior   int;
+  v_ord     smallint;
   v_gain_c  int := 0;
   v_gain_e  int := 0;
 begin
@@ -712,14 +723,23 @@ begin
      where ws.student_id = v_student and ws.word_id = v_word and ws.skill = v_skill;
     v_prior := coalesce(v_prior, 0);
 
+    v_ord := nullif(e ->> 'ord', '')::smallint;
+
     insert into public.answer_events
-      (student_id, word_id, skill, correct, ms, combo, game_id, level_id, session_id)
+      (student_id, word_id, skill, correct, ms, combo, game_id, level_id, session_id, ord)
     values
       (v_student, v_word, v_skill, v_ok, v_ms, v_combo,
        coalesce(e ->> 'gameId', 'unknown'), nullif(e ->> 'levelId', ''),
        -- 格式不對就當沒有，不要讓一個壞欄位把整包答題擋下來
        (case when (e ->> 'sessionId') ~ '^[0-9a-fA-F-]{36}$'
-             then (e ->> 'sessionId')::uuid end));
+             then (e ->> 'sessionId')::uuid end),
+       v_ord)
+    on conflict do nothing;
+
+    -- 這一題之前就進來過（客戶端重試）。掌握度和金幣都跳過，不然會算兩次。
+    if not found then
+      continue;
+    end if;
 
     insert into public.word_stats as ws
       (student_id, word_id, skill, seen, correct, wrong, streak, last_at, avg_ms)

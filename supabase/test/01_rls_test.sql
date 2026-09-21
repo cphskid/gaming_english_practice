@@ -264,6 +264,56 @@ select public.submit_answers($$[
   {"wordId":1,"skill":"recognize","correct":true,"ms":900,"combo":0,"gameId":"tower-defense","levelId":"td-01"}
 ]$$::jsonb);
 
+\echo '── 重試不可以把同一場的金幣算兩次'
+do $blk$
+declare
+  v_sess  uuid := gen_random_uuid();
+  v_batch jsonb;
+  v_one   int;
+  v_two   int;
+  v_rows  int;
+begin
+  -- 網路斷掉的時候，「伺服器沒收到」和「伺服器收到了但回不來」長得一模一樣。
+  -- 結算失敗要讓人按重試（不讓他按，人就卡在一個定住的畫面上），
+  -- 所以整場答題一定會被送第二次。送第二次不可以再給一次錢。
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  select jsonb_agg(jsonb_build_object(
+           'wordId', 50 + i, 'skill', 'recognize', 'correct', true, 'ms', 1000,
+           'combo', 0, 'gameId', 'tower-defense', 'levelId', 'td-01',
+           'sessionId', v_sess::text, 'ord', i))
+    into v_batch from generate_series(1, 8) i;
+
+  select coins into v_one from public.characters where student_id = public.current_student_id();
+  perform public.submit_answers(v_batch);
+  select coins into v_two from public.characters where student_id = public.current_student_id();
+  perform test_ok(v_two > v_one, '第一次送有給錢');
+
+  perform public.submit_answers(v_batch);          -- 重試：一模一樣再送一次
+  perform test_ok((select coins from public.characters
+                    where student_id = public.current_student_id()) = v_two,
+                  '重試沒有再給一次錢');
+
+  select count(*) into v_rows from public.answer_events
+   where student_id = public.current_student_id() and session_id = v_sess;
+  perform test_ok(v_rows = 8, '答題也只進去一次（' || v_rows || ' 筆）');
+
+  -- 掌握度也不可以被算兩次，不然老師報表會說他練了十六次
+  perform test_ok((select seen from public.word_stats
+                    where student_id = public.current_student_id()
+                      and word_id = 51 and skill = 'recognize') = 1,
+                  '掌握度也只算一次');
+
+  -- 另一場的同一個 ord 是不同的題，不能被擋掉
+  perform public.submit_answers(jsonb_build_array(jsonb_build_object(
+    'wordId', 51, 'skill', 'recognize', 'correct', true, 'ms', 1000,
+    'combo', 0, 'gameId', 'tower-defense', 'levelId', 'td-01',
+    'sessionId', gen_random_uuid()::text, 'ord', 1)));
+  perform test_ok((select seen from public.word_stats
+                    where student_id = public.current_student_id()
+                      and word_id = 51 and skill = 'recognize') = 2,
+                  '換一場之後同樣的第幾題還是算數');
+end $blk$;
+
 \echo '── 通關與星星是伺服器算的，前端說了不算'
 do $blk$
 declare
