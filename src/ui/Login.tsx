@@ -1,35 +1,124 @@
 import { useState } from 'react'
 
 /**
- * 班級代碼＋暱稱。**不收真實姓名、不收 email**——使用者是國小學生。
- * 這組東西只用來認人，不用來授權；防作弊在後端做，不在這裡。
+ * 學生的登入與註冊。**不收真實姓名、不收 email**——使用者是國小學生。
+ *
+ * 登入帳號跟暱稱是兩件事：帳號全站唯一、只有登入時用得到；
+ * 暱稱是排行榜上顯示的名字，可以改、可以跟別班的人重複。
+ *
+ * 班級代碼在註冊時同時是邀請碼，所以網址流出去也不會變成誰都能進的公開網站。
  */
-export function Login({ onJoin }: { onJoin: (classCode: string, nickname: string) => void }) {
+export function Login({
+  onLogin, onRegister, onStaff,
+}: {
+  onLogin: (loginId: string, password: string) => Promise<string | null>
+  onRegister: (loginId: string, password: string, nickname: string, classCode: string)
+    => Promise<string | null>
+  onStaff: () => void
+}) {
+  const [tab, setTab] = useState<'login' | 'register'>('login')
+  const [loginId, setLoginId] = useState('')
+  const [password, setPassword] = useState('')
+  const [nickname, setNickname] = useState('')
   const [code, setCode] = useState('')
-  const [name, setName] = useState('')
-  const ok = code.trim().length >= 2 && name.trim().length >= 1
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  /**
+   * 填得不對的時候**講出哪裡不對**，而不是讓按鈕變暗。
+   *
+   * 使用者是國小學生。一顆按不動又不說話的按鈕，小朋友只會一直按，
+   * 然後跑去跟老師說「壞掉了」。訊息也要寫成小朋友看得懂的話。
+   */
+  function problem(): string | null {
+    const id = loginId.trim().toLowerCase()
+    if (!id) return '要先填帳號喔'
+    if (id.length < 3) return '帳號太短了，至少 3 個字'
+    if (id.length > 16) return '帳號太長了，最多 16 個字'
+    if (!/^[a-z0-9_]+$/.test(id)) return '帳號只能用英文字母、數字和底線'
+    if (password.trim().length < 6) {
+      return '密碼至少要 6 個字（現在 ' + password.trim().length + ' 個）'
+    }
+    if (tab === 'register') {
+      if (!nickname.trim()) return '取一個暱稱吧，那是排行榜上會顯示的名字'
+      if (code.trim().length < 3) return '要填老師給你的班級代碼'
+    }
+    return null
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (busy) return
+    const bad = problem()
+    if (bad) { setError(bad); return }
+    setBusy(true)
+    setError(null)
+    const msg = tab === 'login'
+      ? await onLogin(loginId, password)
+      : await onRegister(loginId, password, nickname, code)
+    setBusy(false)
+    if (msg) setError(msg)
+  }
 
   return (
     <div className="screen">
       <h1>🏰 單字守塔</h1>
-      <p className="lede">輸入老師給的班級代碼，取一個你喜歡的暱稱就可以開始。</p>
-      <form
-        className="form panel"
-        onSubmit={(e) => { e.preventDefault(); if (ok) onJoin(code, name) }}
-      >
+
+      <div className="tabs">
+        <button className={tab === 'login' ? 'on' : ''}
+          onClick={() => { setTab('login'); setError(null) }}>我有帳號</button>
+        <button className={tab === 'register' ? 'on' : ''}
+          onClick={() => { setTab('register'); setError(null) }}>第一次來</button>
+      </div>
+
+      <form className="form panel" onSubmit={submit}>
+        {tab === 'register' && (
+          <div>
+            <label htmlFor="cls">班級代碼</label>
+            <input id="cls" value={code} autoComplete="off" maxLength={12}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder="老師給你的代碼" />
+          </div>
+        )}
+
         <div>
-          <label htmlFor="cls">班級代碼</label>
-          <input id="cls" value={code} autoComplete="off" maxLength={12}
-            onChange={(e) => setCode(e.target.value)} placeholder="例如 3A2025" />
+          <label htmlFor="lid">帳號</label>
+          <input id="lid" value={loginId} autoComplete="username" maxLength={16}
+            onChange={(e) => setLoginId(e.target.value.replace(/[^A-Za-z0-9_]/g, '').toLowerCase())}
+            placeholder="英文或數字，例如 ming123" />
         </div>
+
         <div>
-          <label htmlFor="nick">暱稱</label>
-          <input id="nick" value={name} autoComplete="off" maxLength={10}
-            onChange={(e) => setName(e.target.value)} placeholder="例如 小雷" />
+          <label htmlFor="pw">密碼</label>
+          <input id="pw" type="password" value={password} maxLength={32}
+            autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="6 個以上的英文或數字" />
         </div>
-        <button className="btn" type="submit" disabled={!ok}>進入教室</button>
+
+        {tab === 'register' && (
+          <div>
+            <label htmlFor="nick">暱稱</label>
+            <input id="nick" value={nickname} autoComplete="off" maxLength={16}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder="排行榜上顯示的名字，例如 小雷" />
+          </div>
+        )}
+
+        {error && <p className="error">{error}</p>}
+
+        <button className="btn" type="submit" disabled={busy}>
+          {busy ? '請稍等…' : tab === 'login' ? '開始玩' : '建立帳號'}
+        </button>
       </form>
-      <p className="lede">不會用到真實姓名，也不用填 email。</p>
+
+      <p className="lede">
+        {tab === 'login'
+          ? '忘記密碼了嗎？請老師幫你重設一個。'
+          : '帳號是登入用的，暱稱是大家看得到的名字，兩個可以不一樣。不會用到真實姓名，也不用填 email。'}
+      </p>
+
+      <button className="btn ghost small" onClick={onStaff}>我是老師</button>
     </div>
   )
 }

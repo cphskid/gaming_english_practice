@@ -24,11 +24,47 @@ end $$;
 
 grant usage on schema public, extensions, auth to anon, authenticated;
 
+-- 欄位照真的 Supabase 抄，因為 admin_create_teacher 是**自己手寫 auth.users**
+-- （老師帳號由管理員直接開，不寄確認信）。欄位少一個，本機就測不到寫錯什麼。
+-- confirmed_at 在真的 Supabase 是自動算出來的欄位，這裡照做，寫它就會報錯。
 create table if not exists auth.users (
-  id    uuid primary key default gen_random_uuid(),
-  email text
+  instance_id                uuid,
+  id                         uuid primary key default gen_random_uuid(),
+  aud                        varchar(255),
+  role                       varchar(255),
+  email                      varchar(255),
+  encrypted_password         varchar(255),
+  email_confirmed_at         timestamptz,
+  confirmation_token         varchar(255),
+  recovery_token             varchar(255),
+  email_change_token_new     varchar(255),
+  email_change               varchar(255),
+  email_change_token_current varchar(255) default '',
+  phone_change               text default '',
+  phone_change_token         varchar(255) default '',
+  reauthentication_token     varchar(255) default '',
+  raw_app_meta_data          jsonb,
+  raw_user_meta_data         jsonb,
+  created_at                 timestamptz,
+  updated_at                 timestamptz,
+  confirmed_at               timestamptz generated always as (email_confirmed_at) stored,
+  is_sso_user                boolean not null default false,
+  is_anonymous               boolean not null default false
 );
+create unique index if not exists users_email_uq on auth.users (email);
 grant select on auth.users to anon, authenticated;
+
+create table if not exists auth.identities (
+  provider_id     text not null,
+  user_id         uuid not null references auth.users(id) on delete cascade,
+  identity_data   jsonb not null,
+  provider        text not null,
+  last_sign_in_at timestamptz,
+  created_at      timestamptz,
+  updated_at      timestamptz,
+  id              uuid primary key default gen_random_uuid(),
+  unique (provider_id, provider)
+);
 
 create or replace function auth.uid() returns uuid
 language sql stable as $$

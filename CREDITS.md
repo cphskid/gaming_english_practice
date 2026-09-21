@@ -35,3 +35,11 @@
 - 音效 answer-correct、answer-wrong、coin、ui-tap、explosion — 由 Brackeys（Asbjørn Thirslund）製作
 - 音樂 `assets/audio/music/adventure.mp3` — 由 Brackeys（Sofia Thirslund）製作
 - 字型 `assets/fonts/PixelOperator8*.ttf` — 由 Jayvee Enaguas（HarvettFox96）製作
+
+**Determined Pursuit (epic orchestra loop)** — [Emma_MA](https://opengameart.org/content/determined-pursuit-epic-orchestra-loop)
+
+授權為 Creative Commons Zero (CC0)。對戰模式的背景音樂 `public/audio/music/battle.ogg`，已轉為單聲道 Ogg Vorbis 以縮小檔案（原檔為 108 秒立體聲 WAV，19MB）。
+
+**Their Coming (generic horn sound)** — [StumpyStrust](https://opengameart.org/content/their-coming-generic-horn-sound)
+
+授權為 Creative Commons Zero (CC0)。對戰開場的號角 `public/audio/sfx/battle-horn.ogg`，已裁切為 3.4 秒並轉為單聲道。

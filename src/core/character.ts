@@ -7,7 +7,13 @@ export const JOB_DESC: Record<Job, string> = {
 }
 
 export function newCharacter(student: Student, job: Job = 'knight'): Character {
-  return { studentId: student.id, job, exp: 0, coins: 120, items: {}, equipped: [] }
+  // avatar 留空是「還沒創角」的意思，登入後會被帶去創角畫面。
+  return { studentId: student.id, job, avatar: '', exp: 0, coins: 120, items: {}, equipped: [] }
+}
+
+/** 還沒選過職業和頭像的人，要先去創角。 */
+export function needsCreation(c: Character): boolean {
+  return !c.avatar
 }
 
 /** 暱稱做為顯示名稱，不存真實姓名 */

@@ -310,21 +310,47 @@ on conflict (id) do update set
   theme = excluded.theme, emoji = excluded.emoji,
   spell = excluded.spell, level = excluded.level;
 
-insert into public.levels (id, no, name) values
-  ('td-01', 1, '數字島'),
-  ('td-02', 2, '顏色與身體'),
-  ('td-03', 3, '動物森林'),
-  ('td-04', 4, '食物與餐具'),
-  ('td-05', 5, '衣櫃魔王'),
-  ('td-06', 6, '我家'),
-  ('td-07', 7, '學校'),
-  ('td-08', 8, '出門去'),
-  ('td-09', 9, '運動與職業'),
-  ('td-10', 10, '暴風雨魔王'),
-  ('td-11', 11, '心情'),
-  ('td-12', 12, '動起來'),
-  ('td-13', 13, '時間之塔'),
-  ('td-14', 14, '最終試煉')
-on conflict (id) do update set no = excluded.no, name = excluded.name;
+-- 商店品項。**這一段是 tools/gen-shop-seed.mjs 從 src/data/shop.ts 產生的，不要手改。**
+-- 價格放在資料庫是因為客戶端送來的價格不能信。
+insert into public.shop_items (id, price, kind, slot, unlock_level) values
+  ('slow-30', 60, 'consumable', null, 1),
+  ('heal-5', 80, 'consumable', null, 2),
+  ('crystal-40', 120, 'consumable', null, 3),
+  ('color-red', 150, 'cosmetic', 'color', 1),
+  ('color-yellow', 150, 'cosmetic', 'color', 2),
+  ('color-purple', 220, 'cosmetic', 'color', 4),
+  ('color-black', 300, 'cosmetic', 'color', 6),
+  ('frame-gold', 120, 'cosmetic', 'frame', 1),
+  ('frame-ribbon', 180, 'cosmetic', 'frame', 3),
+  ('frame-crown', 260, 'cosmetic', 'frame', 5),
+  ('frame-rainbow', 400, 'cosmetic', 'frame', 7)
+on conflict (id) do update
+  set price = excluded.price, kind = excluded.kind, slot = excluded.slot,
+      unlock_level = excluded.unlock_level;
+
+-- 商店只認這份清單。舊品項留在資料庫裡會變成「買得到但畫面上沒有」的鬼品項，
+-- 所以不在清單裡的一律刪掉。
+delete from public.shop_items where id not in ('slow-30', 'heal-5', 'crystal-40', 'color-red', 'color-yellow', 'color-purple', 'color-black', 'frame-gold', 'frame-ribbon', 'frame-crown', 'frame-rainbow');
+
+
+-- 關卡。**這一段是 tools/gen-levels-seed.mjs 從 src/data/levels.ts 產生的，不要手改。**
+-- min_correct 是「這一關至少要答對幾題才可能通關」，通關與星星由伺服器判定時要用。
+insert into public.levels (id, no, name, min_correct) values
+  ('td-01', 1, '數字島', 13),
+  ('td-02', 2, '顏色與身體', 15),
+  ('td-03', 3, '動物森林', 17),
+  ('td-04', 4, '食物與餐具', 24),
+  ('td-05', 5, '衣櫃魔王', 14),
+  ('td-06', 6, '我家', 15),
+  ('td-07', 7, '學校', 16),
+  ('td-08', 8, '出門去', 18),
+  ('td-09', 9, '運動與職業', 19),
+  ('td-10', 10, '暴風雨魔王', 18),
+  ('td-11', 11, '心情', 18),
+  ('td-12', 12, '動起來', 20),
+  ('td-13', 13, '時間之塔', 21),
+  ('td-14', 14, '最終試煉', 28)
+on conflict (id) do update
+  set no = excluded.no, name = excluded.name, min_correct = excluded.min_correct;
 
 commit;

@@ -40,3 +40,30 @@
 - **不要把音訊內嵌成 data URI**，當一般靜態檔案載入，瀏覽器才會快取。
 - **iOS Safari 在使用者互動前不准播聲音**，第一次播放必須綁在「開始」那一下，由音訊模組統一解鎖。
 - 教室預設值：**音效開、音樂關**，另給老師一個全班靜音開關。
+
+## 要轉檔的時候
+
+這個環境預設沒有 ffmpeg，而且**不要把它加進 package.json**——它是 77MB，
+每次 CI 部署都要多抓一次，只為了偶爾轉一次音檔不划算。要用的時候臨時裝：
+
+    npm i --no-save ffmpeg-static
+    FF=node_modules/ffmpeg-static/ffmpeg
+
+轉音樂（單聲道、80kbps，一分半的曲子大約 900KB）：
+
+    $FF -y -i 原檔.wav -ac 1 -c:a libvorbis -b:a 80k public/audio/music/名字.ogg
+
+轉音效（裁短、尾巴淡出、單聲道）：
+
+    $FF -y -i 原檔.ogg -t 3.4 -af "afade=t=out:st=2.9:d=0.5" -ac 1 -c:a libvorbis -b:a 96k public/audio/sfx/名字.ogg
+
+## 素材抓得到嗎
+
+2026-09-21 實測：**itch.io、kenney.nl、opengameart.org 現在都連得到**
+（以前是 403，所以之前的素材都是請 Chuck 下載後上傳的）。
+opengameart 可以直接抓檔，而且搜尋可以指定授權，是目前最省事的來源：
+
+    https://opengameart.org/art-search-advanced?keys=關鍵字&field_art_licenses_tid%5B%5D=4
+
+`field_art_licenses_tid[]=4` 就是 CC0。**本專案 repo 是公開的，所以只收 CC0
+或可散布的授權**，理由見 CREDITS.md 裡 Minifantasy 那一段。

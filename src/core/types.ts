@@ -78,6 +78,17 @@ export interface AnswerEvent extends AnswerReport {
   gameId: string
   /** 沒有關卡的遊戲（例如打地鼠）是 null */
   levelId: string | null
+  /**
+   * 這一題屬於哪一場。伺服器靠它把「這一場答對幾題」和「這一場通關了嗎」
+   * 兜在一起——星星是這樣算出來的，不是前端說了算。
+   */
+  sessionId: string
+  /**
+   * 這是這一場的第幾題。存在的理由只有一個：**同一題不可以被算兩次錢**。
+   * 結算失敗時人可以按重試，重試會把整場的答題再送一次；伺服器靠
+   * (學生, 這一場, 第幾題) 把重複的擋掉。見 supabase/schema.sql 的 submit_answers。
+   */
+  ord: number
   /** epoch 毫秒 */
   at: number
 }
@@ -141,14 +152,59 @@ export interface LevelData {
 // ---------------------------------------------------------------------------
 
 /** core 交給遊戲的東西。遊戲只看得到這些，不 import core。 */
+/**
+ * 對手在第 t 秒做了什麼。答錯也要記，不然看不出他其實在掙扎。
+ * 產生器在 core/opponent.ts。
+ */
+export interface Move {
+  /** 從開場算起第幾秒 */
+  t: number
+  correct: boolean
+  /** 答對時召喚出來的兵是第幾階；答錯是 null */
+  rank: number | null
+}
+
+/**
+ * 對戰的對手。
+ *
+ * **整個對戰模式的關鍵：對手是「一串照時間發生的答題」，不是「另一台連著線的裝置」。**
+ * 好友在線、好友的上一場紀錄、電腦、之後的跨班配對，四件事因此是同一套程式。
+ */
+export interface Opponent {
+  name: string
+  /** 電腦要老實寫出來。小孩被騙到會更不爽，而且輸給電腦不該記進戰績。 */
+  isBot: boolean
+  /** 到第 t 秒為止，對手做過的事（累計，可以重複問）。 */
+  movesUntil(t: number): Move[]
+}
+
 export interface GameContext {
   /** 沒有關卡的遊戲是 null */
   level: LevelData | null
-  /** 下一題。回傳 null 代表題庫用完了。 */
-  nextQuestion(): Question | null
+  /**
+   * 玩家的職業。遊戲拿它決定「答對之後那一發怎麼分配」，
+   * 不是拿來加傷害——見 data/jobs.ts 的說明。
+   * 用不到職業的遊戲（例如打地鼠）忽略它就好。
+   */
+  job: Job
+  /**
+   * 陣營顏色的美術後綴（例如 '_red'，預設藍色是空字串）。
+   * 這是裝飾品唯一會進到遊戲裡的東西，而且**只能改外觀，不准改數值**。
+   */
+  color: string
+  /**
+   * 下一題。回傳 null 代表題庫用完了。
+   *
+   * 不給題型就用遊戲自己的預設。**兵推要三種題型輪流用**（認字／聽音／拼字
+   * 各對應一條兵種線），所以這裡可以指定；容器會照題型各開一份出題器，
+   * 複習權重才不會混在一起。
+   */
+  nextQuestion(skill?: Skill): Question | null
   /** 唯一的回報管道 */
   report(r: AnswerReport): void
   audio: AudioBus
+  /** 對戰模式才有。單人遊戲是 null。 */
+  opponent: Opponent | null
   /** 遊戲自己決定什麼時候結束 */
   finish(outcome: GameOutcome): void
 }
@@ -165,6 +221,12 @@ export interface GameOutcome {
 export interface GameHandle {
   /** 離開畫面時要叫，停掉 requestAnimationFrame 與事件監聽 */
   destroy(): void
+  /**
+   * 用一個道具。容器管背包（有沒有、扣不扣），遊戲只管效果長什麼樣，
+   * 所以遊戲一樣碰不到金幣與存檔。回傳 false 代表現在用了會浪費，
+   * 容器就不要把道具扣掉。不吃道具的遊戲不用實作。
+   */
+  useItem?(itemId: string): boolean
   /**
    * 暫停／繼續。容器要跳確認框或設定選單時用——
    * 不暫停的話小朋友在讀「確定要離開嗎」的時候怪還在走，會莫名其妙掉血。
@@ -190,7 +252,10 @@ export interface GameModule {
 export type SfxName =
   | 'answer-correct' | 'answer-wrong' | 'volley' | 'enemy-hit' | 'enemy-die'
   | 'castle-hit' | 'tower-build' | 'tower-sell' | 'wave-start' | 'star'
-  | 'coin' | 'ui-tap' | 'explosion' | 'victory' | 'defeat'
+  | 'coin' | 'ui-tap' | 'explosion' | 'victory' | 'defeat' | 'battle-horn'
+
+/** 有哪幾首曲子。對戰才放音樂，關卡裡不放（一整班同時放會吵到老師）。 */
+export type MusicName = 'battle'
 
 export interface AudioBus {
   play(name: SfxName): void
@@ -198,6 +263,13 @@ export interface AudioBus {
   unlock(): void
   setSfxEnabled(on: boolean): void
   setMusicEnabled(on: boolean): void
+  /** 換一首，或傳 null 把音樂停掉。音樂總開關是關的時候這支什麼都不做。 */
+  playMusic(track: MusicName | null): void
+  /** 把音樂放快一點。對戰最後三十秒用它把節奏催起來。 */
+  setMusicRate(rate: number): void
+  /** 暫停／繼續，**不會從頭開始**。按「離開」在問你確定嗎的時候用。 */
+  pauseMusic(on: boolean): void
+  readonly isMusicOn: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -209,9 +281,49 @@ export type Role = 'student' | 'teacher'
 /** 學生只有班級代碼與暱稱，不收真實姓名與 email。 */
 export interface Student {
   id: string
-  classCode: string
+  /** 登入用的帳號，全站唯一。跟 nickname 是兩回事：nickname 可以改、可以跟別班的人重複。 */
+  loginId: string
+  /** 現在在哪一班。null＝還沒加入任何班級（例如朋友的小孩）。 */
+  classCode: string | null
   nickname: string
   role: Role
+}
+
+/** 老師或管理員。跟 Student 是兩種不同的身分，走不同的登入方式。 */
+export interface Staff {
+  userId: string
+  email: string
+  displayName: string
+  isAdmin: boolean
+}
+
+/** 老師看到的一個班。 */
+export interface ClassRoom {
+  code: string
+  name: string
+  open: boolean
+}
+
+/** 管理員看到的一位老師。 */
+export interface TeacherRow {
+  userId: string
+  displayName: string
+  isAdmin: boolean
+  active: boolean
+  classes: number
+  students: number
+}
+
+/** 管理員看到的一個班級：誰在帶、幾個人。 */
+export interface AdminClassRow {
+  code: string
+  name: string
+  open: boolean
+  /** 帶這一班的老師。班級是掛在代碼上的，換老師不會動到學生。 */
+  ownerId: string
+  ownerName: string
+  ownerActive: boolean
+  students: number
 }
 
 export type Job = 'knight' | 'mage'
@@ -219,6 +331,8 @@ export type Job = 'knight' | 'mage'
 export interface Character {
   studentId: string
   job: Job
+  /** 頭像 id。空字串代表還沒創角，登入後會被帶去創角畫面。 */
+  avatar: string
   exp: number
   coins: number
   /** 道具與裝飾品，key 是 item id，value 是數量 */

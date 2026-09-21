@@ -1,14 +1,15 @@
-import { CRYSTAL, FOCUS_MAX, FOCUS_STEP, TOWERS, refundOf } from '@/data/towers'
+import { CRYSTAL, FOCUS_MAX, FOCUS_STEP, SOLDIER_REACH, SOLDIER_SLOW, TOWERS, refundOf } from '@/data/towers'
+import { JOB_EFFECT } from '@/data/jobs'
 import type { GameContext, GameHandle, LevelData, Point, Word } from '@/core/types'
-import { loadArt } from './art'
+import { ART, TERRAIN_KEYS, loadArt, onArt } from './art'
+import { PLATE_RULES, layoutPlates as runPlateLayout, plateY } from './plates'
 
 const W = 1088
 const H = 576
 const TILE = 64
 const COLS = 17
 const PLATE_FONT = 'bold 17px system-ui, "Segoe UI", sans-serif'
-const PLATE_H = 28
-const TIER_GAP = 32
+const PLATE_H = PLATE_RULES.height
 const PRESS = 0.22
 
 /** 怪要完全走進畫面才算數。這一條是第一次試玩那個「狂點就得分」漏洞的修法。 */
@@ -24,6 +25,14 @@ const ANSWER_COOLDOWN = 0.3
 const SOLO_GRACE = 0.4
 /** 開場那一小隊怪彼此隔多遠，免得疊在同一格 */
 const LINE_SPACING = 95
+/**
+ * 寒霜陷阱持續幾秒。
+ *
+ * 本來寫的是「這一波」，但「這一波」沒有長度可以顯示，玩家看不出來它還在不在，
+ * 用起來就像沒發生。改成固定秒數，狀態列才有倒數可以看，也才變成一個
+ * 要抓時機的判斷（等怪擠成一團再按）。
+ */
+const SLOW_SECONDS = 15
 
 interface Enemy {
   word: Word
@@ -38,8 +47,14 @@ interface Enemy {
   frame: number
   blocked: boolean
   px: number
+  /** 牌子這一格該去的位置。px 是慢慢追過去的，不是直接跳過去——見 layoutPlates */
+  ptx: number
   pw: number
   tier: number
+  /** 進場後第一次排版：牌子要直接出現在本體上，不能從畫面左邊滑進來 */
+  laid: boolean
+  /** 低的那一層已經空了幾格，見 plates.ts */
+  hold: number
   press: number
   good: number
   bad: number
@@ -53,7 +68,20 @@ interface Enemy {
 interface Soldier { x: number; y: number; path: number; dist: number; hp: number; respawn: number }
 interface Tower { slot: number; kind: string; soldier: Soldier | null; builtAtWave: number }
 interface Pop { x: number; y: number; text: string; color: string; life: number }
-interface Ring { x: number; y: number; r: number; max: number; life: number; color: string }
+/** 播一次就結束的圖片特效（例如治療）。t 從 0 走到 dur。 */
+interface Fx { kind: string; x: number; y: number; t: number; dur: number; size: number }
+
+/**
+ * 身上正在生效的狀態。
+ *
+ * 本來寒霜陷阱的效果是「這一波」，結果是玩家完全看不出來它還在不在——
+ * 「這一波」沒有長度可以顯示。改成固定秒數之後才有倒數可以看，
+ * 而且變成一個要抓時機的判斷（等怪擠成一團再按），比開場就按掉有趣。
+ */
+interface Buff { id: string; icon: string; name: string; left: number; dur: number }
+
+/** 擴散出去的圈圈。dur 是它本來有多長命，畫的時候要靠它算擴散到哪了。 */
+interface Ring { x: number; y: number; r: number; max: number; life: number; dur: number; color: string }
 interface Shot { x0: number; y0: number; x1: number; y1: number; life: number }
 interface Spawn { hp: number; speed: number; art: string; path: number; boss: boolean; scale: number }
 
@@ -85,6 +113,7 @@ const SHELL = `
     <span class="td-qzh">準備防守</span>
     <span class="td-qhint">蓋好塔再開戰</span>
   </div>
+  <span class="td-buffs"></span>
   <button class="td-say" disabled aria-label="再念一次">🔊</button>
 </div>
 <div class="td-stage">
@@ -120,9 +149,13 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   const elGo = $<HTMLButtonElement>('.td-go')
   const elSell = $<HTMLButtonElement>('.td-sell')
   const elToast = $<HTMLElement>('.td-toast')
+  const elBuffs = $<HTMLElement>('.td-buffs')
 
-  let img: Record<string, HTMLImageElement> = {}
+  // 素材是一張一張進來的，ART 這個物件會就地長大，所以拿參考就好，不用重新指派。
+  const img = ART
   let terrain: HTMLCanvasElement | null = null
+  // 地形先畫在暫存畫布上再整張貼；地形用到的圖後到的話得把它作廢重畫。
+  const unArt = onArt((k) => { if (TERRAIN_KEYS.includes(k)) terrain = null })
   let raf = 0
   let dead = false
   let paused = false
@@ -150,8 +183,13 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     picked: 'archery',
     selected: null as number | null,
     hinted: false,
+    buffs: [] as Buff[],
+    fx: [] as Fx[],
     t: 0,
   }
+
+  /** 怪現在剩幾成速度。寒霜陷阱生效中就是三成慢。 */
+  const slowFactor = () => (S.buffs.some((b) => b.id === 'slow-30') ? 0.7 : 1)
 
   // ---------------------------------------------------------------- 工具
   function toast(msg: string) {
@@ -249,7 +287,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       word, path: s.path, dist: headStart, hp: s.hp, maxHp: s.hp, speed: s.speed,
       art: s.art, scale: s.scale, boss: s.boss,
       frame: Math.random() * 7, blocked: false,
-      px: 0, pw: 0, tier: 0, press: 0, good: 0, bad: 0, shake: 0,
+      px: 0, ptx: 0, pw: 0, tier: 0, laid: false, hold: 0, press: 0, good: 0, bad: 0, shake: 0,
       x: p.x, y: p.y, entered: false,
     })
   }
@@ -292,7 +330,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       buzz(14)
       ctx.audio.play('answer-correct')
       gainCrystals(CRYSTAL.perCorrect, e.x, e.y - 58)
-      S.rings.push({ x: e.x, y: e.y - 20, r: 16, max: 56, life: 0.42, color: '#ffe08a' })
+      S.rings.push({ x: e.x, y: e.y - 20, r: 16, max: 56, life: 0.42, dur: 0.42, color: '#ffe08a' })
       volley(e)
       speak(e.word.word)
     } else {
@@ -306,7 +344,13 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     syncUI()
   }
 
-  /** 齊射：射程涵蓋到這隻怪的塔全部打它一次，同時開火的塔越多傷害越高 */
+  /**
+   * 齊射：射程涵蓋到這隻怪的塔全部打它一次，同時開火的塔越多傷害越高。
+   *
+   * 職業在這裡進場，而且**只**在這裡進場：它改的是這一發怎麼分配，
+   * 不是玩家有多強（理由見 data/jobs.ts）。騎士把整發壓在被點到的那隻身上，
+   * 法師把同一發散到附近幾隻。塔的傷害、集火倍率、水晶收入都不受職業影響。
+   */
   function volley(e: Enemy) {
     const hits: Tower[] = []
     let base = 0
@@ -329,17 +373,97 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     ctx.audio.play('volley')
     const mult = 1 + FOCUS_STEP * Math.min(FOCUS_MAX, hits.length - 1)
     const total = Math.round(base * mult)
-    e.hp -= total
-    S.pops.push({ x: e.x + 18, y: e.y - 40, text: '-' + total, color: '#fff', life: 0.9 })
+    const job = JOB_EFFECT[ctx.job] ?? JOB_EFFECT.knight
+
+    // 主目標。騎士的專長寫在 bossBonus：打魔王特別痛，打小兵跟沒職業一樣。
+    const boss = e.boss ? job.bossBonus : 1
+    const main = Math.max(1, Math.round(total * job.focus * boss))
+    const dead: Enemy[] = []
+    e.hp -= main
+    S.pops.push({ x: e.x + 18, y: e.y - 40, text: '-' + main, color: '#fff', life: 0.9 })
     if (hits.length > 1)
       S.pops.push({ x: e.x + 18, y: e.y - 22, text: '集火 ×' + mult.toFixed(1), color: '#ffd05a', life: 1 })
-    if (e.hp <= 0) {
-      ctx.audio.play('enemy-die')
-      gainCrystals(e.boss ? CRYSTAL.perKill * 5 : CRYSTAL.perKill, e.x, e.y - 70)
-      killEnemy(e)
+    if (e.hp <= 0) dead.push(e)
+
+    // 濺射。只打已經進場的怪，近的先吃，最多 splashMax 隻——
+    // 不設上限的話後面幾關一發就清場，法師會變成唯一解。
+    if (job.splash > 0 && job.splashShare > 0) {
+      const near = S.enemies
+        .filter((o) => o !== e && o.entered)
+        .map((o) => ({ o, d: Math.hypot(o.x - e.x, o.y - e.y) }))
+        .filter((x) => x.d <= job.splash)
+        .sort((a, b) => a.d - b.d)
+        .slice(0, job.splashMax)
+      if (near.length) {
+        const dmg = Math.max(1, Math.round(total * job.splashShare))
+        S.rings.push({ x: e.x, y: e.y - 20, r: 20, max: job.splash, life: 0.5, dur: 0.5, color: '#9fd0ff' })
+        for (const { o } of near) {
+          o.hp -= dmg
+          o.shake = 0.25
+          S.pops.push({ x: o.x + 14, y: o.y - 34, text: '-' + dmg, color: '#9fd0ff', life: 0.8 })
+          if (o.hp <= 0) dead.push(o)
+        }
+      }
     }
-    else ctx.audio.play('enemy-hit')
+
+    if (dead.length) {
+      ctx.audio.play('enemy-die')
+      for (const d of dead) {
+        gainCrystals(d.boss ? CRYSTAL.perKill * 5 : CRYSTAL.perKill, d.x, d.y - 70)
+        killEnemy(d)
+      }
+    } else ctx.audio.play('enemy-hit')
     pickQuestion()
+  }
+
+  /**
+   * 用一個道具。
+   *
+   * 容器負責「有沒有這個道具、用掉之後要寫回哪裡」，遊戲只負責「效果長什麼樣」——
+   * 跟金幣一樣，遊戲碰不到背包，它只知道有人叫它做一件事。
+   * 回傳 false 代表現在用了會浪費（例如血是滿的），容器就不會把道具扣掉。
+   */
+  function useItem(id: string): boolean {
+    if (S.phase === 'done') return false
+    switch (id) {
+      case 'slow-30': {
+        if (S.phase !== 'battle') { toast('開戰之後才用得到，不然會浪費'); return false }
+        if (S.buffs.some((b) => b.id === id)) { toast('地面已經結霜了，等它退了再用'); return false }
+        S.buffs.push({ id, icon: '❄️', name: '寒霜', left: SLOW_SECONDS, dur: SLOW_SECONDS })
+        toast('地面結霜了，怪走得很慢')
+        // 從城堡往外掃一圈，讓人看得出來是整片地結霜，不是只有一個點
+        S.rings.push({ x: layout.castle.x - 200, y: (layout.land.r0 + layout.land.r1) * 32,
+          r: 20, max: 900, life: 1.1, dur: 1.1, color: '#9fd0ff' })
+        for (const e of S.enemies) {
+          S.rings.push({ x: e.x, y: e.y - 18, r: 6, max: 46, life: 0.55, dur: 0.55, color: '#bfe6ff' })
+          S.pops.push({ x: e.x, y: e.y - 52, text: '❄️', color: '#bfe6ff', life: 0.9 })
+        }
+        ctx.audio.play('explosion')
+        syncUI()
+        return true
+      }
+      case 'heal-5':
+        if (S.hp >= rules.castleHp) { toast('城堡是滿血的，留著下次用'); return false }
+        S.hp = Math.min(rules.castleHp, S.hp + 5)
+        toast('城牆補好了')
+        // 修士的治療特效，素材包裡本來就有（見 tools/build-td-art.py）
+        S.fx.push({ kind: 'heal', x: layout.castle.x - 6, y: layout.castle.y - 54, t: 0, dur: 0.9, size: 190 })
+        S.pops.push({ x: layout.castle.x - 40, y: layout.castle.y - 70, text: '+5 ❤️', color: '#9de8a0', life: 1.2 })
+        ctx.audio.play('tower-build')
+        syncUI()
+        return true
+      case 'crystal-40': {
+        // 一顆一顆冒出來，比一個 +40 有感
+        for (let i = 0; i < 8; i++)
+          S.pops.push({ x: layout.castle.x - 150 + Math.random() * 180,
+            y: layout.castle.y - 60 - Math.random() * 60, text: '💎', color: '#8fd8ff', life: 0.7 + i * 0.09 })
+        gainCrystals(40, layout.castle.x - 60, layout.castle.y - 110)
+        toast('補給到了，多蓋一座塔吧')
+        return true
+      }
+      default:
+        return false
+    }
   }
 
   function killEnemy(e: Enemy) {
@@ -384,17 +508,39 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     syncUI()
   }
 
+  /**
+   * 士兵要站在路的哪一點。
+   *
+   * 原本是「離軍營最近的路點」，結果士兵常常站在沒有任何箭塔罩得到的地方，
+   * 怪纏在那裡誰也打不到。這不是個案：魔王關八個塔位裡有五個是這種。
+   *
+   * 現在改成在軍營走得到的範圍內，挑**被最多箭塔罩到**的那一點，
+   * 一樣近的就挑離軍營近的。附近完全沒有箭塔罩得到（例如開場還沒蓋塔）
+   * 就退回最近的路點。士兵每次重生都會重算，所以後來才蓋的箭塔
+   * 會把士兵吸進火力網裡，玩家亂放也不會白放。
+   */
   function makeSoldier(slotIdx: number): Soldier {
     const s = SLOTS[slotIdx]
-    let best: { d: number; x: number; y: number; path: number; dist: number } | null = null
+    const archers = S.towers.filter((t) => t.kind === 'archery').map((t) => SLOTS[t.slot])
+    // 跟 data/levels.ts 的 volleyOf 用同一個判定，不然難度算出來的跟實際打到的會不一樣
+    const covered = (px: number, py: number) =>
+      archers.reduce((n, a) => n + (Math.hypot(a.x - px, a.y - 20 - (py - 22)) <= TOWERS.archery.range ? 1 : 0), 0)
+
+    type Spot = { score: number; d: number; x: number; y: number; path: number; dist: number }
+    const spots: Spot[] = []
     PATHS.forEach((pts, pi) => {
       for (let d = 0; d < PATH_LEN[pi]; d += 6) {
         const p = pointAt(pts, d)
-        const dd = Math.hypot(p.x - s.x, p.y - s.y)
-        if (!best || dd < best.d) best = { d: dd, x: p.x, y: p.y, path: pi, dist: d }
+        spots.push({
+          score: covered(p.x, p.y), d: Math.hypot(p.x - s.x, p.y - s.y),
+          x: p.x, y: p.y, path: pi, dist: d,
+        })
       }
     })
-    const b = best!
+    // 走得到而且真的有箭塔罩得到的點優先；一個都沒有就退回最近的點。
+    const reachable = spots.filter((sp) => sp.d <= SOLDIER_REACH && sp.score > 0)
+    const pool = reachable.length ? reachable : spots
+    const b = pool.reduce((a, c) => (c.score > a.score || (c.score === a.score && c.d < a.d) ? c : a))
     return { x: b.x, y: b.y, path: b.path, dist: b.dist, hp: TOWERS.barracks.soldierHp!, respawn: 0 }
   }
 
@@ -426,8 +572,12 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
           if (gap >= -4 && gap < TOWERS.barracks.blockRadius!) blocker = sd
         }
         e.blocked = !!blocker
+        // 士兵是「纏住」不是「擋死」。擋死會產生一個修不掉的壞情況：
+        // 卡點如果在所有箭塔的射程外，那隻怪就永遠停在那裡，誰也打不到牠。
+        // 拖慢之後怪再慢也一定會走進箭塔的範圍，那個壞情況就消失了，
+        // 而軍營原本的用處（替你爭取時間）完全保留。
         if (blocker) blocker.hp -= dt * 9
-        else e.dist += e.speed * dt
+        e.dist += e.speed * (blocker ? SOLDIER_SLOW : 1) * slowFactor() * dt
 
         const p = pointAt(PATHS[e.path], e.dist)
         e.x = p.x; e.y = p.y
@@ -464,6 +614,15 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       }
     }
 
+    // 狀態倒數。停在備戰畫面的時候不扣，不然玩家在蓋塔它就默默退光了。
+    if (S.phase === 'battle') {
+      for (const b of S.buffs) b.left -= dt
+      const before = S.buffs.length
+      S.buffs = S.buffs.filter((b) => b.left > 0)
+      if (S.buffs.length !== before) { toast('寒霜退了'); syncUI() }
+    }
+    S.fx = S.fx.filter((f) => (f.t += dt) < f.dur)
+
     S.shots = S.shots.filter((s) => (s.life -= dt) > 0)
     S.pops = S.pops.filter((p) => { p.life -= dt; p.y -= dt * 22; return p.life > 0 })
     S.rings = S.rings.filter((r) => (r.life -= dt) > 0)
@@ -485,36 +644,13 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   // ---------------------------------------------------------------- 字牌排版
+  // 規則本身在 plates.ts（純幾何，量得出來），這裡只負責量字寬和挑出該排的怪。
   function layoutPlates() {
     c2d.font = PLATE_FONT
-    for (const e of S.enemies) {
-      e.pw = Math.max(58, c2d.measureText(e.word.word).width + 24)
-      e.px = e.x
-      e.tier = 0
-    }
-    for (let lane = 0; lane < PATHS.length; lane++) {
-      const list = S.enemies.filter((e) => e.path === lane && e.entered).sort((a, b) => a.x - b.x)
-      for (let pass = 0; pass < 6; pass++) {
-        for (let i = 1; i < list.length; i++) {
-          const a = list[i - 1], b = list[i]
-          const need = (a.pw + b.pw) / 2 + 6
-          const gap = b.px - a.px
-          if (gap < need) { const push = (need - gap) / 2; a.px -= push; b.px += push }
-        }
-        for (const e of list) {
-          // 不能離本體太遠，也不能超出畫布——兩個夾限的順序很重要，
-          // 反過來的話牌子會被拉進畫面裡，變成本體還沒出現就看得到答案
-          e.px = Math.max(e.pw / 2 + 3, Math.min(W - e.pw / 2 - 3, e.px))
-          e.px = Math.max(e.x - 46, Math.min(e.x + 46, e.px))
-        }
-      }
-      for (let j = 1; j < list.length; j++) {
-        const p = list[j - 1], q = list[j]
-        if (q.px - p.px < (p.pw + q.pw) / 2) q.tier = (p.tier + 1) % 3
-      }
-    }
+    const list = S.enemies.filter((e) => e.entered)
+    for (const e of list) e.pw = Math.max(58, c2d.measureText(e.word.word).width + 24)
+    runPlateLayout(list, PLATE_RULES)
   }
-  const plateY = (e: Enemy) => e.y + 4 + e.tier * TIER_GAP
 
   // ---------------------------------------------------------------- 畫面
   function roundRect(x: number, y: number, w: number, h: number, r: number) {
@@ -579,12 +715,33 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     c2d.fillStyle = color; c2d.fillRect(x, y, Math.max(0, w * pct), h)
   }
 
+  /**
+   * 地圖還沒下載完的時候畫這個。以前這裡只是一塊純綠色，看起來就像壞掉的地圖，
+   * 小朋友會以為關卡本來就長這樣；寫一句話出來才知道是在等。
+   */
+  function drawLoadingField() {
+    c2d.fillStyle = '#6ea84f'; c2d.fillRect(0, 0, W, H)
+    c2d.save()
+    // 蓋塔位的虛線圈也畫在這片綠色上，字直接寫上去會跟它們糊在一起，
+    // 所以墊一塊深色底再寫。
+    c2d.font = 'bold 30px system-ui, sans-serif'
+    c2d.textAlign = 'center'; c2d.textBaseline = 'middle'
+    const t = '地圖載入中…'
+    const w = c2d.measureText(t).width + 56
+    c2d.fillStyle = 'rgba(20,30,20,.6)'
+    roundRect(W / 2 - w / 2, H / 2 - 27, w, 54, 27); c2d.fill()
+    c2d.fillStyle = '#fff'
+    c2d.fillText(t, W / 2, H / 2 + 1)
+    c2d.restore()
+  }
+
   function draw() {
-    if (!terrain && img.tiles?.complete) buildTerrain()
+    if (!terrain && img.tiles) buildTerrain()
     if (terrain) c2d.drawImage(terrain, 0, 0)
-    else { c2d.fillStyle = '#6ea84f'; c2d.fillRect(0, 0, W, H) }
+    else drawLoadingField()
 
     if (S.phase === 'build') drawBuildHints()
+    drawFrost() // 地面那一層要壓在人和塔底下，所以畫在排序之前
 
     // 所有站在地上的東西照「腳下的 y」由遠到近排，遮擋關係才會對
     const scene: { y: number; f: () => void }[] = []
@@ -606,10 +763,22 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       c2d.beginPath(); c2d.moveTo(s.x0, s.y0); c2d.lineTo(s.x1, s.y1); c2d.stroke()
     }
     for (const r of S.rings) {
-      const t = 1 - r.life / 0.42
+      // 本來這裡寫死 0.42（當時只有一種圈圈），命長一點的圈圈會算出負的半徑，
+      // canvas 直接丟例外，整個遊戲畫面就停在那裡。改成用它自己的 dur。
+      const t = 1 - r.life / r.dur
       c2d.strokeStyle = r.color; c2d.globalAlpha = (1 - t) * 0.9; c2d.lineWidth = 4
       c2d.beginPath(); c2d.arc(r.x, r.y, r.r + (r.max - r.r) * t, 0, 7); c2d.stroke()
       c2d.globalAlpha = 1
+    }
+    // 一次性的圖片特效。治療用的是素材包裡修士的 Heal_Effect，11 格。
+    for (const f of S.fx) {
+      const im = img[f.kind]
+      if (!im?.complete) continue
+      const frames = Math.max(1, Math.round(im.width / im.height))
+      const k = Math.min(frames - 1, Math.floor((f.t / f.dur) * frames))
+      const cell = im.width / frames
+      c2d.drawImage(im, k * cell, 0, cell, im.height,
+        f.x - f.size / 2, f.y - f.size / 2, f.size, f.size)
     }
     for (const p of S.pops) {
       c2d.globalAlpha = Math.min(1, p.life)
@@ -657,26 +826,58 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     c2d.drawImage(im, d.x - im.width / 2, d.y - im.height, im.width, im.height)
   }
 
+  /**
+   * 拿這個陣營顏色的圖。素材包每一棟建築和每一個兵都有五色，
+   * 藍色是預設所以鍵名不帶後綴。沒有那一色就退回藍色，畫面不會空掉。
+   */
+  function art(key: string): HTMLImageElement | undefined {
+    return img[key + ctx.color] ?? img[key]
+  }
+
   function drawCastle() {
-    const im = img.castle
+    const im = art('castle')
     if (!im?.complete) return
     shadow(layout.castle.x, layout.castle.y - 6, 62)
     c2d.drawImage(im, layout.castle.x - 75, layout.castle.y - 120, 150, 120)
   }
 
   function drawTower(t: Tower, s: Point) {
-    const im = img[t.kind]
+    const im = art(t.kind)
     if (!im?.complete) return
     shadow(s.x, s.y - 4, 34)
     c2d.drawImage(im, s.x - 39, s.y - 102, 78, 104)
   }
 
   function drawSoldier(sd: Soldier) {
-    if (img.warrior?.complete) {
+    const w = art('warrior')
+    if (w?.complete) {
       shadow(sd.x, sd.y + 2, 20)
-      c2d.drawImage(img.warrior, sd.x - 42, sd.y - 63, 84, 84)
+      c2d.drawImage(w, sd.x - 42, sd.y - 63, 84, 84)
     }
     bar(sd.x - 19, sd.y - 48, 38, 5, sd.hp / TOWERS.barracks.soldierHp!, '#6fbf4a')
+  }
+
+  /**
+   * 結霜的視覺。道具的問題不是效果不夠強，是**看不出來它在生效**，
+   * 所以這裡分三層：整片地面偏藍、每隻怪身上一層霜、頭上一片雪花。
+   */
+  function drawFrost() {
+    if (!S.buffs.some((b) => b.id === 'slow-30')) return
+    const y0 = layout.land.r0 * 64, y1 = layout.land.r1 * 64 + 64
+    c2d.save()
+    // 淡淡的藍在綠色草地上幾乎看不出來，小朋友要一眼看得出「地上結霜了」，
+    // 所以這裡刻意上得比較重。
+    c2d.globalAlpha = 0.3
+    c2d.fillStyle = '#9fd0ff'
+    c2d.fillRect(0, y0, W, y1 - y0)
+    c2d.globalAlpha = 0.8
+    c2d.strokeStyle = '#eaf7ff'; c2d.lineWidth = 2.5
+    // 沿著上下緣畫一排冰稜，一眼看得出這一片是結霜的範圍
+    for (let x = 8; x < W; x += 34) {
+      c2d.beginPath(); c2d.moveTo(x, y0); c2d.lineTo(x + 8, y0 + 11); c2d.lineTo(x + 16, y0); c2d.stroke()
+      c2d.beginPath(); c2d.moveTo(x, y1); c2d.lineTo(x + 8, y1 - 11); c2d.lineTo(x + 16, y1); c2d.stroke()
+    }
+    c2d.restore()
   }
 
   function drawEnemy(e: Enemy) {
@@ -693,6 +894,14 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       c2d.fillStyle = '#d43c32'
       c2d.beginPath(); c2d.ellipse(e.x + sh, e.y - 20, 26, 28, 0, 0, 7); c2d.fill()
       c2d.globalAlpha = 1
+    }
+    if (S.buffs.some((b) => b.id === 'slow-30')) {
+      c2d.globalAlpha = 0.38
+      c2d.fillStyle = '#9fd0ff'
+      c2d.beginPath(); c2d.ellipse(e.x + sh, e.y - 22, 24, 27, 0, 0, 7); c2d.fill()
+      c2d.globalAlpha = 1
+      c2d.font = '13px system-ui, sans-serif'; c2d.textAlign = 'center'
+      c2d.fillText('❄️', e.x + sh, e.y - 56)
     }
     c2d.restore()
     bar(e.x + sh - 22 * e.scale, e.y - 46 * e.scale, 44 * e.scale, 5, e.hp / e.maxHp, e.boss ? '#ff7a3c' : '#d4504a')
@@ -748,6 +957,22 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     }
   }
 
+  /**
+   * 狀態列：正在生效的道具效果 ＋ 倒數條。
+   *
+   * 每一格都重畫太浪費，所以只在顯示出來的秒數變了才重建 DOM。
+   */
+  let buffSig = ''
+  function syncBuffs() {
+    const sig = S.buffs.map((b) => b.id + ':' + Math.ceil(b.left)).join(',')
+    if (sig === buffSig) return
+    buffSig = sig
+    elBuffs.innerHTML = S.buffs
+      .map((b) => `<span class="td-buff"><i>${b.icon}</i>${b.name}<b>${Math.ceil(b.left)}s</b>`
+        + `<u style="width:${Math.max(0, Math.min(100, (b.left / b.dur) * 100)).toFixed(1)}%"></u></span>`)
+      .join('')
+  }
+
   function syncQuiz() {
     if (S.target) {
       elEmoji.textContent = S.target.word.emoji
@@ -792,7 +1017,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     if (S.phase === 'battle') {
       const hit = pickHit(x, y)
       if (hit) tapEnemy(hit)
-      else S.rings.push({ x, y, r: 6, max: 30, life: 0.3, color: 'rgba(255,255,255,.7)' })
+      else S.rings.push({ x, y, r: 6, max: 30, life: 0.3, dur: 0.3, color: 'rgba(255,255,255,.7)' })
       return
     }
     for (let i = 0; i < SLOTS.length; i++) {
@@ -819,22 +1044,27 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
 
   // ---------------------------------------------------------------- 主迴圈
   let last = performance.now()
+  let artKick = last
   function loop(now: number) {
     if (dead) return
     const dt = Math.min(0.05, (now - last) / 1000)
     last = now
     if (S.phase !== 'done' && !paused) update(dt)
+    // 地圖的圖還沒到就每三秒再敲一次。loadArt 正在跑就跟著同一趟，
+    // 上一趟放棄了才會重開，所以在關卡裡也救得回來，不用退出去重進。
+    if (!img.tiles && now - artKick > 3000) { artKick = now; void loadArt() }
+    syncBuffs()
     draw()
     raf = requestAnimationFrame(loop)
   }
 
-  void loadArt().then((a) => { img = a })
+  void loadArt()
 
   // 開發模式下把內部狀態開出來，自動測試才驗得到難度曲線與出題漏洞。
   // 正式版 build 會整段消失（import.meta.env.DEV 在 production 是 false）。
   if (import.meta.env.DEV) {
     ;(window as unknown as { __td?: unknown }).__td = {
-      S, SLOTS, level, tapEnemy, tapSlot, sellSelected, startWave,
+      S, SLOTS, level, tapEnemy, tapSlot, sellSelected, startWave, useItem,
     }
   }
 
@@ -842,6 +1072,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   raf = requestAnimationFrame(loop)
 
   return {
+    useItem,
     setPaused(on: boolean) {
       paused = on
       // 暫停期間時間會一直走，恢復時把 last 拉回來，不然會一口氣補一大格
@@ -849,6 +1080,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     },
     destroy() {
       dead = true
+      unArt()
       cancelAnimationFrame(raf)
       cv.removeEventListener('pointerdown', onPointerDown)
       try { speechSynthesis.cancel() } catch { /* 有些瀏覽器沒有 */ }

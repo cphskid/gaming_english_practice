@@ -57,6 +57,11 @@ export interface SessionOptions {
 }
 
 export class Session {
+  /**
+   * 這一場的 id。跟著每一題送到伺服器，伺服器就能自己數這一場答對幾題，
+   * 不用相信前端回報的星星（見 supabase/schema.sql 的 save_progress）。
+   */
+  readonly id: string = newSessionId()
   readonly mode: Mode
   readonly gameId: string
   readonly level: LevelData | null
@@ -106,6 +111,8 @@ export class Session {
       studentId,
       gameId: this.gameId,
       levelId: this.level?.id ?? null,
+      sessionId: this.id,
+      ord: this.events.length,
       at: Date.now(),
     }
     this.events.push(event)
@@ -165,4 +172,12 @@ export class Session {
       bonusCoins,
     }
   }
+}
+
+/** 舊的瀏覽器沒有 randomUUID（非 https 的環境也沒有），退一步也要有個 id。 */
+function newSessionId(): string {
+  const c = globalThis.crypto
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID()
+  const hex = (n: number) => Math.floor(Math.random() * 16 ** n).toString(16).padStart(n, '0')
+  return `${hex(8)}-${hex(4)}-4${hex(3)}-a${hex(3)}-${hex(12)}`
 }

@@ -8,8 +8,22 @@ html,body,#root{height:100%;margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--font);overflow:hidden;user-select:none}
 button{font-family:inherit}
 
-.screen{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+/*
+  safe center：內容比畫面高的時候「置中」會把超出去的那一段推到上緣外面，
+  而且捲不回來——手機橫拿開登入畫面，最上面的「我有帳號／第一次來」
+  兩個分頁就是這樣整排消失的（跟之前那次「看不到建立帳號的按鈕」同一類問題）。
+  safe 會在放不下的時候自動退回靠上排。不支援的瀏覽器會整條忽略，
+  那也是靠上排，一樣不會被切掉。
+*/
+.screen{height:100%;display:flex;flex-direction:column;align-items:center;
+  justify-content:safe center;
   gap:18px;padding:24px 20px;overflow-y:auto}
+/*
+  直向排版的東西不准被壓扁。flex 的直欄預設 flex-shrink:1，畫面一矮
+  （手機橫拿只有 390px）就會把分頁列、表單一起壓成一半高，按鈕變成
+  按不到的細條。這一行是整個選單畫面在矮螢幕上不壞掉的關鍵。
+*/
+.screen>*{flex:none}
 .screen h1{font-size:28px;margin:0;text-align:center}
 .screen p.lede{margin:0;color:var(--muted);font-size:14px;text-align:center;max-width:36ch;line-height:1.8}
 
@@ -27,7 +41,8 @@ button{font-family:inherit}
 .form input:focus{outline:2px solid var(--gold);outline-offset:1px}
 
 /* 選關 */
-.topbar{display:flex;align-items:center;gap:12px;width:100%;max-width:880px;flex:none}
+.topbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;
+  width:100%;max-width:880px;flex:none}
 .topbar .who{font-weight:800}
 .topbar .spacer{flex:1}
 .topbar .stat{font-size:14px;color:var(--gold);font-weight:700}
@@ -44,8 +59,18 @@ button{font-family:inherit}
 .lv .lock{position:absolute;top:10px;right:11px;font-size:14px}
 
 /* 遊戲 */
-.play{height:100%;display:flex;flex-direction:column;padding:6px;gap:6px}
-.td-hud{display:flex;align-items:center;gap:10px;padding:5px 10px;flex:none;
+/*
+  上面那一條刻意讓「離開列」與「狀態列」排在同一行：手機橫拿只有 390px 高，
+  兩條各自佔一行等於把戰場吃掉三分之一。
+  用 grid 排（不是 flex-wrap）：第二列要吃掉剩下的高度，wrap 出來的那一行
+  只會長到內容那麼高，畫布就會撐出畫面外。
+  離開列與狀態列是兩個不同來源的元素（一個 React、一個遊戲自己的 DOM），
+  中間那層 display:contents 讓它們直接變成這個 grid 的格子。
+*/
+.play{height:100%;display:grid;grid-template-columns:auto minmax(0,1fr);
+  grid-template-rows:auto minmax(0,1fr);padding:6px;gap:6px}
+.leavebar{grid-column:1;grid-row:1}
+.td-hud{grid-column:2;grid-row:1;display:flex;align-items:center;gap:10px;padding:5px 10px;min-width:0;
   background:var(--panel);border:3px solid var(--line);border-radius:12px}
 .td-stat{font-weight:800;font-size:15px;white-space:nowrap}
 .td-hp{color:var(--blood)} .td-coin{color:var(--gold)}
@@ -54,28 +79,79 @@ button{font-family:inherit}
 .td-qemoji{font-size:26px;line-height:1;flex:none}
 .td-qzh{font-size:21px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .td-qhint{font-size:12px;color:var(--muted);white-space:nowrap;flex:none}
+/* 生效中的道具效果 ＋ 倒數條。看得到還剩幾秒，道具才有「正在發生」的感覺。 */
+.td-buffs{display:flex;gap:6px;flex:none}
+.td-buff{position:relative;display:flex;align-items:center;gap:4px;overflow:hidden;
+  background:#1b2f3d;border:2px solid #3e6b86;border-radius:8px;padding:3px 8px;
+  font-size:12px;font-weight:700;white-space:nowrap}
+.td-buff i{font-style:normal}
+.td-buff b{color:#bfe6ff}
+.td-buff u{position:absolute;left:0;bottom:0;height:3px;background:#7fd0ff;text-decoration:none}
+
 .td-say{border:none;background:var(--sky);color:#fff;border-radius:9px;width:38px;height:34px;
   font-size:17px;cursor:pointer;flex:none}
 .td-say:disabled{opacity:.35}
-.td-stage{flex:1;position:relative;display:flex;align-items:center;justify-content:center;min-height:0;
-  background:var(--sea);border-radius:10px}
-.td-cv{max-width:100%;max-height:100%;image-rendering:pixelated;border-radius:10px;
+/*
+  戰場：左邊畫布、右邊蓋塔面板。
+  畫布一定要 min-width:0，不然它縮不下去（canvas 的 min-content 就是原寬 1088），
+  面板會被擠出畫面外——桌機上就是這樣，面板整個看不到。
+  也不能用 object-fit 來塞：那樣元素的框會比畫出來的圖大，
+  點擊座標換算（用 getBoundingClientRect）就全部偏掉，點怪會點不準。
+*/
+.td-stage{grid-column:1 / -1;grid-row:2;position:relative;display:flex;align-items:center;
+  justify-content:center;gap:8px;min-height:0;background:var(--sea);border-radius:10px}
+.td-cv{max-width:100%;max-height:100%;min-width:0;min-height:0;
+  image-rendering:pixelated;border-radius:10px;
   touch-action:manipulation;display:block}
-.td-tray{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);display:flex;
-  align-items:stretch;gap:8px;padding:7px;z-index:3;max-width:96%;flex-wrap:wrap;justify-content:center;
+/*
+  蓋塔的那一排放在戰場**旁邊**，不是蓋在戰場上。
+  本來它是絕對定位在下緣正中間，手機橫拿時整片壓在下半排的塔位上，
+  要蓋塔得先把面板當障礙物繞過去。現在它是排在畫布右邊的一欄：
+  畫布在手機上是被高度卡住的（16:9 比較扁），左右本來就有留白，
+  這一欄剛好放得進去，畫布不會因此縮小。
+*/
+.td-tray{display:flex;flex-direction:column;justify-content:center;gap:7px;padding:7px;
+  flex:none;width:158px;max-height:100%;overflow:auto;
   background:var(--panel);border:3px solid var(--line);border-radius:12px}
-.td-tray[hidden]{display:none}
+/*
+  開戰時把它藏起來但**位子留著**（visibility 而不是 display）。
+  拿掉位子的話，螢幕窄一點的手機畫布會在開戰那一瞬間變大，
+  怪和塔全部跳位置，正在瞄的那一隻就跑掉了。
+*/
+.td-tray[hidden]{visibility:hidden}
 .td-card{background:var(--panel2);border:2px solid var(--line);border-radius:9px;padding:6px 9px;
-  cursor:pointer;text-align:left;color:inherit;white-space:nowrap}
+  cursor:pointer;text-align:left;color:inherit}
 .td-card.td-sel{border-color:var(--gold);background:#5d4832}
 .td-card b{display:block;font-size:14px}
-.td-card span{font-size:11px;color:var(--muted);display:block;margin-top:1px}
+.td-card span{font-size:11px;color:var(--muted);display:block;margin-top:1px;line-height:1.35}
 .td-card i{font-style:normal;color:var(--gold);font-weight:700}
 .td-btn{border:none;border-radius:10px;padding:8px 18px;font-size:15px;font-weight:800;color:#fff;
   background:var(--leaf);cursor:pointer;box-shadow:0 3px 0 #4c8a33}
 .td-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #4c8a33}
 .td-sell{background:var(--blood);box-shadow:0 3px 0 #8d302a}
 .td-sell:active{box-shadow:0 1px 0 #8d302a}
+/*
+  兵推底下那一排：換兵種與升階。
+
+  **跟守塔的道具列一樣放在畫布旁邊的一欄，不是蓋在戰場上。**
+  理由同上——手機橫拿的時候畫布是被高度卡住的，左右本來就有留白，
+  放在那裡不會壓到任何一隻點得到的兵。蓋在下緣的話，最前線的兵
+  剛好就在那一帶，等於把最常點的區域蓋掉。
+
+  每個鈕至少 44px 高：Chuck 都用手機直接玩，比這小的鈕大拇指按不準。
+*/
+.tw-bar{display:flex;flex-direction:column;justify-content:center;gap:6px;padding:7px;
+  flex:none;width:96px;max-height:100%;
+  background:var(--panel);border:3px solid var(--line);border-radius:12px}
+.tw-line,.tw-up{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  min-height:46px;border:2px solid var(--line);border-radius:10px;background:var(--panel2);
+  color:inherit;font-size:17px;cursor:pointer;padding:4px 2px}
+.tw-line b,.tw-up b{font-size:12px;font-weight:800}
+.tw-line.on{border-color:var(--gold);background:#5d4832}
+.tw-up{background:var(--leaf);border-color:#4c8a33}
+.tw-up i{font-style:normal;font-size:11px;color:#fff;opacity:.9}
+.tw-up:disabled{background:var(--panel2);border-color:var(--line);opacity:.5;cursor:default}
+.tw-crystal{text-align:center;font-size:12px;font-weight:800;color:var(--gold)}
 .td-toast{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(18,28,16,.92);
   padding:6px 15px;border-radius:99px;font-size:13px;font-weight:700;opacity:0;transition:.25s;
   pointer-events:none;z-index:4;white-space:nowrap}
@@ -106,6 +182,7 @@ button{font-family:inherit}
   justify-content:center;gap:12px;text-align:center;padding:30px;font-size:16px;line-height:1.8;
   background:rgba(18,28,16,.94);cursor:pointer}
 @media (orientation:portrait) and (max-width:820px){ .rotate:not(.off){display:flex} }
+
 @media (prefers-reduced-motion:reduce){ .btn:active,.td-btn:active{transform:none} .td-toast{transition-duration:.01ms} }
 
 /* 離開列：屬於容器，不屬於遊戲，所以每個遊戲都自動有 */
@@ -114,6 +191,15 @@ button{font-family:inherit}
   border-radius:8px;padding:4px 12px;font-size:13px;font-weight:700;cursor:pointer}
 .leave:active{transform:translateY(1px)}
 .leavebar-name{font-size:12.5px;color:var(--muted)}
+/* 道具列：擠在上面那一條，戰場一格都不讓出去。多到放不下就自己橫著捲。 */
+.bagbar{margin-left:auto;display:flex;gap:6px;overflow-x:auto;max-width:56%}
+.bagitem{flex:none;display:flex;align-items:center;gap:4px;
+  background:#1d2a1c;border:2px solid var(--line);color:var(--ink);
+  border-radius:8px;padding:4px 9px;font-family:inherit;font-size:12px;font-weight:700;
+  white-space:nowrap;cursor:pointer}
+.bagitem .ic{font-size:14px;line-height:1}
+.bagitem b{margin-left:5px;color:#ffd05a}
+.bagitem:active{transform:translateY(1px)}
 
 .confirm{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;
   background:rgba(12,18,12,.8);padding:20px}
@@ -122,3 +208,237 @@ button{font-family:inherit}
 .confirm-box h2{margin:0;font-size:19px}
 .confirm-box p{margin:0;font-size:14px;color:var(--muted);line-height:1.8}
 .confirm-btns{display:flex;gap:10px;justify-content:center}
+
+/* 結算中。蓋在戰場上面，z-index 要比離開鍵那一條高，不然按得到它。 */
+.settling{z-index:40}
+.dots{display:flex;gap:8px;justify-content:center}
+.dots i{width:9px;height:9px;border-radius:50%;background:var(--gold);
+  animation:dot 1s infinite ease-in-out}
+.dots i:nth-child(2){animation-delay:.16s}
+.dots i:nth-child(3){animation-delay:.32s}
+@keyframes dot{0%,80%,100%{opacity:.25;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.dots i{animation:none;opacity:.6}}
+
+/* 帳號、老師後台、管理員後台 */
+.screen.wide{justify-content:flex-start}
+.screen h2{font-size:18px;margin:0}
+.screen p.lede.left{text-align:left;max-width:none}
+.screen p.lede.small{font-size:12.5px}
+
+.tabs{display:flex;gap:0;border:2px solid var(--line);border-radius:10px;overflow:hidden}
+.tabs button{border:none;background:transparent;color:var(--muted);font-family:inherit;
+  font-size:14px;font-weight:700;padding:9px 18px;cursor:pointer}
+.tabs button.on{background:var(--line);color:var(--ink)}
+
+.btn.small{padding:7px 13px;font-size:13.5px}
+
+/* 錯誤要顯眼：小朋友打錯密碼時看不到提示就只會一直按 */
+.error{margin:0;color:#ffb4ad;background:#4a241f;border:2px solid #7d3a31;
+  border-radius:9px;padding:9px 13px;font-size:14px;max-width:340px;line-height:1.6}
+.note{margin:0;color:#c7e6a8;background:#2c3a22;border:2px solid #4c6b37;
+  border-radius:9px;padding:9px 13px;font-size:14px;max-width:340px;line-height:1.6}
+
+.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap;width:100%;max-width:880px}
+.row input{flex:1;min-width:130px;padding:9px 12px;font-size:15px;border-radius:9px;
+  border:2px solid var(--line);background:#2b2118;color:var(--ink);font-family:inherit}
+
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.chips button{border:2px solid var(--line);background:var(--panel2);color:var(--muted);
+  font-family:inherit;font-size:14px;font-weight:700;padding:7px 14px;border-radius:9px;cursor:pointer}
+.chips button.on{border-color:var(--gold);color:var(--ink)}
+
+/* 班級代碼要大，老師要在黑板上抄它 */
+.codebox{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:8px 0}
+.codebox .code{font-size:30px;font-weight:800;letter-spacing:4px;color:var(--gold);
+  background:var(--panel2);border:3px solid var(--line);border-radius:12px;padding:8px 18px}
+.codebox .lede{margin:0;color:var(--muted);font-size:13px;max-width:30ch;line-height:1.7}
+
+.roster{display:flex;flex-direction:column;gap:7px;width:100%;max-width:880px}
+.roster .r{display:flex;align-items:center;gap:11px;flex-wrap:wrap;
+  background:var(--panel2);border:2px solid var(--line);border-radius:10px;padding:9px 13px}
+.roster .r .n{font-weight:800;min-width:6em}
+.roster .r .n small{color:var(--gold);font-weight:700}
+.roster .r .s{flex:1;color:var(--muted);font-size:13px}
+/* 管理員那頁的「這一班交給誰」。手機上點得到，所以留 44px */
+.roster .r select{min-height:40px;padding:7px 10px;border-radius:9px;
+  border:2px solid var(--line);background:#2b2118;color:var(--ink);
+  font-family:inherit;font-size:14px;font-weight:700}
+.roster .r select:disabled{opacity:.5}
+
+.teacher{width:100%;max-width:880px;display:flex;flex-direction:column;gap:14px}
+
+/* ── 創角、商店、背包 ─────────────────────────────────────────────
+   手機直拿是主要情境（帶班用的是平板和手機），所以寬度一律吃滿、
+   點得到的東西都留 44px 以上。 */
+.screen h2.sec{font-size:17px;margin:6px 0 0;color:var(--gold);align-self:flex-start}
+.screen .btn.big{font-size:18px;padding:14px 30px;width:100%;max-width:360px}
+
+.jobs{display:flex;gap:12px;width:100%;max-width:520px}
+.job{flex:1;display:flex;flex-direction:column;gap:6px;text-align:left;cursor:pointer;
+  background:var(--panel);border:3px solid var(--line);border-radius:14px;
+  padding:14px;color:var(--ink);font-family:inherit}
+.job.on{border-color:var(--gold);background:var(--panel2)}
+.job-name{font-size:18px;font-weight:800}
+.job-blurb{font-size:13px;color:var(--muted);line-height:1.7}
+
+.avatars{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;width:100%;max-width:520px}
+.av{padding:0;border:3px solid var(--line);border-radius:12px;background:var(--panel);
+  cursor:pointer;aspect-ratio:1;overflow:hidden}
+.av.on{border-color:var(--gold);background:var(--panel2)}
+.av img{width:100%;height:100%;object-fit:cover;image-rendering:pixelated;display:block}
+
+/* 頭像與外框。外框都是 CSS 畫的，換尺寸不會糊，也不用為 25 張頭像各畫一套。 */
+.mugbox{position:relative;flex:none;display:inline-block;border-radius:9px;
+  border:2px solid var(--line);background:var(--panel2);box-sizing:border-box}
+.mugbox img{width:100%;height:100%;display:block;border-radius:7px;
+  object-fit:cover;image-rendering:pixelated}
+.mugbadge{position:absolute;left:50%;top:-52%;transform:translateX(-50%);
+  line-height:1;filter:drop-shadow(0 1px 1px rgba(0,0,0,.6));pointer-events:none}
+.mugbox.f-gold{border-color:var(--gold);box-shadow:0 0 0 1px #6b5220, 0 0 9px rgba(255,208,90,.5)}
+.mugbox.f-crown{border-color:var(--gold);box-shadow:0 0 0 1px #6b5220, 0 0 9px rgba(255,208,90,.5)}
+.mugbox.f-ribbon{border-color:#b89a3e}
+.mugbox.f-ribbon::after{content:'';position:absolute;left:50%;bottom:-62%;width:60%;height:66%;
+  transform:translateX(-50%);background:url(./ribbon.png) center/contain no-repeat;
+  image-rendering:pixelated;pointer-events:none}
+.mugbox.f-rainbow{border-color:transparent;background-clip:padding-box}
+.mugbox.f-rainbow::before{content:'';position:absolute;inset:-2px;border-radius:9px;z-index:-1;
+  background:conic-gradient(#ff6b6b,#ffd05a,#6fbf4a,#57c7d4,#8b5cc7,#ff6b6b);
+  animation:spinhue 3.5s linear infinite}
+@keyframes spinhue{to{filter:hue-rotate(360deg)}}
+
+.topbar .mug,.topbar .mugbox{width:36px;height:36px;border-radius:9px;border:2px solid var(--line);
+  object-fit:cover;image-rendering:pixelated;flex:none}
+.topbar .coins{font-weight:800;color:var(--gold)}
+
+.items{display:flex;flex-direction:column;gap:10px;width:100%;max-width:520px}
+.item{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;
+  background:var(--panel);border:3px solid var(--line);border-radius:14px;padding:12px 14px}
+.item.locked{opacity:.55}
+.item .i-name{font-weight:800;font-size:16px}
+.item .i-desc{grid-column:1;font-size:13px;color:var(--muted);line-height:1.6}
+.item .i-tag{grid-column:1;font-size:12px;color:var(--muted)}
+.item .i-poor{grid-column:2;font-size:12px;color:var(--blood);text-align:right}
+.item .btn{grid-row:1/3;grid-column:2;white-space:nowrap}
+
+/* 商店與「我的角色」共用的外層。兩頁都是由上往下一段一段排，
+   寬度跟品項卡一樣 520px，手機直拿剛好吃滿。 */
+.shopwrap{width:100%;max-width:520px;display:flex;flex-direction:column;gap:12px}
+.shopwrap section{display:flex;flex-direction:column;gap:10px}
+.shopwrap h2.sec{align-self:flex-start}
+h2.sec small{font-size:12px;font-weight:400;color:var(--muted)}
+
+/* 展示頁上面那一塊：大頭像 ＋ 現在穿什麼 ＋ 收集進度。
+   小朋友點進來第一眼要看到的是「我現在長這樣」。 */
+.hero{display:flex;align-items:center;gap:16px;padding:16px 18px;
+  background:var(--panel);border:3px solid var(--line);border-radius:14px}
+.hero .mugbox{border-width:3px;border-radius:14px}
+.hero .mugbox img{border-radius:11px}
+.hero-txt{display:flex;flex-direction:column;gap:4px;min-width:0}
+.hero-txt b{font-size:18px}
+.hero-txt span{font-size:13px;color:var(--muted)}
+
+/* 一格一格的選擇鈕（顏色、外框、有幾個道具）。沒買到的畫淡並標價錢，
+   看得到自己還缺什麼才會想再打一關。 */
+.picks{display:flex;flex-wrap:wrap;gap:8px}
+.pick{display:flex;align-items:center;gap:7px;min-height:44px;padding:8px 12px;
+  background:var(--panel);border:3px solid var(--line);border-radius:12px;
+  color:var(--ink);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.pick.on{border-color:var(--gold);background:var(--panel2)}
+.pick.locked{opacity:.5;cursor:default}
+.pick small{font-weight:400;font-size:12px;color:var(--muted)}
+.pick .sw{width:20px;height:20px;border-radius:6px;border:2px solid rgba(0,0,0,.35);flex:none}
+.pick .mugbox{flex:none}
+/* 選單裡的預覽只有 26px，緞帶照原比例會垂到按鈕外面，看起來像破圖 */
+.pick .mugbox.f-ribbon::after{bottom:-34%;width:52%;height:44%}
+
+/* 排行榜。一列就是一個同學：名次、頭像（連外框）、暱稱、分數。
+   自己那一行標起來，小朋友第一件事就是找自己在哪。 */
+.board{width:100%;max-width:520px;display:flex;flex-direction:column;gap:8px}
+.rank{display:flex;align-items:center;gap:12px;padding:10px 14px;
+  background:var(--panel);border:3px solid var(--line);border-radius:14px}
+.rank.me{border-color:var(--gold);background:var(--panel2)}
+.rank .rk{width:32px;text-align:center;font-size:18px;font-weight:800;color:var(--muted);flex:none}
+.rank.me .rk{color:var(--gold)}
+.rank .mugbox{width:40px;height:40px;border-radius:10px}
+.rank .nm{flex:1;min-width:0;font-weight:800;font-size:16px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rank .nm small{font-weight:400;font-size:12px;color:var(--gold)}
+.rank .sc{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex:none}
+.rank .sc b{font-size:15px;color:var(--gold)}
+.rank .sc small{font-size:12px;color:var(--muted)}
+
+/*
+  手機橫拿（高度只剩 390px 左右）。上面那一條每省 10px，戰場就多 10px，
+  所以這裡把用不到的字先收起來：關卡名稱在選關時就看過了，
+  操作提示第一次進來有吐司講過，兩個都不必一直佔著。
+*/
+@media (max-height:520px){
+  .play{padding:4px;gap:4px}
+  .leavebar,.td-hud{border-width:2px;padding:3px 8px;gap:7px}
+  .leavebar-name{display:none}
+  .td-qhint{display:none}
+  .td-qemoji{font-size:21px}
+  .td-qzh{font-size:18px}
+  .td-stat{font-size:14px}
+  .td-say{width:32px;height:29px;font-size:15px}
+  .leave{padding:3px 10px;font-size:12px}
+  .td-tray{width:138px;padding:5px;gap:5px;border-width:2px}
+  .td-card{padding:5px 7px}
+  .td-card b{font-size:13px}
+  .td-card span{font-size:10px}
+  .td-btn{padding:7px 12px;font-size:14px}
+  /* 道具只留圖示：帶三個道具的時候，名字全寫會把那一排擠到要橫捲 */
+  .bagitem .nm{display:none}
+  /* 只剩圖示就不必橫捲了，而且 overflow 會讓這一格量不出自己的寬度、被擠扁 */
+  .bagbar{max-width:none;overflow:visible}
+}
+
+/* 「老師開了一場」。選關畫面最上面那一條，就是房間的全部入口——
+   沒有代碼要抄，看到就按得下去。所以它做得比關卡卡片還醒目，會發亮。 */
+.roomcall{display:flex;align-items:center;gap:12px;width:100%;max-width:880px;
+  margin-bottom:12px;padding:12px 14px;border-radius:14px;cursor:pointer;text-align:left;
+  background:var(--panel2);border:3px solid var(--gold);color:inherit;
+  animation:roomcall 2.4s ease-in-out infinite}
+@keyframes roomcall{
+  0%,100%{box-shadow:0 0 0 0 rgba(212,175,55,0)}
+  50%{box-shadow:0 0 0 5px rgba(212,175,55,.18)}
+}
+.roomcall .ico{font-size:26px;flex:none}
+.roomcall .txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.roomcall .txt b{font-size:16px}
+.roomcall .txt small{font-size:12px;color:var(--muted)}
+.roomcall .go{flex:none;font-weight:800;font-size:14px;color:var(--gold);
+  border:2px solid var(--gold);border-radius:10px;padding:6px 12px}
+
+/* 等待室的名單借排行榜那一套，右邊那格換成狀態（到了／進行中／打完了）。 */
+.board .rank .sc b{font-size:13px;white-space:nowrap}
+
+/* 老師後台的關卡下拉。row 裡面的 input 有樣式，select 沒有，不設會變成系統預設的白底。 */
+.row select{background:var(--panel2);color:inherit;border:2px solid var(--line);
+  border-radius:10px;padding:9px 10px;font:inherit;min-width:0;flex:1}
+
+/* 兵推對戰 */
+.vs-intro{max-width:620px;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.vs-intro p{margin:0;font-size:14px;line-height:1.9}
+.vs-intro .muted{color:var(--muted)}
+.vs-foes{display:flex;flex-direction:column;gap:10px;width:100%;max-width:620px}
+.vs-foe{display:flex;align-items:center;gap:12px;padding:12px 14px;text-align:left;
+  border:none;cursor:pointer;font:inherit;color:inherit;width:100%}
+.vs-foe:active{transform:translateY(1px)}
+.vs-foe .ic{font-size:26px;flex:none}
+.vs-foe .txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.vs-foe .txt b{font-size:16px}
+.vs-foe .txt small{font-size:12.5px;line-height:1.6}
+.vs-foe .txt .muted{color:var(--muted)}
+.vs-foe .go{flex:none;background:var(--leaf);color:#12240c;font-weight:700;
+  padding:7px 14px;border-radius:10px;font-size:14px}
+.vs-note{max-width:620px;font-size:12.5px;color:var(--muted);text-align:center;margin:0}
+/* 對戰的上面那一條：兩座城堡的血和對手是誰 */
+.tw-foe{font-size:13px;color:var(--muted);white-space:nowrap;flex:none}
+@media (max-height:520px){ .tw-foe{display:none} }
+
+/* 設定裡的開關。.form label 本來是小灰字（欄位標題），開關要看得清楚所以蓋掉。 */
+.switch{display:flex;align-items:center;gap:10px;font-size:16px;color:var(--ink);cursor:pointer;
+  padding:4px 0;min-height:44px}
+.switch input{width:22px;height:22px;flex:none;accent-color:var(--gold);margin:0}
+.hint{margin:2px 0 0;font-size:12.5px;line-height:1.5;color:var(--muted)}
