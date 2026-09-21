@@ -13,8 +13,9 @@
  *   2. 失敗看得到原因，而且按得了重試
  *   3. 重試之後真的進得了結算畫面，**而且金幣沒有被算兩次**
  *
- * 一定要打真的 Supabase（本機版不走網路，攔不到）。臨時班級的 SQL 在
- * scratchpad 的 mkfintest.sql / rmfintest.sql。
+ * 一定要打**接著真 Supabase 的 dev server**：本機版不走網路攔不到，
+ * 正式版 build 又沒有 window.__td（那段只在 DEV 存在），自動打不完一關。
+ * 臨時班級的 SQL 在 scratchpad 的 mkfintest.sql / rmfintest.sql。
  *
  *   node tools/test/finish-retry.mjs http://localhost:5180/ ZZ9FIN
  */
