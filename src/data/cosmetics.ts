@@ -42,6 +42,8 @@ export interface FrameDef {
   className: string
   /** 框上角落掛的小東西，沒有就不掛 */
   badge?: string
+  /** 只能靠這個成就解開，商店買不到（見 src/data/achievements.ts） */
+  fromAchievement?: string
 }
 
 export const FRAMES: FrameDef[] = [
@@ -49,6 +51,15 @@ export const FRAMES: FrameDef[] = [
   { id: 'frame-ribbon', name: '緞帶框', className: 'f-ribbon' },
   { id: 'frame-crown', name: '皇冠框', className: 'f-crown', badge: '👑' },
   { id: 'frame-rainbow', name: '彩虹框', className: 'f-rainbow' },
+
+  // 成就限定。**這六個商店買不到**——買不到才有稀缺性，這是 Chuck 要的那一點。
+  // 資料庫那邊 shop_items.achievement_only = true，buy_item 會直接擋掉。
+  { id: 'frame-laurel', name: '葉冠框', className: 'f-laurel', fromAchievement: 'literate' },
+  { id: 'frame-wave', name: '音波框', className: 'f-wave', fromAchievement: 'balanced' },
+  { id: 'frame-flame', name: '火焰框', className: 'f-flame', fromAchievement: 'all-clear' },
+  { id: 'frame-banner', name: '戰旗框', className: 'f-banner', fromAchievement: 'war-flag' },
+  { id: 'frame-stardust', name: '星塵框', className: 'f-stardust', fromAchievement: 'dual-job' },
+  { id: 'frame-calendar', name: '日曆框', className: 'f-calendar', fromAchievement: 'week-5' },
 ]
 
 /** 身上那一套裡的顏色。沒穿就是預設藍。 */

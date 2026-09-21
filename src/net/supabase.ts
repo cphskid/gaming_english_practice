@@ -4,8 +4,8 @@ import type {
   Student, TeacherRow, WordStatEntry,
 } from '@/core/types'
 import type {
-  AddedTeacher, ClassRosterRow, LeaderRow, LevelResult, Repository, RoomBrief, RoomMember,
-  RoomState, SavedResult,
+  AchievementRow, AddedTeacher, ClassRosterRow, LeaderRow, LevelResult, PublicProfile,
+  Repository, RoomBrief, RoomMember, RoomState, SavedResult, VersusMatchInput,
 } from './repository'
 
 /**
@@ -30,9 +30,12 @@ interface CharacterRow {
   job: Job; avatar: string | null; exp: number; coins: number
   items: Record<string, number> | null
   equipped: string[] | null
+  pinned: string[] | null; title: string | null; public_profile: boolean | null
+  avatars_seen: string[] | null; jobs_cleared: string[] | null
 }
 interface ProgressRow {
   level_id: string; stars: number; best_correct: number; cleared_at: string | null
+  best_survival: number | null; last_win_session: string | null
 }
 interface EventRow {
   student_id: string; word_id: number; skill: Skill; correct: boolean
@@ -167,7 +170,7 @@ export class SupabaseRepository implements Repository {
   async loadCharacter(studentId: string): Promise<Character> {
     const { data, error } = await this.db
       .from('characters')
-      .select('job, avatar, exp, coins, items, equipped')
+      .select('job, avatar, exp, coins, items, equipped, pinned, title, public_profile, avatars_seen, jobs_cleared')
       .eq('student_id', studentId)
       .maybeSingle()
     fail('讀取角色失敗', error)
@@ -182,6 +185,11 @@ export class SupabaseRepository implements Repository {
       coins: row.coins,
       items: row.items ?? {},
       equipped: row.equipped ?? [],
+      pinned: row.pinned ?? [],
+      title: row.title ?? '',
+      publicProfile: row.public_profile ?? true,
+      avatarsSeen: row.avatars_seen ?? [],
+      jobsCleared: row.jobs_cleared ?? [],
     }
   }
 
@@ -216,8 +224,13 @@ export class SupabaseRepository implements Repository {
     return (data as string[] | null) ?? []
   }
 
-  async consumeItem(itemId: string): Promise<Record<string, number>> {
-    const { data, error } = await this.db.rpc('consume_item', { p_item: itemId })
+  async consumeItem(
+    itemId: string, sessionId?: string, levelId?: string,
+  ): Promise<Record<string, number>> {
+    // 帶上「用在哪一場」，成就那邊才知道通關的那一場有沒有用道具
+    const { data, error } = await this.db.rpc('consume_item', {
+      p_item: itemId, p_session: sessionId ?? null, p_level_id: levelId ?? null,
+    })
     fail('用不了這個道具', error)
     return (data as Record<string, number> | null) ?? {}
   }
@@ -225,7 +238,7 @@ export class SupabaseRepository implements Repository {
   async loadProgress(studentId: string): Promise<LevelProgress[]> {
     const { data, error } = await this.db
       .from('level_progress')
-      .select('level_id, stars, best_correct, cleared_at')
+      .select('level_id, stars, best_correct, cleared_at, best_survival, last_win_session')
       .eq('student_id', studentId)
     fail('讀取關卡進度失敗', error)
     return ((data as ProgressRow[] | null) ?? []).map((r) => ({
@@ -233,6 +246,8 @@ export class SupabaseRepository implements Repository {
       stars: r.stars as 0 | 1 | 2 | 3,
       bestCorrect: r.best_correct,
       clearedAt: r.cleared_at ? ms(r.cleared_at) : null,
+      bestSurvival: Number(r.best_survival ?? 0),
+      lastWinSession: r.last_win_session ?? null,
     }))
   }
 
@@ -534,13 +549,83 @@ export class SupabaseRepository implements Repository {
     })
     fail('讀取排行榜失敗', error)
     type Row = {
-      nickname: string; coins: number; exp: number; stars: number
+      student_id: string; nickname: string; coins: number; exp: number; stars: number
       avatar: string | null; equipped: string[] | null; me: boolean
+      title: string | null; badges: number | null; viewable: boolean | null
     }
     return ((data as Row[] | null) ?? []).map((r) => ({
+      studentId: r.student_id,
       nickname: r.nickname, coins: r.coins, exp: r.exp, stars: Number(r.stars),
       avatar: r.avatar ?? '', equipped: r.equipped ?? [], me: r.me,
+      title: r.title ?? '', badges: Number(r.badges ?? 0), viewable: r.viewable ?? false,
     }))
+  }
+
+  // ---------------------------------------------------------------- 成就
+  async loadAchievements(): Promise<AchievementRow[]> {
+    const { data, error } = await this.db.rpc('my_achievements')
+    fail('讀取成就失敗', error)
+    type Row = { id: string; category: string; unlocked_at: string | null }
+    return ((data as Row[] | null) ?? []).map((r) => ({
+      id: r.id, category: r.category,
+      unlockedAt: r.unlocked_at ? ms(r.unlocked_at) : null,
+    }))
+  }
+
+  async refreshAchievements(): Promise<string[]> {
+    const { data, error } = await this.db.rpc('refresh_achievements')
+    fail('重算成就失敗', error)
+    // setof text 回來的是一串字串
+    return ((data as string[] | null) ?? []).filter((x) => typeof x === 'string')
+  }
+
+  async setPinned(ids: string[]): Promise<string[]> {
+    const { data, error } = await this.db.rpc('set_pinned', { p_ids: ids.slice(0, 3) })
+    fail('別不上去', error)
+    return (data as string[] | null) ?? []
+  }
+
+  async setTitle(achievementId: string): Promise<string> {
+    const { data, error } = await this.db.rpc('set_title', { p_id: achievementId })
+    fail('換不了稱號', error)
+    return (data as string | null) ?? ''
+  }
+
+  async setPublicProfile(open: boolean): Promise<boolean> {
+    const { data, error } = await this.db.rpc('set_public_profile', { p_open: open })
+    fail('改不了公開設定', error)
+    return (data as boolean | null) ?? open
+  }
+
+  async publicProfile(studentId: string): Promise<PublicProfile> {
+    const { data, error } = await this.db.rpc('public_profile', { p_student: studentId })
+    fail('看不到這位同學的檔案', error)
+    type Row = {
+      nickname: string; avatar: string | null; equipped: string[] | null
+      title: string | null; pinned: string[] | null; badges: string[] | null
+      stars: number; level: number
+    }
+    const row = (data as Row[] | null)?.[0]
+    if (!row) throw new Error('看不到這位同學的檔案')
+    return {
+      nickname: row.nickname, avatar: row.avatar ?? '', equipped: row.equipped ?? [],
+      title: row.title ?? '', pinned: row.pinned ?? [], badges: row.badges ?? [],
+      stars: Number(row.stars ?? 0), level: Number(row.level ?? 1),
+    }
+  }
+
+  async recordVersusMatch(m: VersusMatchInput): Promise<void> {
+    const { error } = await this.db.rpc('record_versus_match', {
+      p_session: m.sessionId,
+      p_opponent_kind: m.opponentKind,
+      p_won: m.won,
+      p_front: m.front,
+      p_lowest_front: m.lowestFront,
+      p_lines: m.linesUsed,
+      p_top_tier: m.topTier,
+      p_opponent_name: m.opponentName,
+    })
+    fail('記不了這一場戰績', error)
   }
 
   async loadClassRoster(classCode: string): Promise<ClassRosterRow[]> {

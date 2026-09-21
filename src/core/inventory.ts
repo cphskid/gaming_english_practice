@@ -20,6 +20,11 @@ export interface ItemDef {
   slot?: Slot
   /** 要幾級才買得到 */
   unlockLevel: number
+  /**
+   * 成就限定：商店裡不顯示、也買不到，只能靠解成就拿到。
+   * 擋下來的是資料庫（buy_item），前端這個旗標只負責不要把它畫在商店裡。
+   */
+  achievementOnly?: boolean
 }
 
 export function count(c: Character, itemId: string): number {

@@ -312,45 +312,106 @@ on conflict (id) do update set
 
 -- 商店品項。**這一段是 tools/gen-shop-seed.mjs 從 src/data/shop.ts 產生的，不要手改。**
 -- 價格放在資料庫是因為客戶端送來的價格不能信。
-insert into public.shop_items (id, price, kind, slot, unlock_level) values
-  ('slow-30', 60, 'consumable', null, 1),
-  ('heal-5', 80, 'consumable', null, 2),
-  ('crystal-40', 120, 'consumable', null, 3),
-  ('color-red', 150, 'cosmetic', 'color', 1),
-  ('color-yellow', 150, 'cosmetic', 'color', 2),
-  ('color-purple', 220, 'cosmetic', 'color', 4),
-  ('color-black', 300, 'cosmetic', 'color', 6),
-  ('frame-gold', 120, 'cosmetic', 'frame', 1),
-  ('frame-ribbon', 180, 'cosmetic', 'frame', 3),
-  ('frame-crown', 260, 'cosmetic', 'frame', 5),
-  ('frame-rainbow', 400, 'cosmetic', 'frame', 7)
+insert into public.shop_items (id, price, kind, slot, unlock_level, achievement_only) values
+  ('slow-30', 60, 'consumable', null, 1, false),
+  ('heal-5', 80, 'consumable', null, 2, false),
+  ('crystal-40', 120, 'consumable', null, 3, false),
+  ('color-red', 150, 'cosmetic', 'color', 1, false),
+  ('color-yellow', 150, 'cosmetic', 'color', 2, false),
+  ('color-purple', 220, 'cosmetic', 'color', 4, false),
+  ('color-black', 300, 'cosmetic', 'color', 6, false),
+  ('frame-gold', 120, 'cosmetic', 'frame', 1, false),
+  ('frame-ribbon', 180, 'cosmetic', 'frame', 3, false),
+  ('frame-crown', 260, 'cosmetic', 'frame', 5, false),
+  ('frame-rainbow', 400, 'cosmetic', 'frame', 7, false),
+  ('frame-laurel', 1, 'cosmetic', 'frame', 1, true),
+  ('frame-wave', 1, 'cosmetic', 'frame', 1, true),
+  ('frame-flame', 1, 'cosmetic', 'frame', 1, true),
+  ('frame-banner', 1, 'cosmetic', 'frame', 1, true),
+  ('frame-stardust', 1, 'cosmetic', 'frame', 1, true),
+  ('frame-calendar', 1, 'cosmetic', 'frame', 1, true)
 on conflict (id) do update
   set price = excluded.price, kind = excluded.kind, slot = excluded.slot,
-      unlock_level = excluded.unlock_level;
+      unlock_level = excluded.unlock_level, achievement_only = excluded.achievement_only;
 
 -- 商店只認這份清單。舊品項留在資料庫裡會變成「買得到但畫面上沒有」的鬼品項，
 -- 所以不在清單裡的一律刪掉。
-delete from public.shop_items where id not in ('slow-30', 'heal-5', 'crystal-40', 'color-red', 'color-yellow', 'color-purple', 'color-black', 'frame-gold', 'frame-ribbon', 'frame-crown', 'frame-rainbow');
+delete from public.shop_items where id not in ('slow-30', 'heal-5', 'crystal-40', 'color-red', 'color-yellow', 'color-purple', 'color-black', 'frame-gold', 'frame-ribbon', 'frame-crown', 'frame-rainbow', 'frame-laurel', 'frame-wave', 'frame-flame', 'frame-banner', 'frame-stardust', 'frame-calendar');
+
+
+-- 成就目錄。**這一段是 tools/gen-achievements-seed.mjs 從 src/data/achievements.ts
+-- 產生的，不要手改。** 名字與說明在 TS 那邊，這裡只有伺服器算解鎖要用的欄位。
+insert into public.achievements (id, category, ord, reward_item, reward_title) values
+  ('first-answer', 'learn', 0, null, '新生'),
+  ('hundred', 'learn', 1, null, ''),
+  ('nemesis', 'learn', 2, null, '不放棄'),
+  ('theme-king', 'learn', 3, null, ''),
+  ('mastered-50', 'learn', 4, null, ''),
+  ('literate', 'learn', 5, 'frame-laurel', ''),
+  ('read-100', 'skill', 6, null, ''),
+  ('listen-100', 'skill', 7, null, ''),
+  ('spell-100', 'skill', 8, null, ''),
+  ('triple-day', 'skill', 9, null, ''),
+  ('long-words', 'skill', 10, null, ''),
+  ('balanced', 'skill', 11, 'frame-wave', ''),
+  ('first-clear', 'tower', 12, null, ''),
+  ('three-star', 'tower', 13, null, ''),
+  ('no-damage', 'tower', 14, null, ''),
+  ('boss-slayer', 'tower', 15, null, ''),
+  ('stars-30', 'tower', 16, null, ''),
+  ('all-clear', 'tower', 17, 'frame-flame', ''),
+  ('first-match', 'versus', 18, null, ''),
+  ('all-lines', 'versus', 19, null, ''),
+  ('top-tier', 'versus', 20, null, ''),
+  ('comeback', 'versus', 21, null, ''),
+  ('never-quit', 'versus', 22, null, '再來一局'),
+  ('war-flag', 'versus', 23, 'frame-banner', ''),
+  ('dressed', 'collect', 24, null, ''),
+  ('five-colors', 'collect', 25, null, ''),
+  ('all-frames', 'collect', 26, null, ''),
+  ('avatar-10', 'collect', 27, null, ''),
+  ('dual-job', 'collect', 28, 'frame-stardust', ''),
+  ('item-taster', 'collect', 29, null, ''),
+  ('week-3', 'habit', 30, null, ''),
+  ('weekend', 'habit', 31, null, ''),
+  ('replay', 'habit', 32, null, ''),
+  ('month-12', 'habit', 33, null, ''),
+  ('old-friend', 'habit', 34, null, ''),
+  ('week-5', 'habit', 35, 'frame-calendar', ''),
+  ('persistent', 'secret', 36, null, ''),
+  ('quick-hand', 'secret', 37, null, ''),
+  ('so-close', 'secret', 38, null, ''),
+  ('bare-handed', 'secret', 39, null, ''),
+  ('combo-20', 'secret', 40, null, ''),
+  ('all-rounder', 'secret', 41, null, '全能生')
+on conflict (id) do update
+  set category = excluded.category, ord = excluded.ord,
+      reward_item = excluded.reward_item, reward_title = excluded.reward_title;
+
+-- 目錄以這份清單為準。刪掉的成就要跟著消失，不然畫面上沒有、資料庫裡卻還在，
+-- 別人的徽章牆上會冒出一個誰都看不懂的東西。
+delete from public.achievements where id not in ('first-answer', 'hundred', 'nemesis', 'theme-king', 'mastered-50', 'literate', 'read-100', 'listen-100', 'spell-100', 'triple-day', 'long-words', 'balanced', 'first-clear', 'three-star', 'no-damage', 'boss-slayer', 'stars-30', 'all-clear', 'first-match', 'all-lines', 'top-tier', 'comeback', 'never-quit', 'war-flag', 'dressed', 'five-colors', 'all-frames', 'avatar-10', 'dual-job', 'item-taster', 'week-3', 'weekend', 'replay', 'month-12', 'old-friend', 'week-5', 'persistent', 'quick-hand', 'so-close', 'bare-handed', 'combo-20', 'all-rounder');
 
 
 -- 關卡。**這一段是 tools/gen-levels-seed.mjs 從 src/data/levels.ts 產生的，不要手改。**
 -- min_correct 是「這一關至少要答對幾題才可能通關」，通關與星星由伺服器判定時要用。
-insert into public.levels (id, no, name, min_correct) values
-  ('td-01', 1, '數字島', 13),
-  ('td-02', 2, '顏色與身體', 15),
-  ('td-03', 3, '動物森林', 17),
-  ('td-04', 4, '食物與餐具', 24),
-  ('td-05', 5, '衣櫃魔王', 14),
-  ('td-06', 6, '我家', 15),
-  ('td-07', 7, '學校', 16),
-  ('td-08', 8, '出門去', 18),
-  ('td-09', 9, '運動與職業', 19),
-  ('td-10', 10, '暴風雨魔王', 18),
-  ('td-11', 11, '心情', 18),
-  ('td-12', 12, '動起來', 20),
-  ('td-13', 13, '時間之塔', 21),
-  ('td-14', 14, '最終試煉', 28)
+insert into public.levels (id, no, name, min_correct, is_boss) values
+  ('td-01', 1, '數字島', 13, false),
+  ('td-02', 2, '顏色與身體', 15, false),
+  ('td-03', 3, '動物森林', 17, false),
+  ('td-04', 4, '食物與餐具', 24, false),
+  ('td-05', 5, '衣櫃魔王', 14, true),
+  ('td-06', 6, '我家', 15, false),
+  ('td-07', 7, '學校', 16, false),
+  ('td-08', 8, '出門去', 18, false),
+  ('td-09', 9, '運動與職業', 19, false),
+  ('td-10', 10, '暴風雨魔王', 18, true),
+  ('td-11', 11, '心情', 18, false),
+  ('td-12', 12, '動起來', 20, false),
+  ('td-13', 13, '時間之塔', 21, false),
+  ('td-14', 14, '最終試煉', 28, true)
 on conflict (id) do update
-  set no = excluded.no, name = excluded.name, min_correct = excluded.min_correct;
+  set no = excluded.no, name = excluded.name, min_correct = excluded.min_correct,
+      is_boss = excluded.is_boss;
 
 commit;

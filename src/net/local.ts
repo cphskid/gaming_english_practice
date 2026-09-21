@@ -10,9 +10,11 @@ import type {
   TeacherRow, WordStatEntry,
 } from '@/core/types'
 import type {
-  AddedTeacher, ClassRosterRow, LeaderRow, LevelResult, Repository, RoomBrief, RoomMember,
-  RoomState, SavedResult,
+  AchievementRow, AddedTeacher, ClassRosterRow, LeaderRow, LevelResult, PublicProfile,
+  Repository, RoomBrief, RoomMember, RoomState, SavedResult, VersusMatchInput,
 } from './repository'
+import { evaluateAchievements, type VersusRecord } from '@/core/achievements'
+import { ACHIEVEMENTS, ACH_BY_ID } from '@/data/achievements'
 
 /** 本地版存下來的一場。跟 RoomState 差在沒有 here／me，那兩個是讀的時候才算的。 */
 interface StoredRoom {
@@ -49,6 +51,9 @@ const k = {
   session: `${NS}.session`,
   classes: `${NS}.classes`,
   rooms: (code: string) => `${NS}.rooms.${code}`,
+  achievements: (id: string) => `${NS}.ach.${id}`,
+  matches: (id: string) => `${NS}.versus.${id}`,
+  itemUses: (id: string) => `${NS}.itemuses.${id}`,
   staff: `${NS}.staff`,
 }
 
@@ -101,7 +106,10 @@ export class LocalRepository implements Repository {
 
     const id = studentId(code, login)
     write(k.password(id), scramble(password.toLowerCase()))
-    return this.remember({ id, loginId: login, classCode: code, nickname: nickname.trim(), role: 'student' })
+    return this.remember({
+      id, loginId: login, classCode: code, nickname: nickname.trim(), role: 'student',
+      createdAt: Date.now(),
+    })
   }
 
   async login(
@@ -183,7 +191,11 @@ export class LocalRepository implements Repository {
 
   async setAvatar(avatar: string): Promise<void> {
     const c = this.current()
-    write(k.character(c.studentId), { ...c, avatar })
+    // 換過哪些頭像要留著：avatar 只存現在這一個，成就數的是種類
+    const seen = c.avatarsSeen ?? []
+    write(k.character(c.studentId), {
+      ...c, avatar, avatarsSeen: seen.includes(avatar) ? seen : [...seen, avatar],
+    })
   }
 
   async buyItem(itemId: string): Promise<{ coins: number; items: Record<string, number> }> {
@@ -218,11 +230,18 @@ export class LocalRepository implements Repository {
     return equipped
   }
 
-  async consumeItem(itemId: string): Promise<Record<string, number>> {
+  async consumeItem(
+    itemId: string, sessionId?: string, levelId?: string,
+  ): Promise<Record<string, number>> {
     const c = this.current()
     const next = consume(c, itemId)
     if (!next) throw new Error('你沒有這個道具了')
     write(k.character(c.studentId), next)
+    // 用在哪一場要留著：背包只存剩幾個，用完歸零就看不出來用過什麼
+    const uses = read<{ itemId: string; sessionId: string | null; levelId: string | null }[]>(
+      k.itemUses(c.studentId), [])
+    uses.push({ itemId, sessionId: sessionId ?? null, levelId: levelId ?? null })
+    write(k.itemUses(c.studentId), uses)
     return next.items
   }
 
@@ -250,6 +269,8 @@ export class LocalRepository implements Repository {
       stars: starsFor({ outcome: { win, survival: r.survival, detail: '' }, correct, asked: mine.length }),
       bestCorrect: correct,
       clearedAt: win ? Date.now() : null,
+      bestSurvival: win ? Math.max(0, Math.min(1, r.survival)) : 0,
+      lastWinSession: win ? r.sessionId : null,
     }
 
     const all = read<LevelProgress[]>(k.progress(id), [])
@@ -259,6 +280,14 @@ export class LocalRepository implements Repository {
     if (i >= 0) all[i] = merged
     else all.push(merged)
     write(k.progress(id), all)
+
+    // 用哪個職業通關過。職業隨時能改，所以要在通關那一刻記（「雙修」要用）。
+    if (win) {
+      const cur = this.current()
+      if (!(cur.jobsCleared ?? []).includes(cur.job)) {
+        write(k.character(id), { ...cur, jobsCleared: [...(cur.jobsCleared ?? []), cur.job] })
+      }
+    }
 
     // 首通獎金也在這裡發，跟資料庫那邊同一條規則：第一次真的通關才有
     const bonusCoins = win && !was?.clearedAt ? firstClearBonus(level.no, false) : 0
@@ -511,6 +540,122 @@ export class LocalRepository implements Repository {
     return code
   }
 
+  // ---------------------------------------------------------------- 成就
+  //
+  // **本地版是鏡像，不是真相。** 真正算數的是 supabase/schema.sql 的
+  // refresh_achievements()；這裡照 src/core/achievements.ts 那份規則算一次，
+  // 讓沒有金鑰的開發環境也看得到徽章牆。
+
+  async loadAchievements(): Promise<AchievementRow[]> {
+    const c = this.current()
+    const got = new Map(read<{ id: string; at: number }[]>(k.achievements(c.studentId), [])
+      .map((x) => [x.id, x.at]))
+    return ACHIEVEMENTS.map((a) => ({
+      id: a.id, category: a.category, unlockedAt: got.get(a.id) ?? null,
+    }))
+  }
+
+  async refreshAchievements(): Promise<string[]> {
+    const c = this.current()
+    const id = c.studentId
+    const have = read<{ id: string; at: number }[]>(k.achievements(id), [])
+    const had = new Set(have.map((x) => x.id))
+    const student = read<Student | null>(k.student(id), null)
+
+    const got = evaluateAchievements({
+      events: read<AnswerEvent[]>(k.events(id), []),
+      stats: (await this.loadWordStats(id)),
+      progress: read<LevelProgress[]>(k.progress(id), []),
+      character: c,
+      matches: read<VersusRecord[]>(k.matches(id), []),
+      itemUses: read<{ itemId: string; sessionId: string | null }[]>(k.itemUses(id), []),
+      createdAt: student?.createdAt ?? 0,
+    })
+
+    // 全能生：七個大類每一類都至少一個（它自己不算）
+    const all = new Set([...had, ...got])
+    const cats = new Set(ACHIEVEMENTS.filter((a) => all.has(a.id) && a.id !== 'all-rounder')
+      .map((a) => a.category))
+    if (cats.size >= 7) got.push('all-rounder')
+
+    const fresh = got.filter((x) => !had.has(x) && ACH_BY_ID.has(x))
+    if (fresh.length) {
+      const now = Date.now()
+      write(k.achievements(id), [...have, ...fresh.map((x) => ({ id: x, at: now }))])
+      // 獎品：成就限定的外框直接放進背包，不用去商店領
+      let next = this.current()
+      for (const x of fresh) {
+        const item = ACH_BY_ID.get(x)?.rewardItem
+        if (item && !(next.items[item] > 0)) next = { ...next, items: { ...next.items, [item]: 1 } }
+      }
+      write(k.character(id), next)
+    }
+    return fresh
+  }
+
+  async setPinned(ids: string[]): Promise<string[]> {
+    const c = this.current()
+    const mine = new Set(read<{ id: string }[]>(k.achievements(c.studentId), []).map((x) => x.id))
+    const pinned = ids.filter((x) => mine.has(x)).slice(0, 3)
+    write(k.character(c.studentId), { ...c, pinned })
+    return pinned
+  }
+
+  async setTitle(achievementId: string): Promise<string> {
+    const c = this.current()
+    const mine = new Set(read<{ id: string }[]>(k.achievements(c.studentId), []).map((x) => x.id))
+    const title = achievementId && mine.has(achievementId)
+      ? ACH_BY_ID.get(achievementId)?.rewardTitle ?? '' : ''
+    write(k.character(c.studentId), { ...c, title })
+    return title
+  }
+
+  async setPublicProfile(open: boolean): Promise<boolean> {
+    const c = this.current()
+    write(k.character(c.studentId), { ...c, publicProfile: open })
+    return open
+  }
+
+  async publicProfile(studentId: string): Promise<PublicProfile> {
+    const me = await this.currentStudent()
+    const s = read<Student | null>(k.student(studentId), null)
+    const c = read<Character | null>(k.character(studentId), null)
+    if (!s || !c) throw new Error('沒有這個人')
+    if (studentId !== me?.id && !(c.publicProfile ?? true)) {
+      throw new Error('這位同學把檔案關起來了')
+    }
+    const p = read<LevelProgress[]>(k.progress(studentId), [])
+    return {
+      nickname: s.nickname,
+      avatar: c.avatar,
+      equipped: c.equipped,
+      title: c.title ?? '',
+      pinned: c.pinned ?? [],
+      badges: read<{ id: string }[]>(k.achievements(studentId), []).map((x) => x.id),
+      stars: p.reduce((n, x) => n + x.stars, 0),
+      level: levelFromExp(c.exp),
+    }
+  }
+
+  async recordVersusMatch(m: VersusMatchInput): Promise<void> {
+    const c = this.current()
+    const all = read<VersusRecord[]>(k.matches(c.studentId), [])
+    // 同一場重送不會變成兩筆
+    if (all.some((x) => x.sessionId === m.sessionId)) return
+    all.push({
+      sessionId: m.sessionId,
+      opponentKind: m.opponentKind,
+      opponentName: m.opponentName,
+      won: m.won,
+      front: m.front,
+      lowestFront: m.lowestFront,
+      linesUsed: m.linesUsed as VersusRecord['linesUsed'],
+      topTier: m.topTier,
+      endedAt: Date.now(),
+    })
+    write(k.matches(c.studentId), all)
+  }
+
   async classLeaderboard(classCode?: string): Promise<LeaderRow[]> {
     const me = await this.currentStudent()
     const code = (classCode ?? me?.classCode ?? '').trim().toUpperCase()
@@ -520,6 +665,7 @@ export class LocalRepository implements Repository {
       const c = read<Character | null>(k.character(id), null)
       const p = read<LevelProgress[]>(k.progress(id), [])
       return {
+        studentId: id,
         nickname: s?.nickname ?? '?',
         coins: c?.coins ?? 0,
         exp: c?.exp ?? 0,
@@ -527,6 +673,10 @@ export class LocalRepository implements Repository {
         avatar: c?.avatar ?? '',
         equipped: c?.equipped ?? [],
         me: id === me?.id,
+        title: c?.title ?? '',
+        badges: read<string[]>(k.achievements(id), []).length,
+        // 本地版沒有老師身分，自己的一定看得到，別人的看他有沒有關起來
+        viewable: id === me?.id || (c?.publicProfile ?? true),
       }
     })
     // 排序規則要跟後端那支 RPC 一樣，不然本機測起來是對的、上線是另一回事。

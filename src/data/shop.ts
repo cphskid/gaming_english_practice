@@ -32,4 +32,14 @@ export const ITEMS: ItemDef[] = [
   { id: 'frame-ribbon', name: '緞帶框', icon: '🎗️', desc: '頭像下面掛一條緞帶', price: 180, kind: 'cosmetic', slot: 'frame', unlockLevel: 3 },
   { id: 'frame-crown', name: '皇冠框', icon: '👑', desc: '金框加一頂小皇冠', price: 260, kind: 'cosmetic', slot: 'frame', unlockLevel: 5 },
   { id: 'frame-rainbow', name: '彩虹框', icon: '🌈', desc: '會跑的彩虹邊，最難買到的那個', price: 400, kind: 'cosmetic', slot: 'frame', unlockLevel: 7 },
+
+  // 成就限定的六個外框。**商店買不到**，價格欄只是因為資料表要求大於零，
+  // 真正的把關在 buy_item（achievement_only 的東西一律擋）。
+  // 哪一個成就給哪一個框寫在 src/data/achievements.ts。
+  { id: 'frame-laurel', name: '葉冠框', icon: '🍃', desc: '三百個字都答對過的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
+  { id: 'frame-wave', name: '音波框', icon: '🎵', desc: '三種技能都練到熟的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
+  { id: 'frame-flame', name: '火焰框', icon: '🔥', desc: '十四關全破的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
+  { id: 'frame-banner', name: '戰旗框', icon: '🏴', desc: '贏過同學五場的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
+  { id: 'frame-stardust', name: '星塵框', icon: '✨', desc: '兩個職業都通關過的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
+  { id: 'frame-calendar', name: '日曆框', icon: '📅', desc: '一週來五天的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
 ]
