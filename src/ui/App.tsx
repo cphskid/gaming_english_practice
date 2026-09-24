@@ -25,13 +25,14 @@ import { Admin } from './Admin'
 import { Settings } from './Settings'
 import { CreateCharacter } from './CreateCharacter'
 import { Shop } from './Shop'
+import { MyCharacter } from './MyCharacter'
 import { Leaderboard } from './Leaderboard'
 import { PeerProfile, Profile } from './Profile'
 import { RoomList, RoomLobby, useRoomList, useRoomState } from './Room'
 import { Versus } from './Versus'
 
 type Screen =
-  | 'login' | 'staff' | 'create' | 'select' | 'shop' | 'board'
+  | 'login' | 'staff' | 'create' | 'select' | 'shop' | 'character' | 'board'
   | 'play' | 'result' | 'teacher' | 'admin' | 'settings' | 'rooms' | 'lobby' | 'versus'
   | 'profile' | 'peer'
 
@@ -480,6 +481,16 @@ export function App() {
           character={character}
           onChanged={setCharacter}
           onBack={() => setScreen('select')}
+          onCharacter={() => setScreen('character')}
+        />
+      )}
+
+      {screen === 'character' && character && (
+        <MyCharacter
+          character={character}
+          onChanged={setCharacter}
+          onBack={() => setScreen('select')}
+          onShop={() => setScreen('shop')}
         />
       )}
 
@@ -540,6 +551,7 @@ export function App() {
           onVersus={() => setScreen('versus')}
           onSettings={() => setScreen('settings')}
           onShop={() => setScreen('shop')}
+          onCharacter={() => setScreen('character')}
           onBoard={() => setScreen('board')}
           onProfile={() => setScreen('profile')}
         />
