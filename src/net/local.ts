@@ -13,13 +13,17 @@ import type {
 } from '@/core/types'
 import type {
   AchievementRow, AddedTeacher, BadgeCount, ClassRosterRow, LeaderRow, LevelResult, PublicProfile,
-  Repository, RoomBrief, RoomMember, RoomState, SavedResult, VersusMatchInput,
+  Repository, RoomBrief, RoomMember, RoomState, SavedResult, VersusMatchInput, Ghost, GhostRow,
 } from './repository'
+import { packMoves, unpackMoves, type PackedMove } from '@/core/opponent'
 import { evaluateAchievements, tierOf, type AchValue, type VersusRecord } from '@/core/achievements'
 
 /** 本地版存的徽章。舊資料沒有 tier，當成 1。 */
 interface LocalAch { id: string; at: number; tier?: number; tierAt?: number }
 import { ACHIEVEMENTS, ACH_BY_ID } from '@/data/achievements'
+
+/** 本地版存的分身（最近一場） */
+interface LocalGhost { legion: string; endedAt: number; correct: number; moves: PackedMove[] }
 
 /** 本地版存下來的一場。跟 RoomState 差在沒有 here／me，那兩個是讀的時候才算的。 */
 interface StoredRoom {
@@ -59,6 +63,8 @@ const k = {
   achievements: (id: string) => `${NS}.ach.${id}`,
   achProgress: (id: string) => `${NS}.achp.${id}`,
   matches: (id: string) => `${NS}.versus.${id}`,
+  /** 最近一場的答題串（分身）。只留一場，跟正式版一樣只重播最近那一場。 */
+  ghost: (id: string) => `${NS}.ghost.${id}`,
   itemUses: (id: string) => `${NS}.itemuses.${id}`,
   staff: `${NS}.staff`,
 }
@@ -714,7 +720,38 @@ export class LocalRepository implements Repository {
       endedAt: Date.now(),
     })
     write(k.matches(c.studentId), all)
+    if (m.moves.length) {
+      write(k.ghost(c.studentId), {
+        legion: legionOf(c.equipped).id, endedAt: Date.now(),
+        correct: m.moves.filter((x) => x.act === 'answer' && x.correct).length,
+        moves: packMoves(m.moves),
+      })
+    }
     this.noteColorPlayed()
+  }
+
+  async listGhosts(): Promise<GhostRow[]> {
+    const me = await this.currentStudent()
+    if (!me?.classCode) return []
+    return read<string[]>(k.roster(me.classCode), []).flatMap((id) => {
+      if (id === me.id) return []
+      const g = read<LocalGhost | null>(k.ghost(id), null)
+      if (!g) return []
+      const s = read<Student | null>(k.student(id), null)
+      const c = read<Character | null>(k.character(id), null)
+      return [{
+        studentId: id, nickname: s?.nickname ?? '?', avatar: c?.avatar ?? '',
+        legion: g.legion, endedAt: g.endedAt, correct: g.correct,
+      }]
+    }).sort((a, b) => b.endedAt - a.endedAt)
+  }
+
+  async loadGhost(studentId: string): Promise<Ghost | null> {
+    const me = await this.currentStudent()
+    const s = read<Student | null>(k.student(studentId), null)
+    const g = read<LocalGhost | null>(k.ghost(studentId), null)
+    if (!me?.classCode || !s || s.classCode !== me.classCode || !g) return null
+    return { studentId, nickname: s.nickname, legion: g.legion, moves: unpackMoves(g.moves) }
   }
 
   /** 記下穿著哪個顏色打了一場。換上別的軍團時顏色沒作用，不算。 */

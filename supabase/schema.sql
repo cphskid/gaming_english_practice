@@ -343,7 +343,7 @@ create table if not exists public.versus_matches (
   student_id       uuid not null references public.students(id) on delete cascade,
   -- 那一場的 Session id，跟答題事件對得起來
   session_id       uuid,
-  opponent_kind    text not null check (opponent_kind in ('cpu','student')),
+  opponent_kind    text not null check (opponent_kind in ('cpu','ghost','student')),
   opponent_student uuid references public.students(id) on delete set null,
   opponent_name    text not null default '',
   won              boolean not null,
@@ -359,6 +359,20 @@ create table if not exists public.versus_matches (
 );
 create index if not exists versus_matches_student
   on public.versus_matches(student_id, ended_at desc);
+
+-- 同學的分身（2026-09-24）。
+--
+-- 每一場存下自己做過的事（答題、出兵、升階，照時間排），同學挑戰你時就重播
+-- **你最近的那一場**。形狀是一串小陣列：[秒,'a',0|1]、[秒,'s',線,階]、[秒,'u']
+-- （見 src/core/opponent.ts 的 packMoves）。legion 是那一場穿的軍團，伺服器自己看，
+-- 前端送不進來。
+--
+-- opponent_kind 多一個 'ghost'：打分身。**分身不算勝場**，免得一直挑同一個弱的同學刷戰旗。
+alter table public.versus_matches add column if not exists moves  jsonb;
+alter table public.versus_matches add column if not exists legion text not null default '';
+alter table public.versus_matches drop constraint if exists versus_matches_opponent_kind_check;
+alter table public.versus_matches add constraint versus_matches_opponent_kind_check
+  check (opponent_kind in ('cpu','ghost','student'));
 
 -- 道具用在哪一場。
 -- 「空手過關」要知道通關那一場有沒有用道具，「道具三味」要知道用過幾種，
@@ -2573,7 +2587,15 @@ $$;
 -- 打電腦也記（「初上戰場」「三線通吃」要算），但**勝場只認同學**——
 -- won 照實存，要不要算成勝場是 refresh_achievements 在判斷的事。
 -- 前端送來的數字都夾住：前線 0~1、兵階 1~3、兵種線只認那三個。
+--
+-- 對手種類前端說了不全算：'student'（真人即時對戰）還沒上線，送來一律當電腦，
+-- 不然直接呼叫這支就能刷戰旗；'ghost' 要真的是同班同學才認。
+--
+-- p_moves 是這一場的答題串（分身）。**答對的筆數不能比這一場真的答對的多**
+-- （跟 answer_events 對帳），多了就整串不收——不然改一串假的，就能做出一個
+-- 同學永遠打不贏的分身。這一場照樣記，只是沒有分身。
 -- -----------------------------------------------------------------------------
+drop function if exists public.record_versus_match(uuid, text, boolean, numeric, numeric, text[], int, text, uuid);
 create or replace function public.record_versus_match(
   p_session       uuid,
   p_opponent_kind text,
@@ -2583,15 +2605,41 @@ create or replace function public.record_versus_match(
   p_lines         text[] default '{}',
   p_top_tier      int default 1,
   p_opponent_name text default '',
-  p_opponent      uuid default null
+  p_opponent      uuid default null,
+  p_moves         jsonb default null
 )
 returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_student uuid := public.current_student_id();
-  v_kind    text := case when p_opponent_kind = 'student' then 'student' else 'cpu' end;
+  v_kind    text := 'cpu';
   v_id      uuid;
+  v_moves   jsonb := null;
+  v_claimed int;
+  v_real    int;
+  v_legion  text;
 begin
   if v_student is null then raise exception '還沒加入班級'; end if;
+
+  if p_opponent_kind = 'ghost' and p_opponent is not null and p_opponent <> v_student
+     and exists (select 1 from public.students a join public.students b on a.class_code = b.class_code
+                  where a.id = v_student and b.id = p_opponent) then
+    v_kind := 'ghost';
+  end if;
+
+  -- 分身的答題串：要是陣列、不能大得離譜（三分鐘正常兩三百筆）、答對筆數對得上帳
+  if p_moves is not null and jsonb_typeof(p_moves) = 'array'
+     and jsonb_array_length(p_moves) between 1 and 1500 and p_session is not null then
+    select count(*) into v_claimed from jsonb_array_elements(p_moves) e
+     where jsonb_typeof(e) = 'array' and e->>1 = 'a' and e->>2 = '1';
+    select count(*) into v_real from public.answer_events a
+     where a.student_id = v_student and a.session_id = p_session and a.correct;
+    if v_claimed <= v_real then v_moves := p_moves; end if;
+  end if;
+
+  select coalesce((select e from jsonb_array_elements_text(c.equipped) e
+                     join public.shop_items i on i.id = e and i.slot = 'legion' limit 1), '')
+    into v_legion
+    from public.characters c where c.student_id = v_student;
 
   -- 同一場只記一次。網路不好時前端會重送，重送不能變成兩場戰績。
   if p_session is not null then
@@ -2602,21 +2650,60 @@ begin
 
   insert into public.versus_matches
     (student_id, session_id, opponent_kind, opponent_student, opponent_name,
-     won, front, lowest_front, lines_used, top_tier)
+     won, front, lowest_front, lines_used, top_tier, moves, legion)
   values
     (v_student, p_session, v_kind,
-     case when v_kind = 'student' then p_opponent end,
+     case when v_kind = 'ghost' then p_opponent end,
      left(coalesce(p_opponent_name, ''), 16),
      coalesce(p_won, false),
      least(greatest(coalesce(p_front, 0.5), 0), 1),
      least(greatest(coalesce(p_lowest_front, 0.5), 0), 1),
      coalesce((select array_agg(x) from unnest(coalesce(p_lines, '{}')) x
                 where x in ('recognize','spell','listen')), '{}'),
-     least(greatest(coalesce(p_top_tier, 1), 1), 3))
+     least(greatest(coalesce(p_top_tier, 1), 1), 3),
+     v_moves, coalesce(v_legion, ''))
   returning id into v_id;
   perform public.note_color_played(v_student);
   return v_id;
 end;
+$$;
+
+-- 同班可以挑戰的分身：每個同學最近一場有答題串的兵推，不含自己。
+-- 只回摘要（誰、多久前、答對幾題、穿什麼），答題串挑了才用 ghost_of 抓。
+drop function if exists public.class_ghosts();
+create or replace function public.class_ghosts()
+returns table (student_id uuid, nickname text, avatar text, legion text,
+               ended_at timestamptz, correct int)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select g.student_id, s.nickname, c.avatar, g.legion, g.ended_at,
+         (select count(*)::int from jsonb_array_elements(g.moves) e
+           where e->>1 = 'a' and e->>2 = '1')
+    from (select distinct on (m.student_id) m.student_id, m.legion, m.ended_at, m.moves
+            from public.versus_matches m
+            join public.students s on s.id = m.student_id
+           where m.moves is not null
+             and s.class_code = public.current_class_code()
+             and m.student_id <> public.current_student_id()
+           order by m.student_id, m.ended_at desc) g
+    join public.students s on s.id = g.student_id
+    left join public.characters c on c.student_id = g.student_id
+   order by g.ended_at desc
+   limit 60;
+$$;
+
+-- 某個同學最近一場的答題串。不同班就什麼都不回。
+drop function if exists public.ghost_of(uuid);
+create or replace function public.ghost_of(p_student uuid)
+returns table (nickname text, legion text, moves jsonb)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select s.nickname, m.legion, m.moves
+    from public.versus_matches m
+    join public.students s on s.id = m.student_id
+   where m.student_id = p_student
+     and m.moves is not null
+     and s.class_code = public.current_class_code()
+   order by m.ended_at desc
+   limit 1;
 $$;
 
 -- 我的徽章牆。回「全部目錄 ＋ 我拿到的時間與階級 ＋ 現在的數字」，沒拿到的
@@ -2767,5 +2854,7 @@ grant execute on function
   public.set_pinned(text[]),
   public.set_title(text),
   public.set_public_profile(boolean),
-  public.record_versus_match(uuid, text, boolean, numeric, numeric, text[], int, text, uuid)
+  public.record_versus_match(uuid, text, boolean, numeric, numeric, text[], int, text, uuid, jsonb),
+  public.class_ghosts(),
+  public.ghost_of(uuid)
 to authenticated;

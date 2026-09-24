@@ -32,7 +32,8 @@ export interface AchInput {
 /** 一場兵推的結果。欄位跟 supabase 的 versus_matches 一樣。 */
 export interface VersusRecord {
   sessionId: string | null
-  opponentKind: 'cpu' | 'student'
+  /** 勝場（戰旗）只認 'student'；打電腦、打分身都不算 */
+  opponentKind: 'cpu' | 'ghost' | 'student'
   opponentName: string
   won: boolean
   /** 前線最後推到哪，0＝自己城牆、1＝對方城牆 */

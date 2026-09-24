@@ -476,6 +476,63 @@ select public.refresh_achievements();
 select test_ok(test_has('b1000000-0000-0000-0000-000000000002', 'all-rounder'),
                '補到七類之後小就也拿到了');
 
+\echo '── 分身：存答題串、同學看得到、假的答題串不收'
+select test_as('b0000000-0000-0000-0000-000000000001', true);
+select test_force($$ select test_events('b1000000-0000-0000-0000-000000000001', 3,
+                       p_session => 'c0000000-0000-0000-0000-0000000000a1') $$);
+select public.record_versus_match('c0000000-0000-0000-0000-0000000000a1'::uuid, 'cpu', true,
+  p_moves => '[[1.2,"a",1],[1.2,"s","recognize",1],[3,"a",0],[5.5,"a",1],[6,"u"],[8,"a",1],[8,"s","spell",2]]'::jsonb);
+select test_ok((select moves is not null from public.versus_matches
+                 where session_id = 'c0000000-0000-0000-0000-0000000000a1'),
+               '答對三題、答題串也說三題：收下來當分身');
+select test_ok((select legion from public.versus_matches
+                 where session_id = 'c0000000-0000-0000-0000-0000000000a1')
+               = coalesce((select e from public.characters c, jsonb_array_elements_text(c.equipped) e
+                            where c.student_id = 'b1000000-0000-0000-0000-000000000001'
+                              and e like 'legion-%' limit 1), ''),
+               '那一場穿什麼軍團是伺服器自己看的');
+-- 答題事件只有兩題，答題串卻說答對五題：做一個打不贏的假分身
+select test_force($$ select test_events('b1000000-0000-0000-0000-000000000001', 2,
+                       p_session => 'c0000000-0000-0000-0000-0000000000a2') $$);
+select public.record_versus_match('c0000000-0000-0000-0000-0000000000a2'::uuid, 'cpu', true,
+  p_moves => '[[1,"a",1],[2,"a",1],[3,"a",1],[4,"a",1],[5,"a",1]]'::jsonb);
+select test_ok((select moves is null from public.versus_matches
+                 where session_id = 'c0000000-0000-0000-0000-0000000000a2'),
+               '答對筆數比答題事件多：答題串不收（戰績照記）');
+select test_ok((select count(*) from public.class_ghosts()) = 0, '自己不會出現在自己的分身名單上');
+
+select test_as('b0000000-0000-0000-0000-000000000002', true);
+select test_ok((select count(*) from public.class_ghosts()) = 1, '同學看得到小成的分身');
+select test_ok((select correct from public.class_ghosts()) = 3,
+               '名單上寫的是最近一場「有分身」的那一場，答對三題');
+select test_ok((select jsonb_array_length(moves) from public.ghost_of('b1000000-0000-0000-0000-000000000001')) = 7,
+               '挑下去抓得到整串');
+select test_ok((select count(*) from public.ghost_of(gen_random_uuid())) = 0, '不存在的人抓不到');
+select test_ok((select count(*) from public.versus_matches
+                 where student_id = 'b1000000-0000-0000-0000-000000000001') = 0,
+               '別人的戰績表還是直接讀不到，只能走 ghost_of');
+
+select test_force($$ select test_events('b1000000-0000-0000-0000-000000000002', 1,
+                       p_session => 'c0000000-0000-0000-0000-0000000000b1') $$);
+select public.record_versus_match('c0000000-0000-0000-0000-0000000000b1'::uuid, 'ghost', true,
+  p_opponent => 'b1000000-0000-0000-0000-000000000001'::uuid,
+  p_moves => '[[2,"a",1]]'::jsonb);
+select test_ok((select opponent_kind = 'ghost' and opponent_student = 'b1000000-0000-0000-0000-000000000001'
+                  from public.versus_matches where session_id = 'c0000000-0000-0000-0000-0000000000b1'),
+               '打同學的分身記成 ghost，對手是誰也記下來');
+select public.record_versus_match('c0000000-0000-0000-0000-0000000000b2'::uuid, 'student', true,
+  p_opponent => 'b1000000-0000-0000-0000-000000000001'::uuid);
+select public.record_versus_match('c0000000-0000-0000-0000-0000000000b3'::uuid, 'ghost', true,
+  p_opponent => gen_random_uuid());
+select test_ok((select count(*) from public.versus_matches
+                 where session_id in ('c0000000-0000-0000-0000-0000000000b2',
+                                      'c0000000-0000-0000-0000-0000000000b3')
+                   and opponent_kind = 'cpu') = 2,
+               '自稱贏了真人、或是分身不是同班同學：都當成打電腦');
+select public.refresh_achievements();
+select test_ok((select value from public.my_achievements() where id = 'war-flag') = 0,
+               '贏分身、自稱贏真人，都不算戰旗勝場');
+
 reset role;
 select test_force($$
   delete from public.students where login_id like 'ach%';

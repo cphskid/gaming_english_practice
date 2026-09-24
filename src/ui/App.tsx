@@ -8,7 +8,7 @@ import { legionOf } from '@/data/legions'
 import type {
   Character, GameModule, GameOutcome, LevelData, LevelProgress, Opponent, Skill, Staff, Student,
 } from '@/core/types'
-import { botOpponent } from '@/core/opponent'
+import { botOpponent, ghostOpponent } from '@/core/opponent'
 import { LEVELS } from '@/data/levels'
 import { WORDS, WORDS_BY_ID, wordsOfThemes } from '@/data/words'
 import { towerDefense, tugOfWar } from '@/games'
@@ -54,6 +54,8 @@ interface Playing {
   quizOpts: Omit<QuizOptions, 'skill'>
   /** 對戰模式才有 */
   opponent: Opponent | null
+  /** 打的是哪個同學的分身。打電腦是 undefined */
+  ghostOf?: string
 }
 
 export function App() {
@@ -254,6 +256,34 @@ export function App() {
     setScreen('play')
   }, [student, stat, myRate])
 
+  /**
+   * 挑戰同學的分身：抓他最近一場的答題串，照原樣重播。
+   * 跟打電腦差的只有對手那一行——引擎分不出來，本來就該分不出來。
+   */
+  const startGhost = useCallback(async (foeId: string): Promise<string | null> => {
+    if (!student) return null
+    audio.unlock()
+    let g
+    try { g = await repo.loadGhost(foeId) } catch { return '抓不到這一場，網路好一點再試一次' }
+    if (!g) return '這位同學還沒有可以挑戰的紀錄'
+    const session = new Session({
+      mode: 'versus',
+      gameId: tugOfWar.id,
+      level: null,
+      participants: [{ studentId: student.id, nickname: student.nickname }],
+      wordsById: WORDS_BY_ID,
+      stat,
+      alreadyCleared: false,
+    })
+    setPlaying({
+      level: null, game: tugOfWar, session, quizzes: new Map(), quizOpts: { words: WORDS, stat },
+      opponent: ghostOpponent(g.nickname, g.moves, g.legion),
+      ghostOf: g.studentId,
+    })
+    setScreen('play')
+    return null
+  }, [student, stat])
+
   /** 這一場被收掉了（開場的人離開、老師按結束）。等待室沒東西好等，回選關畫面。 */
   useEffect(() => {
     if (screen === 'lobby' && roomId && roomLoaded && !room) {
@@ -317,9 +347,12 @@ export function App() {
       if (!lv && outcome.versus && playing.opponent) {
         await repo.recordVersusMatch({
           sessionId: playing.session.id,
-          // v1 只打電腦。**打電腦不算勝場**，換成真人時這裡改成 'student'。
-          opponentKind: 'cpu',
+          // **打電腦、打分身都不算勝場**（戰旗）。即時對戰上線時那邊送 'student'。
+          opponentKind: playing.ghostOf ? 'ghost' : 'cpu',
+          opponentStudent: playing.ghostOf,
           opponentName: playing.opponent.name,
+          // 這一場自己的答題串。存下來，同學挑戰你的時候打的就是它。
+          moves: outcome.versus.moves,
           won: outcome.win,
           front: outcome.versus.front,
           lowestFront: outcome.versus.lowestFront,
@@ -570,6 +603,7 @@ export function App() {
         <Versus
           myRate={myRate()}
           onStart={startVersus}
+          onGhost={startGhost}
           onBack={() => setScreen('select')}
         />
       )}

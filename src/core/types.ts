@@ -162,6 +162,18 @@ export interface Move {
   correct: boolean
   /** 答對時召喚出來的兵是第幾階；答錯是 null */
   rank: number | null
+  /**
+   * 真人錄下來的那一場才有（分身挑戰）。電腦的答題串沒有這欄，引擎照舊自己決定
+   * 走哪條線、什麼時候出兵；有這欄的就**照他當時做的事原樣重播**：
+   *   answer  答了一題（correct 說對錯）——答對一樣開一槍、拿水晶
+   *   summon  派出一隻 line 線、rank 階的兵
+   *   up      按了升階
+   * 分開記而不是只記答題，是因為換線、什麼時候升階都是他自己的決定，
+   * 只記對錯的話重播出來的是電腦，不是他。
+   */
+  act?: 'answer' | 'summon' | 'up'
+  /** act 是 summon 時，派的是哪條線 */
+  line?: Skill
 }
 
 /**
@@ -174,6 +186,13 @@ export interface Opponent {
   name: string
   /** 電腦要老實寫出來。小孩被騙到會更不爽，而且輸給電腦不該記進戰績。 */
   isBot: boolean
+  /**
+   * 同學的分身：重播他最近一場的紀錄，本人不在線上。一樣要老實寫出來——
+   * 小朋友以為同學真的在跟他打，結果去問同學，那就穿幫了。
+   */
+  isGhost?: boolean
+  /** 對手穿哪一套軍團（品項 id，王國軍是空字串）。電腦不填，一律紅色王國軍。 */
+  legion?: string
   /** 到第 t 秒為止，對手做過的事（累計，可以重複問）。 */
   movesUntil(t: number): Move[]
 }
@@ -235,6 +254,8 @@ export interface GameOutcome {
     linesUsed: Skill[]
     /** 這一場推出過的最高兵階 */
     topTier: number
+    /** 這一場自己做過的事，照時間排。存起來就是同學挑戰你時的「分身」。 */
+    moves: Move[]
   }
 }
 

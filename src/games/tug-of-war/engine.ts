@@ -1,4 +1,4 @@
-import type { GameContext, GameHandle, Opponent, Word } from '@/core/types'
+import type { GameContext, GameHandle, Move, Opponent, Word } from '@/core/types'
 import { makeFeeder } from '@/core/opponent'
 import { iconImg, iconUrl } from '@/data/icons'
 import { ART, TERRAIN_KEYS, loadArt, onArt } from '../tower-defense/art'
@@ -199,6 +199,11 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
      * 少了這個，電腦用拼字線會用認字的速度丟出三倍強的兵。
      */
     botCredit: 0,
+    /**
+     * 這一場自己做過的事（答題、出兵、升階），照時間記下來。打完交給容器存起來，
+     * 同學來挑戰的時候，他打的就是這一串重播出來的「分身」。
+     */
+    rec: [] as Move[],
     /** 最後三十秒的音樂加速只做一次 */
     rushed: false,
     pops: [] as { x: number; y: number; text: string; color: string; life: number; icon?: string }[],
@@ -223,7 +228,16 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   const foeSuffix = ctx.color === '_red' && !legion.id ? '_black' : '_red'
   const mine = (key: string) =>
     img[legion.prefix + key + ctx.color] ?? img[legion.prefix + key] ?? img[key + ctx.color] ?? img[key]
-  const theirs = (key: string) => img[key + foeSuffix] ?? img[key]
+  /**
+   * 對手那一套。同學的分身穿他自己的軍團（兩邊都是豬也沒關係，腳下的色圈分得出敵我）；
+   * 電腦、或是對手穿王國軍，就是紅色（我方也紅的話黑色）。
+   */
+  const foeLegion = legionById(foe.legion ?? '')
+  const theirs = (key: string) =>
+    (foeLegion.id ? img[foeLegion.prefix + key] : undefined) ?? img[key + foeSuffix] ?? img[key]
+  const theirUnit = (u: Unit, rank: number) =>
+    (foeLegion.id ? img[legionUnitArt(foeLegion, u.line, LINES[u.line].art, rank)] : undefined)
+      ?? theirs(LINES[u.line].art)
   /** 我方某條線某一階的圖。有的軍團每一階長得不一樣（豬軍團的大砲、豬王）。 */
   const myUnit = (u: Unit, rank: number) =>
     img[legionUnitArt(legion, u.line, LINES[u.line].art, rank)] ?? img[LINES[u.line].art + ctx.color] ?? img[LINES[u.line].art]
@@ -262,7 +276,9 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
    * 它就比人多一份火力——實測會變成三十秒把人的城堡打到剩 16 血，
    * 而平衡量測（那邊兩邊都有算落空）說不該發生。引擎跟平衡量測要跑同一套規則。
    */
-  const feed = makeFeeder(foe, (correct) => {
+  const feed = makeFeeder(foe, (correct, move) => {
+    // 同學的分身：照他當時做的事重播，不替他決定（見 ghostMove）。
+    if (move.act) { ghostMove(move); return }
     // **電腦跟人跑同一套規則**：一樣要累積、一樣有水晶、一樣被上限拖慢出兵速度，
     // 答錯一樣把累積的結算出去。少了任何一條，平衡量測量到的就不是玩家會遇到的東西。
     // 這段跟 tools/test/tug-balance.mjs 的 act() 必須逐行對得上。
@@ -291,6 +307,26 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     const mine = tappable('me')
     strike(S.battle, 'foe', mine[(Math.random() * TAPPABLE) | 0] ?? null, R)
   })
+
+  /**
+   * 分身的一步。**他當時做了什麼就做什麼**：答對一樣開一槍、拿水晶（槍一樣會落空，
+   * 理由同上），出兵就出他當時那條線那一階，升階就升階。
+   *
+   * 升階有可能水晶不夠——這一場他殺掉的兵跟當時不一樣，殺敵水晶就對不上。
+   * 那還是照升：分身重播的是「他的打法」，不是重算一遍他當時的荷包。
+   */
+  function ghostMove(m: Move) {
+    if (m.act === 'answer') {
+      if (!m.correct) return
+      S.battle.crystal.foe += R.answerCrystal
+      const mine = tappable('me')
+      strike(S.battle, 'foe', mine[(Math.random() * TAPPABLE) | 0] ?? null, R)
+    } else if (m.act === 'summon' && m.line) {
+      summon(S.battle, 'foe', m.line as Line, Math.min(MAX_TIER, m.rank ?? 1), R)
+    } else if (m.act === 'up') {
+      if (!upgrade(S.battle, 'foe')) S.battle.tier.foe = Math.min(MAX_TIER, S.battle.tier.foe + 1)
+    }
+  }
 
   // ------------------------------------------------------------------ 題目
   function freshWord(): Word | null {
@@ -498,7 +534,8 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     elMine.innerHTML = `${iconImg('castle', 15)} ${Math.max(0, Math.ceil(S.battle.castleHp.me))}`
     elTheirs.textContent = `🏯 ${Math.max(0, Math.ceil(S.battle.castleHp.foe))}`
     // 電腦對手一定要寫出來。被騙到才會真的不爽。
-    elFoe.textContent = foe.isBot ? `🤖 電腦對手．${foe.name}` : `🧒 ${foe.name}`
+    elFoe.textContent = foe.isBot ? `🤖 電腦對手．${foe.name}`
+      : foe.isGhost ? `👤 ${foe.name}的分身` : `🧒 ${foe.name}`
   }
 
   function toast(text: string) {
@@ -519,6 +556,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     S.topTier = Math.max(S.topTier, rank)
     S.linesUsed.add(S.line)
     const u = summon(S.battle, 'me', S.line, rank, R)
+    S.rec.push({ t: S.battle.t, act: 'summon', correct: true, line: LINES[S.line].skill, rank })
     S.pending = 0
     S.pops.push({
       x: R.homeMe + 40, y: ROAD_Y - 80,
@@ -546,6 +584,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   function buyTier() {
     if (S.done || paused) return
     if (!upgrade(S.battle, 'me')) return
+    S.rec.push({ t: S.battle.t, act: 'up', correct: true, rank: null })
     ctx.audio.play('tower-build')
     toast(`兵階升到 ${S.battle.tier.me} 階，現在要連對 ${S.battle.tier.me} 題才出一隻`)
     syncQuiz()
@@ -652,6 +691,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       wordId: word.id, skill: LINES[S.line].skill, correct,
       ms: Math.round(performance.now() - S.askedAt), combo: S.combo,
     })
+    S.rec.push({ t: S.battle.t, act: 'answer', correct, rank: null })
     if (correct) {
       S.correct++; S.combo++
       buzz(14)
@@ -808,6 +848,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
         lowestFront: Math.min(S.lowestFront, pushed(b, R)),
         linesUsed: [...S.linesUsed].map((l) => LINES[l].skill),
         topTier: S.topTier,
+        moves: S.rec,
       },
     })
   }
@@ -949,10 +990,9 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   function drawUnit(u: Unit) {
     const spec = statsOf(u.line, u.rank)
     const y = laneY(u)
-    const art = LINES[u.line].art
-    const im = u.side === 'me' ? myUnit(u, u.rank) : theirs(art)
+    const im = u.side === 'me' ? myUnit(u, u.rank) : theirUnit(u, u.rank)
     // 隨從一律畫一階的樣子：豬軍團三階是大砲，後面跟的還是丟箱子的小豬
-    const follower = u.side === 'me' ? myUnit(u, 1) : im
+    const follower = u.side === 'me' ? myUnit(u, 1) : theirUnit(u, 1)
     const flip = u.side === 'foe'
     const back = u.side === 'me' ? -1 : 1      // 「後面」是朝自己城堡那一邊
 
@@ -1003,15 +1043,16 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       Math.max(0, S.battle.castleHp[side]) / R.castleHp, side === 'me' ? '#6fbf4a' : '#d4504a')
     // 電腦對手直接寫在它的城堡上。上面那條的對手名字在手機橫拿時放不下（會被藏起來），
     // 只靠開場那一下提示，小朋友打到一半會忘記對面是電腦。
-    if (side === 'foe' && foe.isBot) {
+    if (side === 'foe' && (foe.isBot || foe.isGhost)) {
+      const tag = foe.isBot ? '電腦對手' : `${foe.name}的分身`
       c2d.save()
       c2d.font = 'bold 15px system-ui'
       c2d.textAlign = 'center'; c2d.textBaseline = 'middle'
-      const w = c2d.measureText('電腦對手').width + 18
+      const w = c2d.measureText(tag).width + 18
       c2d.fillStyle = 'rgba(40,24,20,.78)'
       roundRect(x - w / 2, ROAD_Y - 190, w, 22, 11); c2d.fill()
       c2d.fillStyle = '#ffd9d4'
-      c2d.fillText('電腦對手', x, ROAD_Y - 178)
+      c2d.fillText(tag, x, ROAD_Y - 178)
       c2d.restore()
     }
   }
@@ -1378,7 +1419,8 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   syncTargets()
   pickQuestion()
   syncUI()
-  toast(foe.isBot ? `對手是電腦：${foe.name}` : `對手：${foe.name}`)
+  toast(foe.isBot ? `對手是電腦：${foe.name}`
+    : foe.isGhost ? `對手是${foe.name}的分身（重播最近一場）` : `對手：${foe.name}`)
   // 開戰的儀式感：號角先響，熱血 BGM 跟上。
   // 進到這個畫面之前一定點過「開打」，所以 iOS 的解鎖已經拿到了。
   ctx.audio.unlock()

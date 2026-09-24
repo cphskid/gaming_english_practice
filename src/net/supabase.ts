@@ -5,8 +5,9 @@ import type {
 } from '@/core/types'
 import type {
   AchievementRow, AddedTeacher, BadgeCount, Pin, ClassRosterRow, LeaderRow, LevelResult, PublicProfile,
-  Repository, RoomBrief, RoomMember, RoomState, SavedResult, VersusMatchInput,
+  Repository, RoomBrief, RoomMember, RoomState, SavedResult, VersusMatchInput, Ghost, GhostRow,
 } from './repository'
+import { packMoves, unpackMoves } from '@/core/opponent'
 
 /**
  * Supabase 版。
@@ -646,8 +647,33 @@ export class SupabaseRepository implements Repository {
       p_lines: m.linesUsed,
       p_top_tier: m.topTier,
       p_opponent_name: m.opponentName,
+      p_opponent: m.opponentStudent ?? null,
+      p_moves: packMoves(m.moves),
     })
     fail('記不了這一場戰績', error)
+  }
+
+  async listGhosts(): Promise<GhostRow[]> {
+    const { data, error } = await this.db.rpc('class_ghosts')
+    fail('讀不到同學的分身', error)
+    type Row = {
+      student_id: string; nickname: string; avatar: string | null
+      legion: string | null; ended_at: string; correct: number
+    }
+    return ((data as Row[] | null) ?? []).map((r) => ({
+      studentId: r.student_id, nickname: r.nickname, avatar: r.avatar ?? '',
+      legion: r.legion ?? '', endedAt: Date.parse(r.ended_at), correct: Number(r.correct ?? 0),
+    }))
+  }
+
+  async loadGhost(studentId: string): Promise<Ghost | null> {
+    const { data, error } = await this.db.rpc('ghost_of', { p_student: studentId })
+    fail('抓不到這位同學的分身', error)
+    type Row = { nickname: string; legion: string | null; moves: unknown }
+    const row = (data as Row[] | null)?.[0]
+    if (!row) return null
+    const moves = unpackMoves(row.moves)
+    return moves.length ? { studentId, nickname: row.nickname, legion: row.legion ?? '', moves } : null
   }
 
   async loadClassRoster(classCode: string): Promise<ClassRosterRow[]> {

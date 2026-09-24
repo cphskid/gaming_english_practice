@@ -1,5 +1,5 @@
 import type {
-  AdminClassRow, AnswerEvent, Character, ClassRoom, LevelProgress, Mode, Staff, Student,
+  AdminClassRow, AnswerEvent, Character, ClassRoom, LevelProgress, Mode, Move, Staff, Student,
   TeacherRow, WordStatEntry,
 } from '@/core/types'
 
@@ -220,6 +220,14 @@ export interface Repository {
    */
   recordVersusMatch(m: VersusMatchInput): Promise<void>
 
+  /**
+   * 同班可以挑戰的分身：每個同學最近一場有錄下來的兵推。不含自己。
+   * 只有摘要，答題串要挑了才用 loadGhost 抓。
+   */
+  listGhosts(): Promise<GhostRow[]>
+  /** 某個同學最近一場的答題串。不同班、或是還沒打過，回 null。 */
+  loadGhost(studentId: string): Promise<Ghost | null>
+
   listTeachers(): Promise<TeacherRow[]>
   listInvites(): Promise<{ email: string; used: boolean }[]>
   setTeacherActive(userId: string, active: boolean): Promise<void>
@@ -366,9 +374,16 @@ export interface PublicProfile {
 /** 一場兵推的結果。欄位跟資料庫的 versus_matches 一樣。 */
 export interface VersusMatchInput {
   sessionId: string
-  /** 打電腦是 'cpu'。**勝場只認 'student'**，不然贏電腦就能刷戰績。 */
-  opponentKind: 'cpu' | 'student'
+  /**
+   * 打電腦是 'cpu'、打同學的分身是 'ghost'。**勝場只認 'student'**（真人即時對戰），
+   * 不然贏電腦就能刷戰績；分身也先不算，免得一直挑同一個弱的同學刷。
+   */
+  opponentKind: 'cpu' | 'ghost' | 'student'
   opponentName: string
+  /** 打分身時，分身是誰 */
+  opponentStudent?: string
+  /** 這一場自己做過的事。存起來就是別人挑戰你時的分身。 */
+  moves: Move[]
   won: boolean
   /** 前線最後推到哪，0＝自己城牆、1＝對方城牆 */
   front: number
@@ -378,4 +393,25 @@ export interface VersusMatchInput {
   linesUsed: string[]
   /** 這一場推出過的最高兵階 */
   topTier: number
+}
+
+/** 選對手那一頁的一列：一個可以挑戰的同學分身。 */
+export interface GhostRow {
+  studentId: string
+  nickname: string
+  avatar: string
+  /** 那一場穿的軍團（品項 id，王國軍是空字串） */
+  legion: string
+  /** 那一場打完的時間，epoch 毫秒 */
+  endedAt: number
+  /** 那一場答對幾題。讓挑戰的人大概知道對方多快 */
+  correct: number
+}
+
+/** 挑下去之後抓回來的那一整場 */
+export interface Ghost {
+  studentId: string
+  nickname: string
+  legion: string
+  moves: Move[]
 }
