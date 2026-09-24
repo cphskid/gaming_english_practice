@@ -128,25 +128,25 @@ interface LevelSeed {
 }
 
 const SEEDS: LevelSeed[] = [
-  { name: '數字島', themes: ['numbers'], layout: 'twinLanes', waveCount: 4 },
-  { name: '顏色與身體', themes: ['colors', 'body'], layout: 'twinLanes', waveCount: 4 },
-  { name: '動物森林', themes: ['animals'], layout: 'longRoad', waveCount: 4 },
-  { name: '食物與餐具', themes: ['food', 'tableware'], layout: 'twinLanes', waveCount: 5 },
-  { name: '衣櫃魔王', themes: ['clothing'], layout: 'triple', waveCount: 5, boss: true },
+  { name: '數字島', themes: ['numbers'], layout: 'islandTwin', waveCount: 4 },
+  { name: '顏色與身體', themes: ['colors', 'body'], layout: 'zigzag', waveCount: 4 },
+  { name: '動物森林', themes: ['animals'], layout: 'forestS', waveCount: 4 },
+  { name: '食物與餐具', themes: ['food', 'tableware'], layout: 'fork', waveCount: 5 },
+  { name: '衣櫃魔王', themes: ['clothing'], layout: 'tripleRush', waveCount: 5, boss: true },
 
-  { name: '我家', themes: ['house', 'family'], layout: 'twinLanes', waveCount: 5 },
-  { name: '學校', themes: ['school'], layout: 'longRoad', waveCount: 5 },
-  { name: '出門去', themes: ['places', 'transportation'], layout: 'twinLanes', waveCount: 5 },
-  { name: '運動與職業', themes: ['sports', 'jobs'], layout: 'longRoad', waveCount: 5 },
-  { name: '暴風雨魔王', themes: ['weather'], layout: 'triple', waveCount: 6, boss: true },
+  { name: '我家', themes: ['house', 'family'], layout: 'homeLoop', waveCount: 5 },
+  { name: '學校', themes: ['school'], layout: 'corridor', waveCount: 5 },
+  { name: '出門去', themes: ['places', 'transportation'], layout: 'crossroads', waveCount: 5 },
+  { name: '運動與職業', themes: ['sports', 'jobs'], layout: 'hairpin', waveCount: 5 },
+  { name: '暴風雨魔王', themes: ['weather'], layout: 'stormTriple', waveCount: 6, boss: true },
 
-  { name: '心情', themes: ['feelings', 'adjectives'], layout: 'twinLanes', waveCount: 6 },
-  { name: '動起來', themes: ['verbs'], layout: 'longRoad', waveCount: 6 },
-  { name: '時間之塔', themes: ['time'], layout: 'twinLanes', waveCount: 6 },
-  { name: '最終試煉', themes: [], layout: 'triple', waveCount: 7, boss: true },
+  { name: '心情', themes: ['feelings', 'adjectives'], layout: 'twinLoops', waveCount: 6 },
+  { name: '動起來', themes: ['verbs'], layout: 'switchback', waveCount: 6 },
+  { name: '時間之塔', themes: ['time'], layout: 'clockTower', waveCount: 6 },
+  { name: '最終試煉', themes: [], layout: 'finalTrial', waveCount: 7, boss: true },
 ]
 
-/** 外觀每五關換一次，佈局每一關可以不同——外觀貴、佈局便宜 */
+/** 外觀每五關換一次，佈局一關一張——外觀要畫圖很貴，佈局是十幾組座標很便宜 */
 function tilesetFor(no: number): string {
   if (no <= 5) return 'color1'
   if (no <= 10) return 'color3'
