@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { levelFromExp } from '@/core/progress'
 import type { Student } from '@/core/types'
 import { repo } from '@/net'
-import type { LeaderRow } from '@/net/repository'
+import type { BadgeCount, LeaderRow } from '@/net/repository'
+import { PinnedBadges, rarityText } from './Profile'
 import { avatarSrc } from '@/data/jobs'
 import { frameOf } from '@/data/cosmetics'
 import { Icon } from './Icon'
@@ -27,12 +28,15 @@ export function Leaderboard({ student, onOpen, onBack }: {
   const [rows, setRows] = useState<LeaderRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [sort, setSort] = useState<'exp' | 'stars' | 'coins'>('exp')
+  const [counts, setCounts] = useState<BadgeCount[] | null>(null)
 
   useEffect(() => {
     let alive = true
     repo.classLeaderboard()
       .then((r) => { if (alive) setRows(r) })
       .catch((e) => { if (alive) setError(e instanceof Error ? e.message : String(e)) })
+    // 主徽章旁邊的「全班幾人」。拿不到就不顯示，不擋排行榜。
+    void repo.classBadgeCounts().then((c) => { if (alive) setCounts(c) }).catch(() => {})
     return () => { alive = false }
   }, [])
 
@@ -92,6 +96,13 @@ export function Leaderboard({ student, onOpen, onBack }: {
                   <b>Lv.{levelFromExp(r.exp)}</b>
                   <small>⭐ {r.stars}　<Icon name="coin" size={13} /> {r.coins}</small>
                 </span>
+                {/* 別著的三個另起一行排在名字底下，才放得下名字和階級 */}
+                {r.pins.length > 0 && (
+                  <span className="pinline">
+                    <PinnedBadges pins={r.pins}
+                      mainNote={rarityText(counts, r.pins[0].id, r.pins[0].tier)} />
+                  </span>
+                )}
               </div>
             )
           })}

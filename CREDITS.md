@@ -22,9 +22,9 @@
 
 **game-icons.net 徽記** — [game-icons.net](https://game-icons.net/)
 
-授權為 [Creative Commons BY 3.0](https://creativecommons.org/licenses/by/3.0/)：可自由使用、修改與再散布，**但必須署名**。`src/ui/icons.ts` 內嵌的 42 個成就徽章圖示出自此站（只取路徑資料，顏色改由畫面控制）。哪一張是誰畫的標在 `src/ui/icons.ts` 每一張上面，也可用 `tools/gen-badge-icons.py` 重新抓取。作者：
+授權為 [Creative Commons BY 3.0](https://creativecommons.org/licenses/by/3.0/)：可自由使用、修改與再散布，**但必須署名**。`src/ui/icons.ts` 內嵌的 45 個成就徽章圖示出自此站（只取路徑資料，顏色改由畫面控制）。哪一張是誰畫的標在 `src/ui/icons.ts` 每一張上面，也可用 `tools/gen-badge-icons.py` 重新抓取。作者：
 
-- **Lorc** — https://lorcblog.blogspot.com/ （24 張）
+- **Lorc** — https://lorcblog.blogspot.com/ （27 張）
 - **Delapouite** — https://delapouite.com/ （14 張）
 - **Skoll** （2 張）
 - **Carl Olsen** — https://twitter.com/unstoppableCarl （1 張）

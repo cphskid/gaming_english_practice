@@ -1,6 +1,7 @@
 import type { AnswerEvent, Character, LevelProgress, Skill, WordStatEntry } from './types'
 import { LEVELS } from '@/data/levels'
 import { WORDS, WORDS_BY_ID } from '@/data/words'
+import { ACH_BY_ID, ALL } from '@/data/achievements'
 
 /**
  * 成就判定。
@@ -63,23 +64,59 @@ function weekKey(ms: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-/** 這一份輸入現在拿得到哪些成就。回傳 id 陣列，順序不保證。 */
-export function evaluateAchievements(input: AchInput): string[] {
+/** 同一個字、同一個技能、同一天最多算幾次答對。擋狂刷一個簡單的字。 */
+export const DAILY_CAP = 5
+
+/** 分階徽章現在的數字。`all` 是「全部」那一階照目前題庫是多少。 */
+export interface AchValue { value: number; all: number }
+
+export interface AchEval {
+  /** 一次性徽章裡拿得到的 id */
+  got: string[]
+  /** 分階徽章的數字，階級由 tierOf() 換算 */
+  values: Record<string, AchValue>
+}
+
+/** 這個數字到第幾階。跟 SQL 的 ach_put 同一套：依序數到第一個沒達到的為止。 */
+export function tierOf(id: string, v: AchValue): number {
+  const tiers = ACH_BY_ID.get(id)?.tiers ?? []
+  let n = 0
+  for (const t of tiers) {
+    const goal = t === ALL ? Math.max(v.all, 1) : t
+    if (v.value < goal) break
+    n += 1
+  }
+  return n
+}
+
+/** 這一份輸入現在拿得到哪些成就。 */
+export function evaluateAchievements(input: AchInput): AchEval {
   const { events, stats, progress, character: c, matches, itemUses } = input
   const now = input.now ?? Date.now()
   const got: string[] = []
+  const values: Record<string, AchValue> = {}
   const win = (id: string, ok: boolean) => { if (ok) got.push(id) }
+  const put = (id: string, value: number, all = 0) => { values[id] = { value, all } }
 
   const ok = events.filter((e) => e.correct)
-  const okBySkill = (s: Skill) => ok.filter((e) => e.skill === s).length
+  // 有效答對：同一個字、同一個技能、同一天最多 DAILY_CAP 次
+  const capKey = new Map<string, number>()
+  const okCapped = ok.filter((e) => {
+    const key = e.wordId + '|' + e.skill + '|' + dayKey(e.at)
+    const n = (capKey.get(key) ?? 0) + 1
+    capKey.set(key, n)
+    return n <= DAILY_CAP
+  })
+  const okBySkill = (s: Skill) => okCapped.filter((e) => e.skill === s).length
   const mastered = stats.filter((s) => s.streak >= MASTER_STREAK)
   const cleared = progress.filter((p) => p.clearedAt)
   const clearedIds = new Set(cleared.map((p) => p.levelId))
 
   // ---------------------------------------------------------------- 學習
   win('first-answer', ok.length >= 1)
-  win('hundred', ok.length >= 100)
-  win('nemesis', stats.some((s) => s.wrong >= 3 && s.streak >= MASTER_STREAK))
+  put('hundred', okCapped.length)
+  put('nemesis', new Set(stats.filter((s) => s.wrong >= 3 && s.streak >= MASTER_STREAK)
+    .map((s) => s.wordId)).size)
 
   const okWords = new Set(ok.map((e) => e.wordId))
   const themes = new Map<string, { all: number; done: number }>()
@@ -90,14 +127,16 @@ export function evaluateAchievements(input: AchInput): string[] {
     if (okWords.has(w.id)) t.done += 1
     themes.set(w.theme, t)
   }
-  win('theme-king', [...themes.values()].filter((t) => t.all > 0 && t.all === t.done).length >= 5)
-  win('mastered-50', new Set(mastered.map((s) => s.wordId)).size >= 50)
-  win('literate', okWords.size >= WORDS.length)
+  put('theme-king', [...themes.values()].filter((t) => t.all > 0 && t.all === t.done).length,
+    themes.size)
+  const spellable = WORDS.filter((w) => w.spell).length
+  put('mastered-50', mastered.length, 2 * WORDS.length + spellable)
+  put('literate', okWords.size, WORDS.length)
 
   // ---------------------------------------------------------------- 技能
-  win('read-100', okBySkill('recognize') >= 100)
-  win('listen-100', okBySkill('listen') >= 100)
-  win('spell-100', okBySkill('spell') >= 100)
+  put('read-100', okBySkill('recognize'))
+  put('listen-100', okBySkill('listen'))
+  put('spell-100', okBySkill('spell'))
 
   const skillsPerDay = new Map<string, Set<Skill>>()
   for (const e of events) {
@@ -106,36 +145,38 @@ export function evaluateAchievements(input: AchInput): string[] {
     set.add(e.skill)
     skillsPerDay.set(key, set)
   }
-  win('triple-day', [...skillsPerDay.values()].some((s) => s.size >= 3))
+  put('triple-day', [...skillsPerDay.values()].filter((s) => s.size >= 3).length)
 
-  const longSpell = ok.filter(
+  const longSpell = okCapped.filter(
     (e) => e.skill === 'spell' && (WORDS_BY_ID.get(e.wordId)?.word.length ?? 0) >= 8).length
-  win('long-words', longSpell >= 10)
+  put('long-words', longSpell)
 
   const perSkillMastered = (s: Skill) => mastered.filter((m) => m.skill === s).length
-  win('balanced', (['recognize', 'spell', 'listen'] as Skill[])
-    .every((s) => perSkillMastered(s) >= 50))
+  put('balanced', Math.min(...(['recognize', 'spell', 'listen'] as Skill[]).map(perSkillMastered)),
+    Math.min(WORDS.length, spellable))
+  put('combo', Math.max(0, ...ok.map((e) => e.combo)))
 
   // ---------------------------------------------------------------- 守塔
   win('first-clear', cleared.length >= 1)
-  win('three-star', progress.some((p) => p.stars >= 3))
-  win('no-damage', cleared.some((p) => (p.bestSurvival ?? 0) >= 1))
+  put('three-star', progress.filter((p) => p.stars >= 3).length, LEVELS.length)
+  put('no-damage', cleared.filter((p) => (p.bestSurvival ?? 0) >= 1).length, LEVELS.length)
   const bosses = LEVELS.filter((l) => l.isBoss)
   win('boss-slayer', bosses.length > 0 && bosses.every((l) => clearedIds.has(l.id)))
-  win('stars-30', progress.reduce((n, p) => n + p.stars, 0) >= 30)
+  put('stars-30', progress.reduce((n, p) => n + p.stars, 0), LEVELS.length * 3)
   win('all-clear', LEVELS.every((l) => clearedIds.has(l.id)))
 
   // ---------------------------------------------------------------- 對戰
   const byTime = [...matches].sort((a, b) => a.endedAt - b.endedAt)
   win('first-match', byTime.length >= 1)
+  put('veteran', byTime.length)
   win('all-lines', byTime.some((m) => new Set(m.linesUsed).size >= 3))
-  win('top-tier', byTime.some((m) => m.topTier >= 3))
-  win('comeback', byTime.some((m) => m.won && m.lowestFront <= 0.35))
+  put('top-tier', byTime.filter((m) => m.topTier >= 3).length)
+  put('comeback', byTime.filter((m) => m.won && m.lowestFront <= 0.35).length)
   // 連輸兩場之後又開了一場。輸的人也拿得到的那一個。
   win('never-quit', byTime.some((_, i) =>
     i >= 2 && !byTime[i - 1].won && !byTime[i - 2].won))
   // 勝場只認同學，贏電腦不算——不然打最弱的電腦就能刷。
-  win('war-flag', byTime.filter((m) => m.won && m.opponentKind === 'student').length >= 5)
+  put('war-flag', byTime.filter((m) => m.won && m.opponentKind === 'student').length)
 
   // ---------------------------------------------------------------- 收集
   const has = (id: string) => (c.items[id] ?? 0) > 0
@@ -161,7 +202,8 @@ export function evaluateAchievements(input: AchInput): string[] {
   // 不然請假或沒平板的小孩等於被懲罰。
   win('week-3', bestWeek >= 3)
   win('week-5', bestWeek >= 5)
-  win('weekend', events.some((e) => isoDow(e.at) >= 6))
+  put('days', new Set(events.map((e) => dayKey(e.at))).size)
+  put('weekend', new Set(events.filter((e) => isoDow(e.at) >= 6).map((e) => dayKey(e.at))).size)
   win('month-12', Math.max(0, ...[...daysPerMonth.values()].map((s) => s.size)) >= 12)
 
   const clearedAtOf = new Map(cleared.map((p) => [p.levelId, p.clearedAt ?? 0]))
@@ -202,5 +244,5 @@ export function evaluateAchievements(input: AchInput): string[] {
     (p) => p.lastWinSession && !usedSessions.has(p.lastWinSession)))
   win('combo-20', ok.some((e) => e.combo >= 20))
 
-  return got
+  return { got, values }
 }

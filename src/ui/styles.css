@@ -490,7 +490,75 @@ h2.sec small{font-size:12px;font-weight:400;color:var(--muted)}
   box-shadow:inset 0 1px 0 rgba(255,255,255,.45), 0 2px 5px -2px rgba(0,0,0,.6)}
 .badge.got svg{fill:#fff;filter:drop-shadow(0 1px 0 rgba(0,0,0,.35))}
 
-.pins{display:inline-flex;gap:5px;vertical-align:middle}
+.pins{display:inline-flex;gap:6px;vertical-align:middle;flex-wrap:wrap;align-items:center}
+
+/* 第二版：分階徽章的外圈是階級色（銅銀金白金鑽石），鑽石會閃。
+   名牌＝徽章＋名字＋階級，只剩一個小圖示的話誰都看不出那是什麼。 */
+:root{--t1:#b87840;--t2:#b9c3cd;--t3:#e8b73a;--t4:#62d0cc;--t5:#9d8bff}
+.badge.t1{--tc:var(--t1)}.badge.t2{--tc:var(--t2)}.badge.t3{--tc:var(--t3)}
+.badge.t4{--tc:var(--t4)}.badge.t5{--tc:var(--t5)}
+.badge.got[class*=" t"]{box-shadow:0 0 0 3px var(--tc), inset 0 1px 0 rgba(255,255,255,.45),
+  0 2px 6px -2px rgba(0,0,0,.6)}
+.badge.got.t5{animation:dia 2.4s ease-in-out infinite}
+@keyframes dia{0%,100%{box-shadow:0 0 0 3px var(--t5),0 0 6px 1px rgba(157,139,255,.5)}
+  50%{box-shadow:0 0 0 3px var(--t5),0 0 14px 4px rgba(157,139,255,.85)}}
+
+.plate{display:inline-flex;align-items:center;gap:6px;border-radius:999px;
+  padding:2px 9px 2px 3px;font-size:11.5px;line-height:1.2;white-space:nowrap;
+  background:rgba(255,255,255,.07);border:1.5px solid var(--pc, #6b6b6b)}
+.plate .badge{border-radius:50%}
+.plate b{font-weight:800}
+.plate small{color:var(--muted);font-size:10.5px;font-weight:600}
+.plate.main{font-size:13.5px;padding:3px 11px 3px 3px;border-width:2px}
+.plate.t1{--pc:var(--t1)}.plate.t2{--pc:var(--t2)}.plate.t3{--pc:var(--t3)}
+.plate.t4{--pc:var(--t4)}.plate.t5{--pc:var(--t5)}
+.plate:not([class*=" t"]){--pc:var(--gold)}
+.plate[class*=" t"]{background:color-mix(in srgb, var(--pc) 16%, transparent)}
+.rank:has(.pinline){flex-wrap:wrap;row-gap:6px}
+.rank .pinline{flex-basis:100%;padding-left:96px;box-sizing:border-box;min-width:0}
+.rank .pinline .plate small{color:var(--muted);font-size:10.5px;font-weight:600}
+.muted{color:var(--muted)}
+
+/* 「再 12 題就升銀階」 */
+.nearest{display:flex;align-items:center;gap:12px;padding:10px 14px;width:100%;max-width:640px;
+  cursor:pointer;box-sizing:border-box}
+.nearest > div{flex:1;min-width:0}
+.nearest b{font-size:13.5px}
+.bar{height:7px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:6px}
+.bar > span{display:block;height:100%;background:var(--gold);border-radius:4px}
+.minibar{display:block;width:80%;height:4px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden}
+.minibar > span{display:block;height:100%;background:var(--gold)}
+
+/* 點一個徽章跳出來的那一張 */
+.sheet-back{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;
+  align-items:flex-end;justify-content:center;padding:16px;padding-bottom:max(16px, env(safe-area-inset-bottom))}
+.sheet{width:100%;max-width:440px;padding:16px;display:flex;flex-direction:column;gap:14px;box-sizing:border-box}
+.sheet-top{display:flex;gap:14px;align-items:flex-start}
+.sheet-top > div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.sheet-name{font-size:18px}
+.sheet-top p{margin:0;font-size:13.5px;line-height:1.5}
+.sheet-top small{color:var(--muted);font-size:12px}
+.sheet-top .rare{color:var(--gold);font-weight:700}
+.tierline{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.tdot{display:flex;flex-direction:column;align-items:center;gap:1px;font-size:11.5px;font-weight:700;
+  padding:5px 0;border-radius:8px;border:1.5px solid var(--tc);opacity:.45}
+.tdot small{font-size:10px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.tdot.on{opacity:1;background:color-mix(in srgb, var(--tc) 22%, transparent)}
+.tdot.t1{--tc:var(--t1)}.tdot.t2{--tc:var(--t2)}.tdot.t3{--tc:var(--t3)}.tdot.t4{--tc:var(--t4)}.tdot.t5{--tc:var(--t5)}
+.sheet-next{font-size:13px;margin:0}
+.sheet-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sheet-actions .spacer{flex:1}
+
+/* 結算畫面蓋一個大章 */
+.stamp-back{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.7);display:grid;place-items:center;padding:16px}
+.stamp{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;
+  animation:stamp .5s cubic-bezier(.2,1.6,.4,1) both}
+.stamp .badge{border-radius:28px}
+.stamp b{font-size:26px;font-weight:900}
+.stamp span{font-size:17px;color:var(--gold);font-weight:800}
+.stamp small{color:var(--muted);font-size:12px}
+@keyframes stamp{from{transform:scale(2.2) rotate(-12deg);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion: reduce){.stamp,.badge.got.t5{animation:none}}
 
 .profile-head{display:flex;gap:14px;align-items:center;padding:12px 14px;width:100%;max-width:640px}
 .profile-who{min-width:0}
@@ -531,6 +599,7 @@ h2.sec small{font-size:12px;font-weight:400;color:var(--muted)}
 .unlocked .ttl{font-size:13px;font-weight:800;color:var(--gold)}
 .unlocked .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
 .unlocked .one{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px}
+.unlocked .one small{color:var(--gold);font-size:10px}
 
 /* 排行榜點進去看同學的檔案 */
 .rank.link{cursor:pointer}
