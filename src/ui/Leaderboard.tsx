@@ -3,7 +3,7 @@ import { levelFromExp } from '@/core/progress'
 import type { Student } from '@/core/types'
 import { repo } from '@/net'
 import type { BadgeCount, LeaderRow } from '@/net/repository'
-import { PinnedBadges, rarityText } from './Profile'
+import { BadgePlate, rarityText } from './Profile'
 import { avatarSrc } from '@/data/jobs'
 import { frameOf } from '@/data/cosmetics'
 import { Icon } from './Icon'
@@ -96,11 +96,12 @@ export function Leaderboard({ student, onOpen, onBack }: {
                   <b>Lv.{levelFromExp(r.exp)}</b>
                   <small>⭐ {r.stars}　<Icon name="coin" size={13} /> {r.coins}</small>
                 </span>
-                {/* 別著的三個另起一行排在名字底下，才放得下名字和階級 */}
+                {/* 排行榜只放主徽章（Chuck 2026-09-24：比較乾淨）。另起一行排在名字底下，
+                    才放得下名字和階級；三個都看得到的是個人檔案。 */}
                 {r.pins.length > 0 && (
                   <span className="pinline">
-                    <PinnedBadges pins={r.pins}
-                      mainNote={rarityText(counts, r.pins[0].id, r.pins[0].tier)} />
+                    <BadgePlate pin={r.pins[0]} main
+                      note={rarityText(counts, r.pins[0].id, r.pins[0].tier)} />
                   </span>
                 )}
               </div>
