@@ -4,16 +4,21 @@ import { firstClearBonus, levelFromExp, mergeProgress, starsFor } from '@/core/p
 import { LEVELS } from '@/data/levels'
 import type { LevelData } from '@/core/types'
 import { ITEMS } from '@/data/shop'
+import { colorOf } from '@/data/cosmetics'
+import { legionOf } from '@/data/legions'
 import { WordStat } from '@/core/wordStat'
 import type {
   AdminClassRow, AnswerEvent, Character, ClassRoom, LevelProgress, Mode, Staff, Student,
   TeacherRow, WordStatEntry,
 } from '@/core/types'
 import type {
-  AchievementRow, AddedTeacher, ClassRosterRow, LeaderRow, LevelResult, PublicProfile,
+  AchievementRow, AddedTeacher, BadgeCount, ClassRosterRow, LeaderRow, LevelResult, PublicProfile,
   Repository, RoomBrief, RoomMember, RoomState, SavedResult, VersusMatchInput,
 } from './repository'
-import { evaluateAchievements, type VersusRecord } from '@/core/achievements'
+import { evaluateAchievements, tierOf, type AchValue, type VersusRecord } from '@/core/achievements'
+
+/** 本地版存的徽章。舊資料沒有 tier，當成 1。 */
+interface LocalAch { id: string; at: number; tier?: number; tierAt?: number }
 import { ACHIEVEMENTS, ACH_BY_ID } from '@/data/achievements'
 
 /** 本地版存下來的一場。跟 RoomState 差在沒有 here／me，那兩個是讀的時候才算的。 */
@@ -52,6 +57,7 @@ const k = {
   classes: `${NS}.classes`,
   rooms: (code: string) => `${NS}.rooms.${code}`,
   achievements: (id: string) => `${NS}.ach.${id}`,
+  achProgress: (id: string) => `${NS}.achp.${id}`,
   matches: (id: string) => `${NS}.versus.${id}`,
   itemUses: (id: string) => `${NS}.itemuses.${id}`,
   staff: `${NS}.staff`,
@@ -202,8 +208,13 @@ export class LocalRepository implements Repository {
     const c = this.current()
     const item = ITEMS.find((i) => i.id === itemId)
     if (!item) throw new Error('商店裡沒有這個東西')
+    if (item.free) throw new Error('這個是送的，不用買，去「我的角色」直接換上')
     if (levelFromExp(c.exp) < item.unlockLevel) {
       throw new Error(`等級不夠，要 ${item.unlockLevel} 級才買得到`)
+    }
+    if (item.needAchievement
+      && !read<LocalAch[]>(k.achievements(c.studentId), []).some((a) => a.id === item.needAchievement)) {
+      throw new Error('要先拿到指定的成就才買得到')
     }
     const r = buy(c, item)
     if (!r.ok) throw new Error(r.why)
@@ -216,7 +227,7 @@ export class LocalRepository implements Repository {
     const item = ITEMS.find((i) => i.id === itemId)
     if (!item) throw new Error('沒有這個東西')
     if (item.kind !== 'cosmetic') throw new Error('這個不是穿戴的東西')
-    if (on && !count(c, itemId)) throw new Error('你還沒有這個東西')
+    if (on && !count(c, itemId) && !item.free) throw new Error('你還沒有這個東西')
     // 一個欄位一次只能穿一件。正式版這條規則是資料庫在管（equip_item），
     // 本地版要跟著做，不然本機測起來對、上線又是另一回事。
     const slot = item.slot ?? null
@@ -288,6 +299,9 @@ export class LocalRepository implements Repository {
         write(k.character(id), { ...cur, jobsCleared: [...(cur.jobsCleared ?? []), cur.job] })
       }
     }
+
+    // 真的有答題才算「穿著這個顏色打過一場」（跟資料庫的 note_color_played 同一條）
+    if (mine.length > 0) this.noteColorPlayed()
 
     // 首通獎金也在這裡發，跟資料庫那邊同一條規則：第一次真的通關才有
     const bonusCoins = win && !was?.clearedAt ? firstClearBonus(level.no, false) : 0
@@ -548,21 +562,26 @@ export class LocalRepository implements Repository {
 
   async loadAchievements(): Promise<AchievementRow[]> {
     const c = this.current()
-    const got = new Map(read<{ id: string; at: number }[]>(k.achievements(c.studentId), [])
-      .map((x) => [x.id, x.at]))
-    return ACHIEVEMENTS.map((a) => ({
-      id: a.id, category: a.category, unlockedAt: got.get(a.id) ?? null,
-    }))
+    const got = new Map(read<LocalAch[]>(k.achievements(c.studentId), []).map((x) => [x.id, x]))
+    const vals = read<Record<string, AchValue>>(k.achProgress(c.studentId), {})
+    return ACHIEVEMENTS.map((a) => {
+      const g = got.get(a.id)
+      return {
+        id: a.id, category: a.category, unlockedAt: g?.at ?? null,
+        tier: g ? g.tier ?? 1 : 0, tierAt: g ? g.tierAt ?? g.at : null,
+        value: vals[a.id]?.value ?? 0, goalAll: vals[a.id]?.all ?? 0,
+      }
+    })
   }
 
   async refreshAchievements(): Promise<string[]> {
     const c = this.current()
     const id = c.studentId
-    const have = read<{ id: string; at: number }[]>(k.achievements(id), [])
-    const had = new Set(have.map((x) => x.id))
+    const have = read<LocalAch[]>(k.achievements(id), [])
+    const byId = new Map(have.map((x) => [x.id, { ...x }]))
     const student = read<Student | null>(k.student(id), null)
 
-    const got = evaluateAchievements({
+    const { got, values } = evaluateAchievements({
       events: read<AnswerEvent[]>(k.events(id), []),
       stats: (await this.loadWordStats(id)),
       progress: read<LevelProgress[]>(k.progress(id), []),
@@ -571,26 +590,65 @@ export class LocalRepository implements Repository {
       itemUses: read<{ itemId: string; sessionId: string | null }[]>(k.itemUses(id), []),
       createdAt: student?.createdAt ?? 0,
     })
+    write(k.achProgress(id), values)
+
+    const now = Date.now()
+    const out: string[] = []
+    for (const x of got) {
+      if (byId.has(x) || !ACH_BY_ID.has(x) || ACH_BY_ID.get(x)!.tiers) continue
+      byId.set(x, { id: x, at: now, tier: 1 })
+      out.push(x)
+    }
+    // 分階：只升不降，跟 SQL 的 ach_put 一樣
+    for (const [x, v] of Object.entries(values)) {
+      if (!ACH_BY_ID.get(x)?.tiers) continue
+      const t = tierOf(x, v)
+      const old = byId.get(x)
+      if (t > 0 && t > (old?.tier ?? 0)) {
+        byId.set(x, { id: x, at: old?.at ?? now, tier: t, tierAt: now })
+        out.push(`${x}:${t}`)
+      }
+    }
 
     // 全能生：七個大類每一類都至少一個（它自己不算）
-    const all = new Set([...had, ...got])
-    const cats = new Set(ACHIEVEMENTS.filter((a) => all.has(a.id) && a.id !== 'all-rounder')
+    const cats = new Set(ACHIEVEMENTS.filter((a) => byId.has(a.id) && a.id !== 'all-rounder')
       .map((a) => a.category))
-    if (cats.size >= 7) got.push('all-rounder')
+    if (cats.size >= 7 && !byId.has('all-rounder')) {
+      byId.set('all-rounder', { id: 'all-rounder', at: now, tier: 1 })
+      out.push('all-rounder')
+    }
 
-    const fresh = got.filter((x) => !had.has(x) && ACH_BY_ID.has(x))
-    if (fresh.length) {
-      const now = Date.now()
-      write(k.achievements(id), [...have, ...fresh.map((x) => ({ id: x, at: now }))])
-      // 獎品：成就限定的外框直接放進背包，不用去商店領
+    if (out.length) {
+      write(k.achievements(id), [...byId.values()])
+      // 獎品：成就限定的外框直接放進背包，不用去商店領（分階的要到 rewardTier）
       let next = this.current()
-      for (const x of fresh) {
-        const item = ACH_BY_ID.get(x)?.rewardItem
-        if (item && !(next.items[item] > 0)) next = { ...next, items: { ...next.items, [item]: 1 } }
+      for (const a of byId.values()) {
+        const def = ACH_BY_ID.get(a.id)
+        const item = def?.rewardItem
+        if (item && (a.tier ?? 1) >= (def.rewardTier ?? 1) && !(next.items[item] > 0)) {
+          next = { ...next, items: { ...next.items, [item]: 1 } }
+        }
       }
       write(k.character(id), next)
     }
-    return fresh
+    return out
+  }
+
+  async classBadgeCounts(classCode?: string): Promise<BadgeCount[]> {
+    const me = await this.currentStudent()
+    const code = (classCode ?? me?.classCode ?? '').trim().toUpperCase()
+    if (!code) return []
+    const roster = read<string[]>(k.roster(code), [])
+    const n = new Map<string, number>()
+    for (const sid of roster) {
+      for (const a of read<LocalAch[]>(k.achievements(sid), [])) {
+        for (let t = 1; t <= (a.tier ?? 1); t++) n.set(a.id + ':' + t, (n.get(a.id + ':' + t) ?? 0) + 1)
+      }
+    }
+    return [...n.entries()].map(([key, holders]) => {
+      const [aid, t] = key.split(':')
+      return { id: aid, tier: Number(t), holders, classSize: roster.length }
+    })
   }
 
   async setPinned(ids: string[]): Promise<string[]> {
@@ -631,7 +689,9 @@ export class LocalRepository implements Repository {
       equipped: c.equipped,
       title: c.title ?? '',
       pinned: c.pinned ?? [],
-      badges: read<{ id: string }[]>(k.achievements(studentId), []).map((x) => x.id),
+      badges: read<LocalAch[]>(k.achievements(studentId), []).map((x) => x.id),
+      tiers: Object.fromEntries(read<LocalAch[]>(k.achievements(studentId), [])
+        .map((x) => [x.id, x.tier ?? 1])),
       stars: p.reduce((n, x) => n + x.stars, 0),
       level: levelFromExp(c.exp),
     }
@@ -654,6 +714,16 @@ export class LocalRepository implements Repository {
       endedAt: Date.now(),
     })
     write(k.matches(c.studentId), all)
+    this.noteColorPlayed()
+  }
+
+  /** 記下穿著哪個顏色打了一場。換上別的軍團時顏色沒作用，不算。 */
+  private noteColorPlayed() {
+    const c = this.current()
+    if (legionOf(c.equipped).id) return
+    const color = colorOf(c.equipped).id || 'blue'
+    const seen = c.colorsPlayed ?? []
+    if (!seen.includes(color)) write(k.character(c.studentId), { ...c, colorsPlayed: [...seen, color] })
   }
 
   async classLeaderboard(classCode?: string): Promise<LeaderRow[]> {
@@ -674,7 +744,11 @@ export class LocalRepository implements Repository {
         equipped: c?.equipped ?? [],
         me: id === me?.id,
         title: c?.title ?? '',
-        badges: read<string[]>(k.achievements(id), []).length,
+        badges: read<LocalAch[]>(k.achievements(id), []).length,
+        pins: (c?.pinned ?? []).flatMap((pid) => {
+          const a = read<LocalAch[]>(k.achievements(id), []).find((x) => x.id === pid)
+          return a ? [{ id: pid, tier: a.tier ?? 1 }] : []
+        }),
         // 本地版沒有老師身分，自己的一定看得到，別人的看他有沒有關起來
         viewable: id === me?.id || (c?.publicProfile ?? true),
       }

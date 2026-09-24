@@ -187,12 +187,19 @@ export interface Repository {
   loadAchievements(): Promise<AchievementRow[]>
 
   /**
-   * 重算一次成就，回傳「這一次新解開的」。
+   * 重算一次成就，回傳「這一次新解開或升階的」：一次性徽章是 'id'，
+   * 分階徽章是 'id:階'（'hundred:3'＝萬題升到金）。用 parseUnlock() 拆。
    *
    * 打完一場、開個人檔案、開機各叫一次。**重算而不是答對時加一**：
    * 規則改了、資料補了，下一次重算就自己對了；少算一次也不會永久漏掉。
    */
   refreshAchievements(): Promise<string[]>
+
+  /**
+   * 全班每一格、每一階有幾個人拿到。不傳就是自己班；老師傳班級代碼。
+   * 只有人數，沒有名字。
+   */
+  classBadgeCounts(classCode?: string): Promise<BadgeCount[]>
 
   /** 別在名字旁邊的徽章，最多三個。只能別自己拿到的。 */
   setPinned(ids: string[]): Promise<string[]>
@@ -243,6 +250,8 @@ export interface LeaderRow {
   title: string
   /** 拿到幾個徽章 */
   badges: number
+  /** 別在名字旁邊的，連同階級 */
+  pins: Pin[]
   /** 他的檔案讓不讓我點進去看 */
   viewable: boolean
 }
@@ -322,7 +331,21 @@ export interface AchievementRow {
   category: string
   /** epoch 毫秒 */
   unlockedAt: number | null
+  /** 第幾階（1＝銅 … 5＝鑽石）。一次性徽章拿到是 1，沒拿到是 0。 */
+  tier: number
+  /** 升到現在這一階的時間，epoch 毫秒 */
+  tierAt: number | null
+  /** 分階徽章現在的數字，「還差多少」用 */
+  value: number
+  /** 「全部」那一階現在是多少（題庫幾個字、幾關） */
+  goalAll: number
 }
+
+/** 別在名字旁邊的一個。第一個是主徽章。 */
+export interface Pin { id: string; tier: number }
+
+/** 全班有幾個人拿到某一格的某一階 */
+export interface BadgeCount { id: string; tier: number; holders: number; classSize: number }
 
 /** 同學的個人檔案。只有看得到的東西，沒有登入帳號也沒有答題明細。 */
 export interface PublicProfile {
@@ -334,6 +357,8 @@ export interface PublicProfile {
   pinned: string[]
   /** 拿到的徽章 id，照拿到的先後 */
   badges: string[]
+  /** 每一格到第幾階 */
+  tiers: Record<string, number>
   stars: number
   level: number
 }

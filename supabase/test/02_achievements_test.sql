@@ -1,6 +1,6 @@
 -- 成就的實測。
 --
--- 為什麼要測：解鎖條件有四十二條，全部寫在 refresh_achievements() 裡面，
+-- 為什麼要測：解鎖條件有四十五條（其中二十一條分五階），全部寫在 refresh_achievements() 裡面，
 -- 而它算的是**別人看得到的東西**（徽章會出現在同學點得進來的個人檔案上）。
 -- 算錯了不是顯示問題，是「他明明做到了卻沒拿到」或「他沒做到卻有」。
 --
@@ -47,6 +47,13 @@ create or replace function test_has(p_student uuid, p_id text) returns boolean
 language sql security definer as $$
   select exists (select 1 from public.student_achievements
                   where student_id = p_student and achievement_id = p_id);
+$$;
+
+-- 這一格到第幾階（沒有是 0）
+create or replace function test_tier(p_student uuid, p_id text) returns int
+language sql security definer as $$
+  select coalesce((select tier::int from public.student_achievements
+                    where student_id = p_student and achievement_id = p_id), 0);
 $$;
 
 -- 背包裡有幾個這個東西
@@ -103,7 +110,7 @@ select test_as('b0000000-0000-0000-0000-000000000001', true);
 
 \echo '── 一題都沒答的時候'
 select test_ok((select count(*) from public.refresh_achievements()) = 0, '什麼都還沒有');
-select test_ok((select count(*) from public.my_achievements()) = 42, '牆上四十二格都回得出來');
+select test_ok((select count(*) from public.my_achievements()) = 45, '牆上四十五格都回得出來');
 select test_ok((select count(*) from public.my_achievements() where unlocked_at is not null) = 0,
                '一個都還沒解開');
 
@@ -118,7 +125,54 @@ select test_ok((select count(*) from public.refresh_achievements()) = 0,
 \echo '── 學習：一百題'
 select test_force($$ select test_events('b1000000-0000-0000-0000-000000000001', 100) $$);
 select public.refresh_achievements();
-select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'hundred'), '一百題');
+select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'hundred') = 1, '一百題＝萬題銅階');
+select test_ok((select value from public.my_achievements() where id = 'hundred') = 101,
+               '牆上看得到現在答對幾題（「還差多少」要用）');
+select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'literate') = 2,
+               '一百個不同的字＝識字者銀階');
+select test_ok((select goal_all from public.my_achievements() where id = 'literate')
+               = (select count(*) from public.words),
+               '識字者的「全部」照題庫字數算');
+select test_ok(test_item('b1000000-0000-0000-0000-000000000001', 'frame-laurel') = 0,
+               '桂冠框要到鑽石階才給，銀階還沒有');
+
+\echo '── 分階：同一個字一天最多算 5 次，擋掉狂刷'
+select test_force($$
+  insert into public.answer_events
+    (student_id, word_id, skill, correct, ms, combo, game_id, ord, at)
+  select 'b1000000-0000-0000-0000-000000000001', (select min(id) from public.words),
+         'recognize', true, 900, 0, 'test', g, now()
+    from generate_series(1, 400) g
+$$);
+select test_ok(exists (select 1 from public.refresh_achievements() r where r = 'hundred:1') is false,
+               '同一個字刷四百次也不會升階');
+select test_ok((select value from public.my_achievements() where id = 'hundred') = 104,
+               '四百次只多算 3 次（那個字今天本來就答對 2 次，上限 5）');
+select test_force($$
+  select test_events('b1000000-0000-0000-0000-000000000001', 300, 'recognize', now() - interval '1 day');
+  select test_events('b1000000-0000-0000-0000-000000000001', 300, 'recognize', now() - interval '2 days');
+$$);
+select test_ok(exists (select 1 from public.refresh_achievements() r where r = 'hundred:2'),
+               '換天再答就算數，升到銀階會回報「hundred:2」');
+select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'hundred') = 2, '存成銀階');
+select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'days') = 0,
+               '才來三天，百日還沒有');
+select test_denied($$ select public.ach_put('b1000000-0000-0000-0000-000000000001', 'hundred', 99999) $$,
+                   '學生自己叫 ach_put 升鑽石');
+
+\echo '── 分階：只升不降'
+select test_force($$
+  update public.student_achievements set tier = 5
+   where student_id = 'b1000000-0000-0000-0000-000000000001' and achievement_id = 'hundred'
+$$);
+select test_ok((select count(*) from public.refresh_achievements() r where r like 'hundred%') = 0,
+               '重算不會回報降階');
+select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'hundred') = 5,
+               '重算算出比較低的階，也不會把已經拿到的降下去');
+select test_force($$
+  update public.student_achievements set tier = 2
+   where student_id = 'b1000000-0000-0000-0000-000000000001' and achievement_id = 'hundred'
+$$);
 
 \echo '── 守塔：通關、三星、城牆不倒、全破'
 select test_force($$
@@ -147,10 +201,11 @@ $$);
 select public.refresh_achievements();
 select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'all-clear'), '十四關全破');
 select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'boss-slayer'), '三個魔王關都過了');
-select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'stars-30')
-               = ((select sum(stars) from public.level_progress
-                    where student_id = 'b1000000-0000-0000-0000-000000000001') >= 30),
-               '星星三十跟實際星數一致');
+-- 3 + 13 × 1 ＝ 16 顆：過了 15（銀）、還沒到 25（金）
+select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'stars-30') = 2,
+               '十六顆星＝星星銀階');
+select test_ok((select goal_all from public.my_achievements() where id = 'stars-30')
+               = 3 * (select count(*) from public.levels), '星星的「全部」＝關數 × 3');
 
 \echo '── 獎品：成就限定的外框直接進背包，而且買不到'
 select test_ok(test_item('b1000000-0000-0000-0000-000000000001', 'frame-flame') = 1,
@@ -199,7 +254,60 @@ select test_force($$
     from generate_series(1, 5)
 $$);
 select public.refresh_achievements();
-select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'war-flag'), '贏同學五場');
+select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'war-flag') = 1, '贏同學五場＝戰旗銅階');
+select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'veteran') = 1,
+               '打完十六場＝戰場老兵銅階（輸贏都算，打電腦也算）');
+
+\echo '── 五色軍團：顏色免費送之後，要五色都真的穿上場才算'
+select test_ok((select colors_played from public.characters
+                 where student_id = 'b1000000-0000-0000-0000-000000000001') ? 'blue',
+               '剛剛那幾場穿的是預設藍，伺服器自己記下來了');
+select public.equip_item('color-red', true);
+select public.record_versus_match(gen_random_uuid(), 'cpu', false);
+select public.equip_item('color-yellow', true);
+select public.record_versus_match(gen_random_uuid(), 'cpu', false);
+select public.equip_item('color-purple', true);
+select public.record_versus_match(gen_random_uuid(), 'cpu', false);
+select public.refresh_achievements();
+select test_ok(not test_has('b1000000-0000-0000-0000-000000000001', 'five-colors'), '四色還不夠');
+
+-- 換上別的軍團時顏色是灰的，穿著黑色去打也不算黑色
+select test_force($$ update public.characters set items = items || '{"legion-goblin":1}'
+                     where student_id = 'b1000000-0000-0000-0000-000000000001' $$);
+select public.equip_item('legion-goblin', true);
+select public.equip_item('color-black', true);
+select public.record_versus_match(gen_random_uuid(), 'cpu', false);
+select public.refresh_achievements();
+select test_ok(not ((select colors_played from public.characters
+                      where student_id = 'b1000000-0000-0000-0000-000000000001') ? 'color-black'),
+               '穿著哥布林軍團打的那一場，黑色不算');
+select test_ok(not test_has('b1000000-0000-0000-0000-000000000001', 'five-colors'), '所以還是沒有五色軍團');
+
+select public.equip_item('legion-goblin', false);
+select public.record_versus_match(gen_random_uuid(), 'cpu', false);
+select public.refresh_achievements();
+select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'five-colors'),
+               '脫下軍團、穿黑色打一場＝五色軍團');
+
+\echo '── 軍團包：稀有級要先拿到「頂階降臨」才買得到'
+select test_force($$ update public.characters set coins = 5000, exp = 1200
+                     where student_id in ('b1000000-0000-0000-0000-000000000001',
+                                          'b1000000-0000-0000-0000-000000000002') $$);
+select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'top-tier'), '小明推過三階兵');
+select public.buy_item('legion-pig');
+select test_ok(test_item('b1000000-0000-0000-0000-000000000001', 'legion-pig') = 1, '所以買得到豬軍團');
+select public.equip_item('legion-goblin', true);
+select public.equip_item('legion-pig', true);
+select test_ok((select equipped ? 'legion-pig' and not equipped ? 'legion-goblin' and equipped ? 'color-black'
+                  from public.characters where student_id = 'b1000000-0000-0000-0000-000000000001'),
+               '軍團一次只能穿一套，換軍團不會把顏色脫掉（換回王國軍時顏色還在）');
+select test_as('b0000000-0000-0000-0000-000000000002', true);
+select test_ok(not test_has('b1000000-0000-0000-0000-000000000002', 'top-tier'), '小就沒推過三階兵');
+select test_denied($$ select public.buy_item('legion-pig') $$, '沒拿到頂階降臨就想買豬軍團');
+select public.buy_item('legion-goblin');
+select test_ok(test_item('b1000000-0000-0000-0000-000000000002', 'legion-goblin') = 1,
+               '普通級只看等級和金幣，哥布林買得到');
+select test_as('b0000000-0000-0000-0000-000000000001', true);
 
 \echo '── 對戰：連輸兩場之後又開一場（輸的人也拿得到的那一個）'
 select test_ok(not test_has('b1000000-0000-0000-0000-000000000002', 'never-quit'),
@@ -277,6 +385,7 @@ select test_force($$
 $$);
 select public.refresh_achievements();
 select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'combo-20'), '連對二十');
+select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'combo') = 2, '連對二十＝連對銀階');
 
 \echo '── 別徽章與稱號：只能別自己拿到的'
 select test_ok(public.set_pinned(array['first-answer','hundred','first-clear']) is not null,
@@ -284,8 +393,9 @@ select test_ok(public.set_pinned(array['first-answer','hundred','first-clear']) 
 select test_ok(jsonb_array_length(public.set_pinned(
                  array['first-answer','hundred','first-clear','all-clear'])) = 3,
                '最多三個');
-select test_ok(public.set_pinned(array['literate']) = '[]'::jsonb,
+select test_ok(public.set_pinned(array['so-close']) = '[]'::jsonb,
                '沒拿到的別不上去');
+select public.set_pinned(array['first-answer','hundred','first-clear']);
 select test_denied($$ select public.set_title('literate') $$, '掛沒拿到的稱號');
 select test_ok(public.set_title('first-answer') = '新生', '掛得上自己的稱號');
 
@@ -315,6 +425,20 @@ select test_ok((select viewable from public.class_leaderboard()
 select test_ok((select badges from public.class_leaderboard()
                  where student_id = 'b1000000-0000-0000-0000-000000000001') > 0,
                '徽章數看得到（數量不是隱私，內容才是）');
+select test_ok((select pins -> 0 ->> 'id' from public.class_leaderboard()
+                 where student_id = 'b1000000-0000-0000-0000-000000000001') = 'first-answer',
+               '別的徽章照順序排，第一個是主徽章');
+select test_ok((select (pins -> 1 ->> 'tier')::int from public.class_leaderboard()
+                 where student_id = 'b1000000-0000-0000-0000-000000000001') = 2,
+               '排行榜上看得到萬題是銀階');
+
+\echo '── 全班幾人有'
+select test_ok((select holders from public.class_badge_counts()
+                 where achievement_id = 'hundred' and tier = 1) = 1,
+               '萬題銅階全班只有小成一個');
+select test_ok((select class_size from public.class_badge_counts() limit 1) = 2,
+               '全班兩個人');
+select test_denied($$ select * from public.class_badge_counts('ZZZ9') $$, '看別班的徽章人數');
 
 \echo '── 全能生：七類都有才給'
 -- 小就只打過對戰、答過幾題，離七類還遠。

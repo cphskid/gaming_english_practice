@@ -29,6 +29,7 @@ ICONS = [
     ('triple-day', 'three-leaves', 'lorc'),
     ('long-words', 'measure-tape', 'delapouite'),
     ('balanced', 'scales', 'lorc'),
+    ('combo', 'lightning-trio', 'lorc'),
     ('first-clear', 'tower-flag', 'delapouite'),
     ('three-star', 'star-medal', 'delapouite'),
     ('no-damage', 'brick-wall', 'delapouite'),
@@ -36,6 +37,7 @@ ICONS = [
     ('stars-30', 'stars-stack', 'delapouite'),
     ('all-clear', 'castle', 'lorc'),
     ('first-match', 'crossed-swords', 'lorc'),
+    ('veteran', 'swords-emblem', 'lorc'),
     ('all-lines', 'trident', 'lorc'),
     ('top-tier', 'crown', 'lorc'),
     ('comeback', 'anticlockwise-rotation', 'delapouite'),
@@ -48,6 +50,7 @@ ICONS = [
     ('dual-job', 'wizard-staff', 'lorc'),
     ('item-taster', 'round-potion', 'caro-asercion'),
     ('week-3', 'hourglass', 'lorc'),
+    ('days', 'sun-radiations', 'lorc'),
     ('weekend', 'sunrise', 'lorc'),
     ('replay', 'cycle', 'lorc'),
     ('month-12', 'calendar-half-year', 'delapouite'),
@@ -71,7 +74,7 @@ HEAD = '''/**
  * 來源：game-icons.net，**CC BY 3.0**——允許再散布（所以公開 repo 可以收），
  * 但**一定要署名**：每一張上面都標了作者，完整清單在 CREDITS.md。
  *
- * 為什麼是內嵌的路徑資料不是 .svg 檔：四十二張各一到五 KB，內嵌省掉四十二個
+ * 為什麼是內嵌的路徑資料不是 .svg 檔：四十五張各一到五 KB，內嵌省掉四十二個
  * 檔案請求；而且徽章要跟著文字一起變色（拿到的畫白色、沒拿到畫灰色），
  * 用 <img> 就染不了色，一定要是行內的 <svg>。
  *

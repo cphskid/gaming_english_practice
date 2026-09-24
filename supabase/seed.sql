@@ -312,85 +312,92 @@ on conflict (id) do update set
 
 -- 商店品項。**這一段是 tools/gen-shop-seed.mjs 從 src/data/shop.ts 產生的，不要手改。**
 -- 價格放在資料庫是因為客戶端送來的價格不能信。
-insert into public.shop_items (id, price, kind, slot, unlock_level, achievement_only) values
-  ('slow-30', 60, 'consumable', null, 1, false),
-  ('heal-5', 80, 'consumable', null, 2, false),
-  ('crystal-40', 120, 'consumable', null, 3, false),
-  ('color-red', 150, 'cosmetic', 'color', 1, false),
-  ('color-yellow', 150, 'cosmetic', 'color', 2, false),
-  ('color-purple', 220, 'cosmetic', 'color', 4, false),
-  ('color-black', 300, 'cosmetic', 'color', 6, false),
-  ('frame-gold', 120, 'cosmetic', 'frame', 1, false),
-  ('frame-ribbon', 180, 'cosmetic', 'frame', 3, false),
-  ('frame-crown', 260, 'cosmetic', 'frame', 5, false),
-  ('frame-rainbow', 400, 'cosmetic', 'frame', 7, false),
-  ('frame-laurel', 1, 'cosmetic', 'frame', 1, true),
-  ('frame-wave', 1, 'cosmetic', 'frame', 1, true),
-  ('frame-flame', 1, 'cosmetic', 'frame', 1, true),
-  ('frame-banner', 1, 'cosmetic', 'frame', 1, true),
-  ('frame-stardust', 1, 'cosmetic', 'frame', 1, true),
-  ('frame-calendar', 1, 'cosmetic', 'frame', 1, true)
+insert into public.shop_items (id, price, kind, slot, unlock_level, achievement_only, free, need_achievement) values
+  ('slow-30', 60, 'consumable', null, 1, false, false, null),
+  ('heal-5', 80, 'consumable', null, 2, false, false, null),
+  ('crystal-40', 120, 'consumable', null, 3, false, false, null),
+  ('color-red', 1, 'cosmetic', 'color', 1, false, true, null),
+  ('color-yellow', 1, 'cosmetic', 'color', 1, false, true, null),
+  ('color-purple', 1, 'cosmetic', 'color', 1, false, true, null),
+  ('color-black', 1, 'cosmetic', 'color', 1, false, true, null),
+  ('legion-goblin', 300, 'cosmetic', 'legion', 3, false, false, null),
+  ('legion-pig', 600, 'cosmetic', 'legion', 6, false, false, 'top-tier'),
+  ('frame-gold', 120, 'cosmetic', 'frame', 1, false, false, null),
+  ('frame-ribbon', 180, 'cosmetic', 'frame', 3, false, false, null),
+  ('frame-crown', 260, 'cosmetic', 'frame', 5, false, false, null),
+  ('frame-rainbow', 400, 'cosmetic', 'frame', 7, false, false, null),
+  ('frame-laurel', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-wave', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-flame', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-banner', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-stardust', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-calendar', 1, 'cosmetic', 'frame', 1, true, false, null)
 on conflict (id) do update
   set price = excluded.price, kind = excluded.kind, slot = excluded.slot,
-      unlock_level = excluded.unlock_level, achievement_only = excluded.achievement_only;
+      unlock_level = excluded.unlock_level, achievement_only = excluded.achievement_only,
+      free = excluded.free, need_achievement = excluded.need_achievement;
 
 -- 商店只認這份清單。舊品項留在資料庫裡會變成「買得到但畫面上沒有」的鬼品項，
 -- 所以不在清單裡的一律刪掉。
-delete from public.shop_items where id not in ('slow-30', 'heal-5', 'crystal-40', 'color-red', 'color-yellow', 'color-purple', 'color-black', 'frame-gold', 'frame-ribbon', 'frame-crown', 'frame-rainbow', 'frame-laurel', 'frame-wave', 'frame-flame', 'frame-banner', 'frame-stardust', 'frame-calendar');
+delete from public.shop_items where id not in ('slow-30', 'heal-5', 'crystal-40', 'color-red', 'color-yellow', 'color-purple', 'color-black', 'legion-goblin', 'legion-pig', 'frame-gold', 'frame-ribbon', 'frame-crown', 'frame-rainbow', 'frame-laurel', 'frame-wave', 'frame-flame', 'frame-banner', 'frame-stardust', 'frame-calendar');
 
 
 -- 成就目錄。**這一段是 tools/gen-achievements-seed.mjs 從 src/data/achievements.ts
 -- 產生的，不要手改。** 名字與說明在 TS 那邊，這裡只有伺服器算解鎖要用的欄位。
-insert into public.achievements (id, category, ord, reward_item, reward_title) values
-  ('first-answer', 'learn', 0, null, '新生'),
-  ('hundred', 'learn', 1, null, ''),
-  ('nemesis', 'learn', 2, null, '不放棄'),
-  ('theme-king', 'learn', 3, null, ''),
-  ('mastered-50', 'learn', 4, null, ''),
-  ('literate', 'learn', 5, 'frame-laurel', ''),
-  ('read-100', 'skill', 6, null, ''),
-  ('listen-100', 'skill', 7, null, ''),
-  ('spell-100', 'skill', 8, null, ''),
-  ('triple-day', 'skill', 9, null, ''),
-  ('long-words', 'skill', 10, null, ''),
-  ('balanced', 'skill', 11, 'frame-wave', ''),
-  ('first-clear', 'tower', 12, null, ''),
-  ('three-star', 'tower', 13, null, ''),
-  ('no-damage', 'tower', 14, null, ''),
-  ('boss-slayer', 'tower', 15, null, ''),
-  ('stars-30', 'tower', 16, null, ''),
-  ('all-clear', 'tower', 17, 'frame-flame', ''),
-  ('first-match', 'versus', 18, null, ''),
-  ('all-lines', 'versus', 19, null, ''),
-  ('top-tier', 'versus', 20, null, ''),
-  ('comeback', 'versus', 21, null, ''),
-  ('never-quit', 'versus', 22, null, '再來一局'),
-  ('war-flag', 'versus', 23, 'frame-banner', ''),
-  ('dressed', 'collect', 24, null, ''),
-  ('five-colors', 'collect', 25, null, ''),
-  ('all-frames', 'collect', 26, null, ''),
-  ('avatar-10', 'collect', 27, null, ''),
-  ('dual-job', 'collect', 28, 'frame-stardust', ''),
-  ('item-taster', 'collect', 29, null, ''),
-  ('week-3', 'habit', 30, null, ''),
-  ('weekend', 'habit', 31, null, ''),
-  ('replay', 'habit', 32, null, ''),
-  ('month-12', 'habit', 33, null, ''),
-  ('old-friend', 'habit', 34, null, ''),
-  ('week-5', 'habit', 35, 'frame-calendar', ''),
-  ('persistent', 'secret', 36, null, ''),
-  ('quick-hand', 'secret', 37, null, ''),
-  ('so-close', 'secret', 38, null, ''),
-  ('bare-handed', 'secret', 39, null, ''),
-  ('combo-20', 'secret', 40, null, ''),
-  ('all-rounder', 'secret', 41, null, '全能生')
+insert into public.achievements (id, category, ord, reward_item, reward_title, tiers, reward_tier) values
+  ('first-answer', 'learn', 0, null, '新生', '{}', 1),
+  ('hundred', 'learn', 1, null, '', '{100,500,1000,3000,10000}', 1),
+  ('nemesis', 'learn', 2, null, '不放棄', '{1,5,15,30,60}', 1),
+  ('theme-king', 'learn', 3, null, '', '{3,5,10,15,-1}', 1),
+  ('mastered-50', 'learn', 4, null, '', '{50,250,500,750,-1}', 1),
+  ('literate', 'learn', 5, 'frame-laurel', '', '{50,100,200,250,-1}', 5),
+  ('read-100', 'skill', 6, null, '', '{100,300,1000,2000,5000}', 1),
+  ('listen-100', 'skill', 7, null, '', '{100,300,1000,2000,5000}', 1),
+  ('spell-100', 'skill', 8, null, '', '{100,300,1000,2000,5000}', 1),
+  ('triple-day', 'skill', 9, null, '', '{1,5,15,30,60}', 1),
+  ('long-words', 'skill', 10, null, '', '{10,30,80,150,300}', 1),
+  ('balanced', 'skill', 11, 'frame-wave', '', '{20,50,100,150,-1}', 2),
+  ('combo', 'skill', 12, null, '', '{10,20,30,40,50}', 1),
+  ('first-clear', 'tower', 13, null, '', '{}', 1),
+  ('three-star', 'tower', 14, null, '', '{1,3,7,10,-1}', 1),
+  ('no-damage', 'tower', 15, null, '', '{1,3,7,10,-1}', 1),
+  ('boss-slayer', 'tower', 16, null, '', '{}', 1),
+  ('stars-30', 'tower', 17, null, '', '{5,15,25,35,-1}', 1),
+  ('all-clear', 'tower', 18, 'frame-flame', '', '{}', 1),
+  ('first-match', 'versus', 19, null, '', '{}', 1),
+  ('veteran', 'versus', 20, null, '', '{5,20,50,100,200}', 1),
+  ('all-lines', 'versus', 21, null, '', '{}', 1),
+  ('top-tier', 'versus', 22, null, '', '{1,5,15,30,60}', 1),
+  ('comeback', 'versus', 23, null, '', '{1,3,10,20,40}', 1),
+  ('never-quit', 'versus', 24, null, '再來一局', '{}', 1),
+  ('war-flag', 'versus', 25, 'frame-banner', '', '{5,15,40,80,150}', 1),
+  ('dressed', 'collect', 26, null, '', '{}', 1),
+  ('five-colors', 'collect', 27, null, '', '{}', 1),
+  ('all-frames', 'collect', 28, null, '', '{}', 1),
+  ('avatar-10', 'collect', 29, null, '', '{}', 1),
+  ('dual-job', 'collect', 30, 'frame-stardust', '', '{}', 1),
+  ('item-taster', 'collect', 31, null, '', '{}', 1),
+  ('week-3', 'habit', 32, null, '', '{}', 1),
+  ('days', 'habit', 33, null, '', '{7,20,40,70,100}', 1),
+  ('weekend', 'habit', 34, null, '', '{1,5,15,30,50}', 1),
+  ('replay', 'habit', 35, null, '', '{}', 1),
+  ('month-12', 'habit', 36, null, '', '{}', 1),
+  ('old-friend', 'habit', 37, null, '', '{}', 1),
+  ('week-5', 'habit', 38, 'frame-calendar', '', '{}', 1),
+  ('persistent', 'secret', 39, null, '', '{}', 1),
+  ('quick-hand', 'secret', 40, null, '', '{}', 1),
+  ('so-close', 'secret', 41, null, '', '{}', 1),
+  ('bare-handed', 'secret', 42, null, '', '{}', 1),
+  ('combo-20', 'secret', 43, null, '', '{}', 1),
+  ('all-rounder', 'secret', 44, null, '全能生', '{}', 1)
 on conflict (id) do update
   set category = excluded.category, ord = excluded.ord,
-      reward_item = excluded.reward_item, reward_title = excluded.reward_title;
+      reward_item = excluded.reward_item, reward_title = excluded.reward_title,
+      tiers = excluded.tiers, reward_tier = excluded.reward_tier;
 
 -- 目錄以這份清單為準。刪掉的成就要跟著消失，不然畫面上沒有、資料庫裡卻還在，
 -- 別人的徽章牆上會冒出一個誰都看不懂的東西。
-delete from public.achievements where id not in ('first-answer', 'hundred', 'nemesis', 'theme-king', 'mastered-50', 'literate', 'read-100', 'listen-100', 'spell-100', 'triple-day', 'long-words', 'balanced', 'first-clear', 'three-star', 'no-damage', 'boss-slayer', 'stars-30', 'all-clear', 'first-match', 'all-lines', 'top-tier', 'comeback', 'never-quit', 'war-flag', 'dressed', 'five-colors', 'all-frames', 'avatar-10', 'dual-job', 'item-taster', 'week-3', 'weekend', 'replay', 'month-12', 'old-friend', 'week-5', 'persistent', 'quick-hand', 'so-close', 'bare-handed', 'combo-20', 'all-rounder');
+delete from public.achievements where id not in ('first-answer', 'hundred', 'nemesis', 'theme-king', 'mastered-50', 'literate', 'read-100', 'listen-100', 'spell-100', 'triple-day', 'long-words', 'balanced', 'combo', 'first-clear', 'three-star', 'no-damage', 'boss-slayer', 'stars-30', 'all-clear', 'first-match', 'veteran', 'all-lines', 'top-tier', 'comeback', 'never-quit', 'war-flag', 'dressed', 'five-colors', 'all-frames', 'avatar-10', 'dual-job', 'item-taster', 'week-3', 'days', 'weekend', 'replay', 'month-12', 'old-friend', 'week-5', 'persistent', 'quick-hand', 'so-close', 'bare-handed', 'combo-20', 'all-rounder');
 
 
 -- 關卡。**這一段是 tools/gen-levels-seed.mjs 從 src/data/levels.ts 產生的，不要手改。**

@@ -4,7 +4,7 @@ import type {
   Student, TeacherRow, WordStatEntry,
 } from '@/core/types'
 import type {
-  AchievementRow, AddedTeacher, ClassRosterRow, LeaderRow, LevelResult, PublicProfile,
+  AchievementRow, AddedTeacher, BadgeCount, Pin, ClassRosterRow, LeaderRow, LevelResult, PublicProfile,
   Repository, RoomBrief, RoomMember, RoomState, SavedResult, VersusMatchInput,
 } from './repository'
 
@@ -552,12 +552,14 @@ export class SupabaseRepository implements Repository {
       student_id: string; nickname: string; coins: number; exp: number; stars: number
       avatar: string | null; equipped: string[] | null; me: boolean
       title: string | null; badges: number | null; viewable: boolean | null
+      pins: Pin[] | null
     }
     return ((data as Row[] | null) ?? []).map((r) => ({
       studentId: r.student_id,
       nickname: r.nickname, coins: r.coins, exp: r.exp, stars: Number(r.stars),
       avatar: r.avatar ?? '', equipped: r.equipped ?? [], me: r.me,
       title: r.title ?? '', badges: Number(r.badges ?? 0), viewable: r.viewable ?? false,
+      pins: r.pins ?? [],
     }))
   }
 
@@ -565,10 +567,29 @@ export class SupabaseRepository implements Repository {
   async loadAchievements(): Promise<AchievementRow[]> {
     const { data, error } = await this.db.rpc('my_achievements')
     fail('讀取成就失敗', error)
-    type Row = { id: string; category: string; unlocked_at: string | null }
+    type Row = {
+      id: string; category: string; unlocked_at: string | null
+      tier: number | null; tier_at: string | null; value: number | null; goal_all: number | null
+    }
     return ((data as Row[] | null) ?? []).map((r) => ({
       id: r.id, category: r.category,
       unlockedAt: r.unlocked_at ? ms(r.unlocked_at) : null,
+      tier: Number(r.tier ?? (r.unlocked_at ? 1 : 0)),
+      tierAt: r.tier_at ? ms(r.tier_at) : null,
+      value: Number(r.value ?? 0),
+      goalAll: Number(r.goal_all ?? 0),
+    }))
+  }
+
+  async classBadgeCounts(classCode?: string): Promise<BadgeCount[]> {
+    const { data, error } = await this.db.rpc('class_badge_counts', {
+      p_code: classCode ? classCode.trim().toUpperCase() : null,
+    })
+    fail('數不到全班的徽章', error)
+    type Row = { achievement_id: string; tier: number; holders: number; class_size: number }
+    return ((data as Row[] | null) ?? []).map((r) => ({
+      id: r.achievement_id, tier: Number(r.tier), holders: Number(r.holders),
+      classSize: Number(r.class_size),
     }))
   }
 
@@ -603,13 +624,14 @@ export class SupabaseRepository implements Repository {
     type Row = {
       nickname: string; avatar: string | null; equipped: string[] | null
       title: string | null; pinned: string[] | null; badges: string[] | null
-      stars: number; level: number
+      stars: number; level: number; tiers: Record<string, number> | null
     }
     const row = (data as Row[] | null)?.[0]
     if (!row) throw new Error('看不到這位同學的檔案')
     return {
       nickname: row.nickname, avatar: row.avatar ?? '', equipped: row.equipped ?? [],
       title: row.title ?? '', pinned: row.pinned ?? [], badges: row.badges ?? [],
+      tiers: row.tiers ?? {},
       stars: Number(row.stars ?? 0), level: Number(row.level ?? 1),
     }
   }

@@ -15,7 +15,8 @@
  * **資料庫在管**（shop_items.slot ＋ equip_item），前端這份只負責顯示。
  */
 
-export type Slot = 'color' | 'frame'
+/** legion 是整套軍團（見 data/legions.ts） */
+export type Slot = 'color' | 'frame' | 'legion'
 
 export interface ColorDef {
   /** 商店品項 id。空字串代表預設的藍色，不用買。 */

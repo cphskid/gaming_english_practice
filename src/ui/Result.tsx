@@ -1,5 +1,6 @@
 import type { SessionResult } from '@/core/session'
-import { ACH_BY_ID, CATEGORIES } from '@/data/achievements'
+import { useState } from 'react'
+import { ACH_BY_ID, CATEGORIES, TIER_NAMES, badgeLabel, parseUnlock } from '@/data/achievements'
 import { Badge } from './Profile'
 import { Icon } from './Icon'
 
@@ -50,22 +51,46 @@ export function Result({
   )
 }
 
-/** 這一場解開的徽章。名字一定要寫出來——不然小朋友不知道自己做對了什麼。 */
+/**
+ * 這一場解開或升階的徽章。名字一定要寫出來——不然小朋友不知道自己做對了什麼。
+ *
+ * 第一次進結算畫面先蓋一個大章（最高的那一個），點一下收起來，下面那一排留著。
+ * 升到鑽石跟第一次拿到一樣值得大張旗鼓，所以升階也蓋。
+ */
 function Unlocked({ ids }: { ids: string[] }) {
-  const defs = ids.map((id) => ACH_BY_ID.get(id)).filter((a) => !!a)
-  if (!defs.length) return null
+  const list = ids.map(parseUnlock)
+    .map((u) => ({ ...u, def: ACH_BY_ID.get(u.id) }))
+    .filter((u) => !!u.def)
+  const [stamp, setStamp] = useState(true)
+  if (!list.length) return null
+  // 大章蓋階級最高的那一個；同階就蓋第一個
+  const top = [...list].sort((a, b) => b.tier - a.tier)[0]
+  const hue = (id: string) => CATEGORIES.find((c) => c.key === ACH_BY_ID.get(id)!.category)!.hue
+  const verb = (u: typeof top) => (u.def!.tiers && u.tier > 1 ? `升到${TIER_NAMES[u.tier - 1]}階` : '解開')
   return (
-    <div className="unlocked">
-      <div className="ttl">🏅 解開 {defs.length} 個新徽章</div>
-      <div className="row">
-        {defs.map((a) => (
-          <div className="one" key={a!.id}>
-            <Badge def={a!} got size={44}
-              hue={CATEGORIES.find((c) => c.key === a!.category)!.hue} />
-            <b>{a!.name}</b>
+    <>
+      {stamp && (
+        <div className="stamp-back" onClick={() => setStamp(false)} role="dialog" aria-modal="true">
+          <div className={'stamp' + (top.def!.tiers ? ' t' + top.tier : '')}>
+            <Badge def={top.def!} got tier={top.tier} size={120} hue={hue(top.id)} />
+            <b>{badgeLabel(top.def!, top.def!.tiers ? top.tier : 0)}</b>
+            <span>{verb(top)}！</span>
+            {list.length > 1 && <small>還有 {list.length - 1} 個，點一下看</small>}
           </div>
-        ))}
+        </div>
+      )}
+      <div className="unlocked">
+        <div className="ttl">🏅 這一場拿到 {list.length} 個徽章</div>
+        <div className="row">
+          {list.map((u) => (
+            <div className="one" key={u.id}>
+              <Badge def={u.def!} got tier={u.tier} size={44} hue={hue(u.id)} />
+              <b>{badgeLabel(u.def!, u.def!.tiers ? u.tier : 0)}</b>
+              <small>{verb(u)}</small>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   )
 }

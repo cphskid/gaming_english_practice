@@ -19,7 +19,7 @@ import type { IconName } from '@/data/icons'
  * 所以每一個新遊戲都自動有返回路徑，不用各寫一次。
  */
 export function GameHost({
-  game, level, session, studentId, job, color, items, opponent,
+  game, level, session, studentId, job, color, legion, items, opponent,
   nextQuestion, onFinish, onLeave, onUseItem,
 }: {
   game: GameModule
@@ -31,6 +31,8 @@ export function GameHost({
   job: Job
   /** 陣營顏色的美術後綴，由身上穿的裝飾品決定 */
   color: string
+  /** 身上那一套軍團的品項 id，王國軍是空字串 */
+  legion: string
   /** 背包裡的東西，key 是 item id。道具列就是從這裡長出來的。 */
   items: Record<string, number>
   nextQuestion: (skill?: Skill) => Question | null
@@ -58,6 +60,7 @@ export function GameHost({
       level,
       job,
       color,
+      legion,
       opponent: opponent ?? null,
       nextQuestion: (skill) => nextRef.current(skill),
       report: (r) => { session.report(studentId, { ...r, combo: session.comboOf(studentId) }) },
@@ -68,7 +71,7 @@ export function GameHost({
     const handle = game.mount(el, ctx)
     handleRef.current = handle
     return () => { handleRef.current = null; handle.destroy() }
-  }, [game, level, session, studentId, job, color, opponent])
+  }, [game, level, session, studentId, job, color, legion, opponent])
 
   /**
    * 道具列放在容器，不放在遊戲裡——跟離開鍵同一個道理：

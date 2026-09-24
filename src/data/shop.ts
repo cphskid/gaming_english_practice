@@ -1,4 +1,5 @@
 import type { ItemDef, ItemMode } from '@/core/inventory'
+import { LEGIONS, TIERS, legionNeed } from './legions'
 
 /** 守塔和對戰都吃得下的道具。三個消耗品現在都是。 */
 const BOTH: ItemMode[] = ['tower-defense', 'tug-of-war']
@@ -20,7 +21,8 @@ const BOTH: ItemMode[] = ['tower-defense', 'tug-of-war']
  * 這個欄位就是為了不再發生那件事。只有某個遊戲吃得下的道具就只填那一個遊戲。
  *
  * 價格與解鎖等級這裡寫的只是顯示用，**真正算數的是資料庫的 shop_items**
- * （seed.sql 由 tools/gen-shop-seed.mjs 從這份產生）。
+ * （seed.sql 由 tools/gen-shop-seed.mjs 從這份產生——它會真的執行這支檔案，
+ * 所以軍團那幾行用程式展開也沒關係）。
  */
 export const ITEMS: ItemDef[] = [
   // 道具：效果只活在這一場戰鬥裡。三個在守塔和對戰都做得出來，
@@ -35,13 +37,21 @@ export const ITEMS: ItemDef[] = [
     desc: '兩邊都是馬上多 40 顆水晶。守塔夠多蓋一座塔，對戰夠升一階',
     price: 120, kind: 'consumable', unlockLevel: 3 },
 
-  // 陣營顏色：城堡、塔、士兵整套變色。
+  // 陣營顏色：城堡、塔、士兵整套變色。**2026-09-24 起免費送**（Chuck：「多點小樂趣」），
+  // 不上商店架子，在「我的角色」直接換。只對王國軍有效，換上別的軍團時變灰。
+  // 價格欄只是因為資料表要求大於零，free 才是真正的把關（equip_item 不看有沒有買）。
   // **裝飾品沒有 icon**——商店直接畫色塊、外框直接套一張小頭像給你看，
   // 一個外觀品項最好的縮圖就是它自己。見 Shop.tsx。
-  { id: 'color-red', name: '紅軍', icon: '', desc: '城堡、塔、士兵全部變紅色', price: 150, kind: 'cosmetic', slot: 'color', unlockLevel: 1 },
-  { id: 'color-yellow', name: '黃軍', icon: '', desc: '城堡、塔、士兵全部變黃色', price: 150, kind: 'cosmetic', slot: 'color', unlockLevel: 2 },
-  { id: 'color-purple', name: '紫軍', icon: '', desc: '城堡、塔、士兵全部變紫色', price: 220, kind: 'cosmetic', slot: 'color', unlockLevel: 4 },
-  { id: 'color-black', name: '黑軍', icon: '', desc: '城堡、塔、士兵全部變黑色', price: 300, kind: 'cosmetic', slot: 'color', unlockLevel: 6 },
+  { id: 'color-red', name: '紅軍', icon: '', desc: '城堡、塔、士兵全部變紅色', price: 1, kind: 'cosmetic', slot: 'color', unlockLevel: 1, free: true },
+  { id: 'color-yellow', name: '黃軍', icon: '', desc: '城堡、塔、士兵全部變黃色', price: 1, kind: 'cosmetic', slot: 'color', unlockLevel: 1, free: true },
+  { id: 'color-purple', name: '紫軍', icon: '', desc: '城堡、塔、士兵全部變紫色', price: 1, kind: 'cosmetic', slot: 'color', unlockLevel: 1, free: true },
+  { id: 'color-black', name: '黑軍', icon: '', desc: '城堡、塔、士兵全部變黑色', price: 1, kind: 'cosmetic', slot: 'color', unlockLevel: 1, free: true },
+
+  // 軍團包：一次買整套。門檻跟著級別走（data/legions.ts 的 TIERS），這裡不用一個一個寫。
+  ...LEGIONS.filter((l) => l.id).map((l): ItemDef => ({
+    id: l.id, name: l.name, icon: '', desc: l.desc, kind: 'cosmetic', slot: 'legion',
+    price: TIERS[l.tier].price, unlockLevel: TIERS[l.tier].unlockLevel, needAchievement: legionNeed(l),
+  })),
 
   // 頭像外框：排行榜和上面那一條都看得到
   { id: 'frame-gold', name: '金邊框', icon: '', desc: '頭像加一圈金邊', price: 120, kind: 'cosmetic', slot: 'frame', unlockLevel: 1 },

@@ -78,7 +78,7 @@ try {
       await page.waitForSelector('.note, .error')
     }
     await buyOnce('金邊框')
-    await buyOnce('紅軍')
+    // 陣營顏色 2026-09-24 起免費送，不用買，下面直接在「我的角色」換
 
     await page.locator('.item', { hasText: '金邊框' }).locator('.i-go').click()
     await page.waitForSelector('.hero')

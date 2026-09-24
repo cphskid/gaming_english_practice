@@ -1,5 +1,5 @@
 /**
- * 成就：四十二個徽章，七個大類。
+ * 成就：四十五格徽章，七個大類，其中二十一格分五階（2026-09-24 第二版）。
  *
  * **三條原則**（2026-09-21 跟 Chuck 談定）：
  *
@@ -47,88 +47,140 @@ export const CATEGORIES: CategoryDef[] = [
 export const CATEGORY_NAME: Record<AchCategory, string> =
   Object.fromEntries(CATEGORIES.map((c) => [c.key, c.name])) as Record<AchCategory, string>
 
+/** 五階的名字。一次性的徽章沒有階級，只有「拿到／沒拿到」。 */
+export const TIER_NAMES = ['銅', '銀', '金', '白金', '鑽石'] as const
+
+/**
+ * 門檻裡的「全部」。題庫會從 300 字長到兩千字，「三百個字全部答對過」寫死 300
+ * 的話，加字那天就變成一個誰都能拿的鑽石。所以最後一階寫「全部」，由伺服器照
+ * 當下的題庫（字數、關卡數）去算那是多少。前面幾階是固定數字，題庫大很多之後
+ * 要回來調高——只加不刪，已經拿到的階級不會因為調門檻掉下來。
+ */
+export const ALL = -1
+
 export interface AchDef {
   id: string
   category: AchCategory
   name: string
-  /** 拿到之後顯示的說明 */
+  /**
+   * 拿到之後顯示的說明。分階徽章寫成樣板，`{n}` 換成那一階的門檻。
+   */
   desc: string
-  /** 還沒拿到時顯示的提示。彩蛋類沒有——看得到路才想拿，但彩蛋要是驚喜。 */
+  /** 還沒拿到（或還沒到下一階）時顯示的提示，`{n}` 一樣是下一階的門檻。彩蛋類沒有。 */
   hint?: string
   /** 彩蛋：牆上顯示成問號，名字都不給 */
   secret?: true
+  /**
+   * 分階門檻，由低到高，一律五階（銅銀金白金鑽石）。沒有這個欄位的是一次性徽章。
+   * **拿到就一路往上升，牆上還是一格。** 升階永遠不會降回去。
+   */
+  tiers?: number[]
   /** 解開的外框（商店買不到的那六個） */
   rewardItem?: string
   /** 解開的稱號，別在暱稱旁邊 */
   rewardTitle?: string
+  /** 分階徽章要到第幾階才給獎品。預設 1。 */
+  rewardTier?: number
 }
+
+// 答對次數類都算「有效答對」：**同一個字一天最多算 5 次**。一萬題除以三百字，
+// 每個字平均也要答對三十幾次，一天五次擋得住狂刷一個簡單的字，正常玩完全碰不到。
+const CAP = '（同一個字一天最多算 5 次）'
 
 export const ACHIEVEMENTS: AchDef[] = [
   // ---------------------------------------------------------------- 學習
   { id: 'first-answer', category: 'learn', name: '第一題',
     desc: '答對第一題。', hint: '答對一題就有了', rewardTitle: '新生' },
-  { id: 'hundred', category: 'learn', name: '百題',
-    desc: '累計答對一百題。', hint: '累計答對一百題' },
+  { id: 'hundred', category: 'learn', name: '萬題',
+    tiers: [100, 500, 1000, 3000, 10000],
+    desc: '累計答對 {n} 題' + CAP + '。', hint: '累計答對 {n} 題' },
   { id: 'nemesis', category: 'learn', name: '死對頭',
-    desc: '把一個錯過三次以上的字，練到連對三次。',
-    hint: '把一個常錯的字練到連對三次', rewardTitle: '不放棄' },
+    tiers: [1, 5, 15, 30, 60],
+    desc: '把 {n} 個錯過三次以上的字，練到連對三次。',
+    hint: '把 {n} 個常錯的字練到連對三次', rewardTitle: '不放棄' },
   { id: 'theme-king', category: 'learn', name: '主題王',
-    desc: '五個主題的字全部答對過。', hint: '把五個主題的字全部答對過' },
-  { id: 'mastered-50', category: 'learn', name: '熟練五十',
-    desc: '五十個字達到「熟」（連對三次）。', hint: '五十個字連對三次' },
+    tiers: [3, 5, 10, 15, ALL],
+    desc: '{n} 個主題的字全部答對過。', hint: '把 {n} 個主題的字全部答對過' },
+  // 「500 字、750 字」題庫裝不下，所以算「字 × 技能」：同一個字認得、聽得出、
+  // 拼得出分開算。300 字是 300＋300＋180（要拼的）＝780 組。
+  { id: 'mastered-50', category: 'learn', name: '精通',
+    tiers: [50, 250, 500, 750, ALL],
+    desc: '{n} 組「字 × 技能」練到熟（連對三次）。',
+    hint: '{n} 組「字 × 技能」練到熟——認字、聽音、拼字分開算' },
   { id: 'literate', category: 'learn', name: '識字者',
-    desc: '三百個字全部答對過至少一次。', hint: '每一個字都至少答對過一次',
-    rewardItem: 'frame-laurel' },
+    tiers: [50, 100, 200, 250, ALL],
+    desc: '{n} 個不同的字答對過。', hint: '{n} 個不同的字至少答對過一次',
+    rewardItem: 'frame-laurel', rewardTier: 5 },
 
   // ---------------------------------------------------------------- 技能
   { id: 'read-100', category: 'skill', name: '看得懂',
-    desc: '認字答對一百題。', hint: '認字答對一百題' },
+    tiers: [100, 300, 1000, 2000, 5000],
+    desc: '認字答對 {n} 題' + CAP + '。', hint: '認字答對 {n} 題' },
   { id: 'listen-100', category: 'skill', name: '聽得出',
-    desc: '聽音答對一百題。', hint: '聽音答對一百題' },
+    tiers: [100, 300, 1000, 2000, 5000],
+    desc: '聽音答對 {n} 題' + CAP + '。', hint: '聽音答對 {n} 題' },
   { id: 'spell-100', category: 'skill', name: '拼得出',
-    desc: '拼字答對一百題。', hint: '拼字答對一百題' },
+    tiers: [100, 300, 1000, 2000, 5000],
+    desc: '拼字答對 {n} 題' + CAP + '。', hint: '拼字答對 {n} 題' },
   { id: 'triple-day', category: 'skill', name: '三修生',
-    desc: '同一天三種技能都玩過。', hint: '同一天認字、聽音、拼字都玩過' },
+    tiers: [1, 5, 15, 30, 60],
+    desc: '有 {n} 天是認字、聽音、拼字三種都玩過。', hint: '{n} 天裡三種技能都玩過' },
   { id: 'long-words', category: 'skill', name: '長字挑戰',
-    desc: '拼對八個字母以上的字十次。', hint: '拼對八個字母以上的長字十次' },
+    tiers: [10, 30, 80, 150, 300],
+    desc: '拼對八個字母以上的字 {n} 次' + CAP + '。', hint: '拼對八個字母以上的長字 {n} 次' },
   { id: 'balanced', category: 'skill', name: '均衡',
-    desc: '三種技能各有五十個字達到「熟」。', hint: '三種技能各熟五十個字',
-    rewardItem: 'frame-wave' },
+    tiers: [20, 50, 100, 150, ALL],
+    desc: '三種技能各有 {n} 個字練到熟。', hint: '三種技能各熟 {n} 個字',
+    rewardItem: 'frame-wave', rewardTier: 2 },
+  { id: 'combo', category: 'skill', name: '連對',
+    tiers: [10, 20, 30, 40, 50],
+    desc: '同一場裡連對 {n} 題。', hint: '同一場裡連對 {n} 題' },
 
   // ---------------------------------------------------------------- 守塔
   { id: 'first-clear', category: 'tower', name: '初戰',
     desc: '通關第一關。', hint: '通關任何一關' },
   { id: 'three-star', category: 'tower', name: '滿星',
-    desc: '任何一關拿到三顆星。', hint: '一關拿到三顆星' },
+    tiers: [1, 3, 7, 10, ALL],
+    desc: '{n} 關拿到三顆星。', hint: '{n} 關拿到三顆星' },
   { id: 'no-damage', category: 'tower', name: '城牆不倒',
-    desc: '城堡一滴血都沒掉就通關。', hint: '城堡一滴血都沒掉就通關' },
+    tiers: [1, 3, 7, 10, ALL],
+    desc: '{n} 關城堡一滴血都沒掉就通關。', hint: '{n} 關城堡一滴血都沒掉就通關' },
   { id: 'boss-slayer', category: 'tower', name: '屠魔',
     desc: '三個魔王關都通關。', hint: '三個魔王關都通關' },
-  { id: 'stars-30', category: 'tower', name: '星星三十',
-    desc: '累計三十顆星。', hint: '累計三十顆星（滿分四十二）' },
+  { id: 'stars-30', category: 'tower', name: '星星',
+    tiers: [5, 15, 25, 35, ALL],
+    desc: '累計 {n} 顆星。', hint: '累計 {n} 顆星' },
   { id: 'all-clear', category: 'tower', name: '全破',
     desc: '十四關全部通關。', hint: '十四關全部通關', rewardItem: 'frame-flame' },
 
   // ---------------------------------------------------------------- 對戰
   { id: 'first-match', category: 'versus', name: '初上戰場',
     desc: '打完第一場兵推。', hint: '打完一場兵推' },
+  { id: 'veteran', category: 'versus', name: '戰場老兵',
+    tiers: [5, 20, 50, 100, 200],
+    desc: '打完 {n} 場兵推，輸贏都算。', hint: '打完 {n} 場兵推，輸贏都算' },
   { id: 'all-lines', category: 'versus', name: '三線通吃',
     desc: '同一場裡三條兵種線都派過兵。', hint: '同一場裡三條兵種線都派過兵' },
   { id: 'top-tier', category: 'versus', name: '頂階降臨',
-    desc: '推出三階兵：字母將軍、音闇神射或拼字戰神。', hint: '在戰場上推出一隻三階兵' },
+    tiers: [1, 5, 15, 30, 60],
+    desc: '{n} 場裡推出過三階兵：字母將軍、音闇神射或拼字戰神。',
+    hint: '{n} 場裡推出過三階兵' },
   { id: 'comeback', category: 'versus', name: '逆轉勝',
-    desc: '前線被推進自己半場，最後還是贏了。', hint: '被推進自己半場之後還贏回來' },
+    tiers: [1, 3, 10, 20, 40],
+    desc: '前線被推進自己半場，最後還是贏了，{n} 場。', hint: '被推進自己半場之後還贏回來 {n} 場' },
   { id: 'never-quit', category: 'versus', name: '不服輸',
     desc: '連輸兩場之後又開了一場。', hint: '連輸兩場之後再開一場',
     rewardTitle: '再來一局' },
   { id: 'war-flag', category: 'versus', name: '戰旗',
-    desc: '贏過同學五場。', hint: '贏過同學五場（打電腦不算）', rewardItem: 'frame-banner' },
+    tiers: [5, 15, 40, 80, 150],
+    desc: '贏過同學 {n} 場。', hint: '贏過同學 {n} 場（打電腦不算）', rewardItem: 'frame-banner' },
 
   // ---------------------------------------------------------------- 收集
   { id: 'dressed', category: 'collect', name: '換裝',
     desc: '第一次穿上外框。', hint: '在商店買一個外框穿上' },
   { id: 'five-colors', category: 'collect', name: '五色軍團',
-    desc: '紅黃紫黑四個陣營顏色都買齊（藍軍本來就有）。', hint: '把四個陣營顏色都買齊' },
+    desc: '藍紅黃紫黑五個陣營顏色，每一色都穿上打過一場。',
+    hint: '在「我的角色」換顏色，五色各打一場（守塔或對戰都算）' },
   { id: 'all-frames', category: 'collect', name: '框框控',
     desc: '商店的四個外框都買齊。', hint: '把商店的四個外框都買齊' },
   { id: 'avatar-10', category: 'collect', name: '換頭像',
@@ -142,8 +194,12 @@ export const ACHIEVEMENTS: AchDef[] = [
   // ---------------------------------------------------------------- 習慣
   { id: 'week-3', category: 'habit', name: '一週三天',
     desc: '同一週裡有三天玩過。', hint: '同一週玩三天' },
+  { id: 'days', category: 'habit', name: '百日',
+    tiers: [7, 20, 40, 70, 100],
+    desc: '總共來玩 {n} 天，不用連續。', hint: '總共來玩 {n} 天，不用連續' },
   { id: 'weekend', category: 'habit', name: '週末戰士',
-    desc: '週六或週日也玩過。', hint: '週末也來玩一次' },
+    tiers: [1, 5, 15, 30, 50],
+    desc: '{n} 個週六、週日來玩過。', hint: '週末來玩 {n} 天' },
   { id: 'replay', category: 'habit', name: '回鍋',
     desc: '回頭重玩已經通關的關卡。', hint: '回頭重玩一關已經通關的關卡' },
   { id: 'month-12', category: 'habit', name: '月曆十二',
@@ -178,3 +234,26 @@ export function achievementsOf(cat: AchCategory): AchDef[] {
 /** 稱號清單：拿到對應徽章才選得起來。 */
 export const TITLES: { id: string; title: string }[] =
   ACHIEVEMENTS.filter((a) => a.rewardTitle).map((a) => ({ id: a.id, title: a.rewardTitle! }))
+
+/** 這一階的門檻。`all` 是伺服器照當下題庫算出來的「全部」是多少。 */
+export function tierGoal(def: AchDef, tier: number, all: number): number | null {
+  const t = def.tiers?.[tier - 1]
+  if (t === undefined) return null
+  return t === ALL ? all : t
+}
+
+/** 把說明樣板裡的 `{n}` 換成數字。 */
+export function fillN(text: string, n: number | null): string {
+  return n === null ? text : text.replace('{n}', n.toLocaleString('en-US'))
+}
+
+/** 「萬題·金」。一次性的徽章只有名字。 */
+export function badgeLabel(def: AchDef, tier: number): string {
+  return def.tiers && tier > 0 ? `${def.name}·${TIER_NAMES[tier - 1]}` : def.name
+}
+
+/** refreshAchievements() 回來的一筆：'hundred:3' → { id: 'hundred', tier: 3 }，'first-clear' → tier 1。 */
+export function parseUnlock(s: string): { id: string; tier: number } {
+  const [id, t] = s.split(':')
+  return { id, tier: t ? Number(t) || 1 : 1 }
+}

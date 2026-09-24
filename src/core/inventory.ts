@@ -44,6 +44,13 @@ export interface ItemDef {
    * 擋下來的是資料庫（buy_item），前端這個旗標只負責不要把它畫在商店裡。
    */
   achievementOnly?: boolean
+  /**
+   * 送的，不用買：不用擁有就能穿（2026-09-24 起陣營五色是這樣）。
+   * 資料庫那邊 equip_item 看的是 shop_items.free。
+   */
+  free?: boolean
+  /** 要先拿到這個成就才買得到（軍團包的稀有級）。擋的是 buy_item。 */
+  needAchievement?: string
 }
 
 export function count(c: Character, itemId: string): number {

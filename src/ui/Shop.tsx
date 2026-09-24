@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { count, MODE_LABEL } from '@/core/inventory'
 import { levelFromExp } from '@/core/progress'
 import type { Character } from '@/core/types'
 import type { ItemDef } from '@/core/inventory'
 import { ITEMS } from '@/data/shop'
 import { COLORS, FRAMES } from '@/data/cosmetics'
+import { LEGIONS, TIERS, TIER_ORDER, legionNeed, type LegionDef } from '@/data/legions'
+import { ACH_BY_ID } from '@/data/achievements'
+import { LegionThumb } from './LegionThumb'
 import { JOB_NAME } from '@/core/character'
 import { repo } from '@/net'
 import { Avatar } from './Avatar'
@@ -58,6 +61,15 @@ export function Shop({
 
   const level = levelFromExp(character.exp)
   const has = (id: string) => count(character, id) > 0
+  // 拿到哪些成就。稀有級軍團要先拿到指定成就才開放購買（真正擋的是 buy_item）。
+  const [badges, setBadges] = useState<Set<string> | null>(null)
+  useEffect(() => {
+    let alive = true
+    repo.loadAchievements()
+      .then((rows) => { if (alive) setBadges(new Set(rows.filter((r) => r.unlockedAt).map((r) => r.id))) })
+      .catch(() => { if (alive) setBadges(new Set()) })
+    return () => { alive = false }
+  }, [])
 
   async function run(what: () => Promise<string>) {
     if (busy) return
@@ -90,15 +102,24 @@ export function Shop({
       {note && <p className="note">{note}</p>}
 
       <div className="shopwrap">
+        <section>
+          <h2 className="sec">軍團<small>　一次換整套：兵推的兵、城堡、塔、戰場，守塔的士兵和箭塔</small></h2>
+          {TIER_ORDER.map((tier) => (
+            <LegionShelf key={tier} tier={tier} level={level} coins={character.coins} badges={badges}
+              owned={(l) => !l.id || has(l.id)} busy={busy} onBuy={(l) => void buy(l.id, l.name)}
+              onCharacter={onCharacter} />
+          ))}
+        </section>
+
         {[
           { key: 'consumable', title: '道具', hint: '帶進關卡裡用，用掉就沒了' },
-          { key: 'color', title: '陣營顏色', hint: '城堡、塔、士兵整套變色' },
+          // 陣營顏色 2026-09-24 起免費送，不上架，在「我的角色」直接換
           { key: 'frame', title: '頭像外框', hint: '套在頭像外面，同學也看得到' },
         ].map((g) => (
           <section key={g.key}>
             <h2 className="sec">{g.title}<small>　{g.hint}</small></h2>
             <div className="items">
-              {ITEMS.filter((i) => !i.achievementOnly
+              {ITEMS.filter((i) => !i.achievementOnly && !i.free
                 && (g.key === 'consumable' ? i.kind === 'consumable' : i.slot === g.key))
                 .map((i) => {
                   const locked = level < i.unlockLevel
@@ -131,6 +152,75 @@ export function Shop({
           </section>
         ))}
       </div>
+    </div>
+  )
+}
+
+/**
+ * 軍團的一層架子。四級＝四層：預設、普通、稀有、傳說。
+ *
+ * **門檻跟著那一層走**（data/legions.ts 的 TIERS），所以每一層的標題就寫著要什麼，
+ * 小朋友一眼看得到「再升三級、再拿一個成就就能買豬」。
+ * 之後加新軍團就是往某一層多放一張卡，這裡不用改。
+ */
+function LegionShelf({
+  tier, level, coins, badges, owned, busy, onBuy, onCharacter,
+}: {
+  tier: keyof typeof TIERS
+  level: number
+  coins: number
+  /** 拿到的成就；還沒讀到是 null */
+  badges: Set<string> | null
+  owned: (l: LegionDef) => boolean
+  busy: boolean
+  onBuy: (l: LegionDef) => void
+  onCharacter: () => void
+}) {
+  const t = TIERS[tier]
+  const list = LEGIONS.filter((l) => l.tier === tier)
+  const needs = [
+    t.unlockLevel > 1 && `Lv${t.unlockLevel}`,
+    t.needAchievement && `成就「${ACH_BY_ID.get(t.needAchievement)?.name ?? t.needAchievement}」`,
+    t.badgeLater && '指定成就',
+    t.price > 0 && `${t.price} 金`,
+  ].filter(Boolean).join('＋')
+  return (
+    <div className="lg-shelf" style={{ borderColor: t.tint }}>
+      <div className="lg-head">
+        <b style={{ background: t.tint }}>{t.name}</b>
+        <small>{needs || '免費，一開始就有'}</small>
+      </div>
+      {list.length === 0 && <p className="lg-soon">還沒上架，之後會有最帥的那一套</p>}
+      {list.map((l) => {
+        const mine = owned(l)
+        const need = legionNeed(l)
+        const lowLevel = level < t.unlockLevel
+        const noBadge = !!need && badges !== null && !badges.has(need)
+        const poor = coins < t.price
+        return (
+          <div className={'item lg-item' + (!mine && (lowLevel || noBadge) ? ' locked' : '')} key={l.id || 'default'}>
+            <span className="i-name"><LegionThumb legion={l} /> {l.name}</span>
+            <span className="i-desc">{l.desc}</span>
+            {mine
+              ? <button className="i-tag i-go" onClick={onCharacter}>
+                  {l.id ? '已經有了，去「我的角色」換上 ›' : '預設就有，去「我的角色」換 ›'}
+                </button>
+              : <span className="i-tag">
+                  {lowLevel && `還要升到 ${t.unlockLevel} 級`}
+                  {lowLevel && noBadge && '，'}
+                  {noBadge && `先拿到成就「${ACH_BY_ID.get(need!)?.name ?? need}」`}
+                </span>}
+            <button className="btn small" disabled={busy || mine || lowLevel || noBadge || badges === null && !!need}
+              onClick={() => onBuy(l)}>
+              {mine ? '已擁有'
+                : lowLevel ? `${t.unlockLevel} 級解鎖`
+                  : noBadge ? '先拿成就'
+                    : <><Icon name="coin" size={13} /> {t.price}</>}
+            </button>
+            {!mine && !lowLevel && !noBadge && poor && <span className="i-poor">還差 {t.price - coins}</span>}
+          </div>
+        )
+      })}
     </div>
   )
 }
