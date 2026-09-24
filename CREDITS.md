@@ -10,6 +10,18 @@
 
 `assets/treasure-hunters/` 的海盜角色、船隻、陷阱、地形與 UI 出自此素材包。授權為 Creative Commons Zero (CC0)，不強制標註；此處仍列出以示感謝。
 
+**Pirate Bomb** — [Pixel Frog](https://pixelfrog-assets.itch.io/pirate-bomb)
+
+`assets/pirate-bomb/` 的海盜角色、大砲與船艙地形出自此素材包。授權為 Creative Commons Zero (CC0)，不強制標註；此處仍列出以示感謝。
+
+**Monsters Creatures Fantasy** — [LuizMelo](https://luizmelo.itch.io/monsters-creatures-fantasy)
+
+`assets/monsters-creatures-fantasy/` 的哥布林、飛眼、骷髏、蘑菇出自此素材包。授權為 Creative Commons Zero (CC0)，不強制標註；此處仍列出以示感謝。
+
+**Elementals（Fire Knight、Leaf Ranger、Crystal Mauler）** — [chierit](https://chierit.itch.io/elementals-bundle)
+
+`assets/elementals/` 的三位元素大師出自此系列。授權為 Creative Commons Attribution 4.0 (CC BY 4.0)，**須標註作者 chierit 並附連結**。
+
 **Kings and Pigs** — [Pixel Frog](https://pixelfrog-assets.itch.io/kings-and-pigs)
 
 `assets/kings-and-pigs/` 的豬兵、豬王、大砲與地形出自此素材包。授權為 Creative Commons Zero (CC0)，不強制標註；此處仍列出以示感謝。
