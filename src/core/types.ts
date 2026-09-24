@@ -216,6 +216,20 @@ export interface GameOutcome {
   survival: number
   /** 給結算畫面看的一句話 */
   detail: string
+  /**
+   * 對戰才有的戰報。容器拿它去記戰績（versus_matches），成就那邊要用——
+   * 「三線通吃」「頂階降臨」「逆轉勝」從答題事件是看不出來的。
+   */
+  versus?: {
+    /** 前線最後推到哪，0＝自己城牆、1＝對方城堡 */
+    front: number
+    /** 整場最落後的時候。逆轉勝要用。 */
+    lowestFront: number
+    /** 用過哪幾條兵種線 */
+    linesUsed: Skill[]
+    /** 這一場推出過的最高兵階 */
+    topTier: number
+  }
 }
 
 export interface GameHandle {
@@ -287,6 +301,11 @@ export interface Student {
   classCode: string | null
   nickname: string
   role: Role
+  /**
+   * 註冊時間，epoch 毫秒。本地版才有——Supabase 那邊 students 只 grant
+   * 三個欄位出來（見 schema.sql），註冊時間只有伺服器自己看得到。
+   */
+  createdAt?: number
 }
 
 /** 老師或管理員。跟 Student 是兩種不同的身分，走不同的登入方式。 */
@@ -339,6 +358,16 @@ export interface Character {
   items: Record<string, number>
   /** 目前穿戴的外觀 */
   equipped: string[]
+  /** 別在名字旁邊的三個徽章。同學在排行榜上看得到的就是這三個。 */
+  pinned?: string[]
+  /** 稱號，解成就拿到的 */
+  title?: string
+  /** 讓同學從排行榜點進來看我的徽章。預設開，自己可以關，老師一律看得到。 */
+  publicProfile?: boolean
+  /** 換過哪些頭像。avatar 只存現在這一個，但「換頭像」那個成就數的是種類。 */
+  avatarsSeen?: string[]
+  /** 用哪些職業通關過（「雙修」要用）。職業隨時能改，所以要在通關那一刻記。 */
+  jobsCleared?: string[]
 }
 
 export interface LevelProgress {
@@ -346,6 +375,10 @@ export interface LevelProgress {
   stars: 0 | 1 | 2 | 3
   bestCorrect: number
   clearedAt: number | null
+  /** 通關那幾次裡城堡血剩最多的一次，0~1。「城牆不倒」要用。 */
+  bestSurvival?: number
+  /** 最後一次通關是哪一場。「空手過關」要知道那一場有沒有用道具。 */
+  lastWinSession?: string | null
 }
 
 /** wordStat 的一格：某個學生的某個字的某個能力 */

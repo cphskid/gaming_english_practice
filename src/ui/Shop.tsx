@@ -61,7 +61,8 @@ export function Shop({
     return on ? `換上「${name}」了` : `脫下「${name}」了`
   })
 
-  const cosmetics = ITEMS.filter((i) => i.kind === 'cosmetic')
+  // 成就限定的外框不進商店——買不到的東西擺在賣場只會讓人一直按
+  const cosmetics = ITEMS.filter((i) => i.kind === 'cosmetic' && !i.achievementOnly)
   const ownedCosmetics = cosmetics.filter((i) => has(i.id)).length
 
   return (
@@ -92,7 +93,8 @@ export function Shop({
             <section key={g.key}>
               <h2 className="sec">{g.title}<small>　{g.hint}</small></h2>
               <div className="items">
-                {ITEMS.filter((i) => (g.key === 'consumable' ? i.kind === 'consumable' : i.slot === g.key))
+                {ITEMS.filter((i) => !i.achievementOnly
+                  && (g.key === 'consumable' ? i.kind === 'consumable' : i.slot === g.key))
                   .map((i) => {
                     const locked = level < i.unlockLevel
                     const owned = has(i.id)
@@ -155,7 +157,8 @@ export function Shop({
             {FRAMES.map((f) => {
               const owned = has(f.id)
               const on = wornFrame?.id === f.id
-              const price = ITEMS.find((i) => i.id === f.id)?.price
+              const item = ITEMS.find((i) => i.id === f.id)
+              const price = item?.price
               return (
                 <button key={f.id} className={'pick' + (on ? ' on' : '') + (owned ? '' : ' locked')}
                   disabled={busy || !owned} onClick={() => void wear(f.id, true, f.name)}>
@@ -164,7 +167,9 @@ export function Shop({
                     {f.badge && <i className="mugbadge" style={{ fontSize: 11 }}>{f.badge}</i>}
                   </span>
                   {f.name}
-                  {!owned && <small>🪙 {price}</small>}
+                  {!owned && (item?.achievementOnly
+                    ? <small>解成就</small>
+                    : <small>🪙 {price}</small>)}
                 </button>
               )
             })}

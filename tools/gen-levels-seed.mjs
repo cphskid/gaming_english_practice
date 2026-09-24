@@ -31,17 +31,19 @@ const { LEVELS } = await import(out)
 
 const rows = LEVELS.map((l) => {
   const enemies = l.rules.waves.reduce((n, w) => n + w.count, 0) + (l.rules.boss ? 1 : 0)
-  return { id: l.id, no: l.no, name: l.name, minCorrect: Math.ceil(enemies * 0.5) }
+  // isBoss：守塔的成就（「屠魔」「差一點」）要分得出哪幾關是魔王關
+  return { id: l.id, no: l.no, name: l.name, minCorrect: Math.ceil(enemies * 0.5), boss: !!l.isBoss }
 })
 if (rows.length !== 14) throw new Error('關卡數不是 14，是不是改了？' + rows.length)
 
 const sql = `
 -- 關卡。**這一段是 tools/gen-levels-seed.mjs 從 src/data/levels.ts 產生的，不要手改。**
 -- min_correct 是「這一關至少要答對幾題才可能通關」，通關與星星由伺服器判定時要用。
-insert into public.levels (id, no, name, min_correct) values
-${rows.map((r) => `  ('${r.id}', ${r.no}, '${r.name}', ${r.minCorrect})`).join(',\n')}
+insert into public.levels (id, no, name, min_correct, is_boss) values
+${rows.map((r) => `  ('${r.id}', ${r.no}, '${r.name}', ${r.minCorrect}, ${r.boss})`).join(',\n')}
 on conflict (id) do update
-  set no = excluded.no, name = excluded.name, min_correct = excluded.min_correct;
+  set no = excluded.no, name = excluded.name, min_correct = excluded.min_correct,
+      is_boss = excluded.is_boss;
 `
 const marker = '-- 關卡。'
 let seed = readFileSync('supabase/seed.sql', 'utf8')

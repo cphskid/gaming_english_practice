@@ -49,8 +49,13 @@ export interface Repository {
   /** 穿脫裝飾品。回傳穿好之後的清單。 */
   equipItem(itemId: string, on: boolean): Promise<string[]>
 
-  /** 用掉一個消耗品。回傳用完之後的背包。 */
-  consumeItem(itemId: string): Promise<Record<string, number>>
+  /**
+   * 用掉一個消耗品。回傳用完之後的背包。
+   *
+   * 多帶「用在哪一場、哪一關」是給成就用的：背包只存剩幾個，用完歸零，
+   * 事後完全看不出來他用過什麼（「空手過關」「道具三味」就是靠這個）。
+   */
+  consumeItem(itemId: string, sessionId?: string, levelId?: string): Promise<Record<string, number>>
 
   /**
    * 班內排行榜。**排名由後端算**，而且只回暱稱、分數和外觀——
@@ -174,6 +179,40 @@ export interface Repository {
   /** 這套系統有沒有管理員。沒有的話老師後台要讓人認領，不然誰都進不去。 */
   hasAdmin(): Promise<boolean>
 
+  // -------------------------------------------------------------- 成就
+  /**
+   * 我的徽章牆。**沒拿到的也會回**，畫面要畫得出灰色剪影和「還差多少」。
+   * 誰拿到什麼是伺服器說了算，前端只負責畫。
+   */
+  loadAchievements(): Promise<AchievementRow[]>
+
+  /**
+   * 重算一次成就，回傳「這一次新解開的」。
+   *
+   * 打完一場、開個人檔案、開機各叫一次。**重算而不是答對時加一**：
+   * 規則改了、資料補了，下一次重算就自己對了；少算一次也不會永久漏掉。
+   */
+  refreshAchievements(): Promise<string[]>
+
+  /** 別在名字旁邊的徽章，最多三個。只能別自己拿到的。 */
+  setPinned(ids: string[]): Promise<string[]>
+  /** 選稱號。傳空字串＝不掛。回傳實際掛上的稱號文字。 */
+  setTitle(achievementId: string): Promise<string>
+  /** 檔案給不給同學看 */
+  setPublicProfile(open: boolean): Promise<boolean>
+
+  /**
+   * 看同學的檔案。**一定要走這支**：別人的角色存檔讀不到（RLS 擋著），
+   * 而且對方可以把檔案關起來。
+   */
+  publicProfile(studentId: string): Promise<PublicProfile>
+
+  /**
+   * 記一場兵推。打電腦也記（有些成就要算），但勝場只認同學。
+   * 同一場重送不會變成兩筆。
+   */
+  recordVersusMatch(m: VersusMatchInput): Promise<void>
+
   listTeachers(): Promise<TeacherRow[]>
   listInvites(): Promise<{ email: string; used: boolean }[]>
   setTeacherActive(userId: string, active: boolean): Promise<void>
@@ -189,6 +228,8 @@ export interface ClassRosterRow {
 }
 
 export interface LeaderRow {
+  /** 點進去看他的徽章牆要用 */
+  studentId: string
   nickname: string
   coins: number
   exp: number
@@ -198,6 +239,12 @@ export interface LeaderRow {
   equipped: string[]
   /** 這一列是不是自己。把自己那一行標出來，找起來才快 */
   me: boolean
+  /** 稱號，解成就拿到的 */
+  title: string
+  /** 拿到幾個徽章 */
+  badges: number
+  /** 他的檔案讓不讓我點進去看 */
+  viewable: boolean
 }
 
 /** 班上開著的一場，清單上那一列。 */
@@ -267,4 +314,43 @@ export interface SavedResult {
   progress: LevelProgress
   /** 首次通關獎金。也是伺服器發的，畫面上的數字要跟著它，不要自己算一份。 */
   bonusCoins: number
+}
+
+/** 徽章牆上的一格。unlockedAt 是 null 就是還沒拿到。 */
+export interface AchievementRow {
+  id: string
+  category: string
+  /** epoch 毫秒 */
+  unlockedAt: number | null
+}
+
+/** 同學的個人檔案。只有看得到的東西，沒有登入帳號也沒有答題明細。 */
+export interface PublicProfile {
+  nickname: string
+  avatar: string
+  equipped: string[]
+  title: string
+  /** 別在名字旁邊的三個 */
+  pinned: string[]
+  /** 拿到的徽章 id，照拿到的先後 */
+  badges: string[]
+  stars: number
+  level: number
+}
+
+/** 一場兵推的結果。欄位跟資料庫的 versus_matches 一樣。 */
+export interface VersusMatchInput {
+  sessionId: string
+  /** 打電腦是 'cpu'。**勝場只認 'student'**，不然贏電腦就能刷戰績。 */
+  opponentKind: 'cpu' | 'student'
+  opponentName: string
+  won: boolean
+  /** 前線最後推到哪，0＝自己城牆、1＝對方城牆 */
+  front: number
+  /** 整場最落後的時候。逆轉勝要用。 */
+  lowestFront: number
+  /** 用過哪幾條兵種線 */
+  linesUsed: string[]
+  /** 這一場推出過的最高兵階 */
+  topTier: number
 }

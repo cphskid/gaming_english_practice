@@ -252,6 +252,95 @@ create table if not exists public.teacher_open (
   primary key (class_code, level_id)
 );
 
+-- 魔王關。守塔的成就要分得出哪幾關是魔王關，而這件事的來源是
+-- src/data/levels.ts（boss: true），由 tools/gen-levels-seed.mjs 灌進來。
+alter table public.levels add column if not exists is_boss boolean not null default false;
+
+-- 通關時的城堡血量與那一場的 session。
+--   * best_survival：「城牆不倒」要知道有沒有一滴血都沒掉。
+--   * last_win_session：「空手過關」要知道通關的那一場有沒有用道具。
+alter table public.level_progress add column if not exists best_survival numeric not null default 0;
+alter table public.level_progress add column if not exists last_win_session uuid;
+
+-- 角色上的成就周邊。
+--   * pinned：別在暱稱旁邊的三個徽章（同學看得到的那三個）
+--   * title：稱號，一樣別在暱稱旁邊
+--   * public_profile：允許同學從排行榜點進來看。預設開，自己可以關，老師一律看得到。
+--   * avatars_seen：換過哪些頭像（「換頭像」要數種類，但 avatar 欄位只存現在這一個）
+--   * jobs_cleared：用哪些職業通關過（「雙修」要用）
+alter table public.characters add column if not exists pinned jsonb not null default '[]'::jsonb;
+alter table public.characters add column if not exists title text not null default '';
+alter table public.characters add column if not exists public_profile boolean not null default true;
+alter table public.characters add column if not exists avatars_seen jsonb not null default '[]'::jsonb;
+alter table public.characters add column if not exists jobs_cleared text[] not null default '{}';
+
+-- 成就限定的品項：商店買不到，只能解成就拿到。**買不到才有稀缺性。**
+alter table public.shop_items add column if not exists achievement_only boolean not null default false;
+
+-- 成就目錄。名字和說明在前端，這裡只存「機器要用的」：分類、順序、獎品。
+create table if not exists public.achievements (
+  id           text primary key,
+  category     text not null check (category in
+                 ('learn','skill','tower','versus','collect','habit','secret')),
+  ord          smallint not null default 0,
+  -- 解開的外框。指到 shop_items，因為「一個欄位只能穿一件」那條規則住在那邊。
+  reward_item  text references public.shop_items(id) on delete set null,
+  reward_title text not null default ''
+);
+
+create table if not exists public.student_achievements (
+  student_id     uuid not null references public.students(id) on delete cascade,
+  achievement_id text not null references public.achievements(id) on delete cascade,
+  unlocked_at    timestamptz not null default now(),
+  primary key (student_id, achievement_id)
+);
+create index if not exists student_achievements_student
+  on public.student_achievements(student_id, unlocked_at desc);
+
+-- 兵推的戰績。
+--
+-- **為什麼要這張表**：兵推本來只寫答題事件，每一場的輸贏根本沒存，
+-- 所以對戰那一類六個成就有五個算不出來。順便也是好友挑戰要用的那張表——
+-- 對手就是「一串照時間發生的答題」，這裡存的是那一串的結果。
+--
+-- 打電腦的場次照樣記（要算「初上戰場」「三線通吃」），但 **won 只在
+-- opponent_kind = 'student' 時才算勝場**，不然贏電腦就能刷「戰旗」。
+create table if not exists public.versus_matches (
+  id               uuid primary key default gen_random_uuid(),
+  student_id       uuid not null references public.students(id) on delete cascade,
+  -- 那一場的 Session id，跟答題事件對得起來
+  session_id       uuid,
+  opponent_kind    text not null check (opponent_kind in ('cpu','student')),
+  opponent_student uuid references public.students(id) on delete set null,
+  opponent_name    text not null default '',
+  won              boolean not null,
+  -- 前線最後推到哪（0＝自己城牆，1＝對方城牆）
+  front            numeric not null default 0.5 check (front between 0 and 1),
+  -- 整場最落後的時候。逆轉勝要用。
+  lowest_front     numeric not null default 0.5 check (lowest_front between 0 and 1),
+  -- 用過哪幾條兵種線
+  lines_used       text[] not null default '{}',
+  -- 這一場推出過的最高兵階
+  top_tier         smallint not null default 1 check (top_tier between 1 and 3),
+  ended_at         timestamptz not null default now()
+);
+create index if not exists versus_matches_student
+  on public.versus_matches(student_id, ended_at desc);
+
+-- 道具用在哪一場。
+-- 「空手過關」要知道通關那一場有沒有用道具，「道具三味」要知道用過幾種，
+-- 而 characters.items 是消耗品的「剩幾個」，用完歸零，什麼都看不出來。
+create table if not exists public.item_uses (
+  id         bigint generated always as identity primary key,
+  student_id uuid not null references public.students(id) on delete cascade,
+  item_id    text not null,
+  session_id uuid,
+  level_id   text,
+  at         timestamptz not null default now()
+);
+create index if not exists item_uses_student on public.item_uses(student_id, at desc);
+create index if not exists item_uses_session on public.item_uses(session_id);
+
 -- =============================================================================
 -- 權限：先全部關起來，再一條一條開
 -- =============================================================================
@@ -868,15 +957,29 @@ begin
   end if;
 
   insert into public.level_progress as lp
-    (student_id, level_id, stars, best_correct, cleared_at)
+    (student_id, level_id, stars, best_correct, cleared_at, best_survival, last_win_session)
   values
     (v_student, p_level_id, v_stars, v_correct,
-     case when v_win then now() else null end)
+     case when v_win then now() else null end,
+     case when v_win then least(greatest(coalesce(p_survival, 0), 0), 1) else 0 end,
+     case when v_win then p_session end)
   on conflict (student_id, level_id) do update set
     stars        = greatest(lp.stars, excluded.stars),
     best_correct = greatest(lp.best_correct, excluded.best_correct),
     -- 第一次通關的時間留著，重玩不覆蓋
-    cleared_at   = coalesce(lp.cleared_at, excluded.cleared_at);
+    cleared_at   = coalesce(lp.cleared_at, excluded.cleared_at),
+    -- 城堡血留最好的那一次（「城牆不倒」要用），只有通關的場次算
+    best_survival = greatest(lp.best_survival, excluded.best_survival),
+    last_win_session = coalesce(excluded.last_win_session, lp.last_win_session);
+
+  -- 用哪個職業通關過（「雙修」要用）。職業隨時可以改，所以要在通關那一刻記。
+  if v_win then
+    update public.characters c
+       set jobs_cleared = (select array_agg(distinct x)
+                             from unnest(c.jobs_cleared || array[c.job]) x),
+           updated_at = now()
+     where c.student_id = v_student and not (c.jobs_cleared @> array[c.job]);
+  end if;
 
   if v_bonus > 0 then
     update public.characters c
@@ -916,8 +1019,15 @@ begin
   if p_avatar !~ '^Avatars_(0[1-9]|1[0-9]|2[0-5])$' then
     raise exception '沒有這張頭像';
   end if;
-  update public.characters set avatar = p_avatar, updated_at = now()
-   where student_id = v_student;
+  -- 換過哪些頭像要留著。avatar 欄位只存「現在這一個」，
+  -- 但「換頭像」那個成就數的是種類。
+  update public.characters c
+     set avatar = p_avatar,
+         avatars_seen = case when c.avatars_seen @> to_jsonb(p_avatar)
+                             then c.avatars_seen
+                             else c.avatars_seen || to_jsonb(p_avatar) end,
+         updated_at = now()
+   where c.student_id = v_student;
 end;
 $$;
 
@@ -931,12 +1041,15 @@ language plpgsql security definer set search_path = public, pg_temp as $$
 #variable_conflict use_column
 declare
   v_student uuid := public.current_student_id();
-  v_price int; v_unlock int; v_coins int; v_exp int;
+  v_price int; v_unlock int; v_coins int; v_exp int; v_only boolean;
 begin
   if v_student is null then raise exception '還沒加入班級'; end if;
-  select i.price, i.unlock_level into v_price, v_unlock
+  select i.price, i.unlock_level, i.achievement_only into v_price, v_unlock, v_only
     from public.shop_items i where i.id = p_item;
   if v_price is null then raise exception '商店裡沒有這個東西'; end if;
+  -- 成就限定的東西買不到。買得到就不稀有了，而且商店根本沒把它畫出來，
+  -- 會走到這一行的只有自己打 API 的人。
+  if v_only then raise exception '這個要解成就才拿得到，買不到'; end if;
 
   select c.coins, c.exp into v_coins, v_exp
     from public.characters c where c.student_id = v_student for update;
@@ -995,7 +1108,11 @@ end;
 $$;
 
 /* 用掉一個消耗品。數量不夠就擋下來，不然按快一點就能無限用。 */
-create or replace function public.consume_item(p_item text)
+-- 參數變多了（多了「用在哪一場」），舊的那支要先丟掉，
+-- 不然會變成兩支同名函式，前端呼叫到哪一支全看運氣。
+drop function if exists public.consume_item(text);
+create or replace function public.consume_item(
+  p_item text, p_session uuid default null, p_level_id text default null)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_student uuid := public.current_student_id();
@@ -1011,6 +1128,12 @@ begin
          updated_at = now()
    where c.student_id = v_student
   returning c.items into v_items;
+
+  -- 用在哪一場要留著：「空手過關」要知道通關那一場有沒有用道具，
+  -- 「道具三味」要知道用過幾種。背包只存剩幾個，用完歸零就什麼都看不出來。
+  insert into public.item_uses (student_id, item_id, session_id, level_id)
+  values (v_student, p_item, p_session, nullif(p_level_id, ''));
+
   return v_items;
 end;
 $$;
@@ -1020,18 +1143,27 @@ $$;
 -- 收集品要同學看得到才有意義（見 src/data/cosmetics.ts）。
 -- me 是「這一列是不是我」，讓畫面把自己那一行標出來，不用把 id 送出去。
 -- 回傳的欄位變多了，create or replace 不能改回傳型別，所以先丟掉舊的。
+-- 多了四欄（id、稱號、徽章數、檔案開不開）：排行榜的名字點下去要能看同學的
+-- 徽章牆，所以這裡得說「這是誰」和「他讓不讓看」。
 drop function if exists public.class_leaderboard(text);
 create or replace function public.class_leaderboard(p_code text default null)
-returns table (nickname text, coins int, exp int, stars int,
-               avatar text, equipped jsonb, me boolean)
+returns table (student_id uuid, nickname text, coins int, exp int, stars int,
+               avatar text, equipped jsonb, me boolean,
+               title text, badges int, viewable boolean)
 language sql stable security definer set search_path = public, pg_temp as $$
   with target as (
     select coalesce(upper(btrim(p_code)), public.current_class_code()) as code
   )
-  select s.nickname, c.coins, c.exp,
+  select s.id, s.nickname, c.coins, c.exp,
          coalesce((select sum(lp.stars)::int from public.level_progress lp
                     where lp.student_id = s.id), 0),
-         c.avatar, c.equipped, s.id = public.current_student_id()
+         c.avatar, c.equipped, s.id = public.current_student_id(),
+         c.title,
+         (select count(*)::int from public.student_achievements sa
+           where sa.student_id = s.id),
+         -- 自己的一定看得到；同學的要他沒關起來；老師看得到全班。
+         (s.id = public.current_student_id() or c.public_profile
+          or public.is_teacher_of(s.class_code))
     from public.students s
     join public.characters c on c.student_id = s.id
     join target t on t.code = s.class_code
@@ -1863,7 +1995,7 @@ grant execute on function
   public.set_avatar(text),
   public.buy_item(text),
   public.equip_item(text, boolean),
-  public.consume_item(text),
+  public.consume_item(text, uuid, text),
   public.level_of(int),
   public.class_leaderboard(text),
   public.current_student_id(),
@@ -1911,4 +2043,541 @@ grant execute on function
   public.admin_set_class_owner(text, uuid),
   public.has_admin(),
   public.is_admin()
+to authenticated;
+
+-- =============================================================================
+-- 成就
+--
+-- **解鎖條件的唯一真相在這裡**（refresh_achievements()）。前端那份
+-- src/data/achievements.ts 只有名字、說明和圖，它說誰拿到了是不算數的——
+-- 徽章會出現在別人看得到的個人檔案上，看得到就值得作弊。
+--
+-- 做法跟星星一樣：**每次都從頭重算**，不是「答對時順手加一」。
+--   * 規則改了、資料補了，下一次重算自己就對了，不用寫搬家 SQL。
+--   * 少算一次不會永久漏掉（下一次打完、下一次開檔案都會再算一遍）。
+--   * 四十二個條件都是小查詢，一次重算對一個學生來說很便宜。
+-- 已經拿到的**永遠不會被收回**（只 insert 不 delete），不然「差一點」這種
+-- 安慰獎會在他終於通關那天消失，那比沒給還傷。
+-- =============================================================================
+
+alter table public.achievements         enable row level security;
+alter table public.student_achievements enable row level security;
+alter table public.versus_matches       enable row level security;
+alter table public.item_uses            enable row level security;
+
+grant select on public.achievements to anon, authenticated;
+grant select on public.student_achievements, public.versus_matches, public.item_uses
+  to authenticated;
+
+-- 目錄人人可讀（畫面要畫出「還沒拿到的那些」）。
+drop policy if exists achievements_read on public.achievements;
+create policy achievements_read on public.achievements for select to anon, authenticated using (true);
+
+-- 自己的徽章自己讀得到。**別人的徽章走 public_profile() 那支**，
+-- 因為「可不可以看」牽涉到對方有沒有把檔案關起來，那是函式在管的事。
+drop policy if exists student_achievements_read on public.student_achievements;
+create policy student_achievements_read on public.student_achievements for select to authenticated
+  using (student_id = public.current_student_id() or public.owns_student(student_id));
+
+drop policy if exists versus_matches_read on public.versus_matches;
+create policy versus_matches_read on public.versus_matches for select to authenticated
+  using (student_id = public.current_student_id() or public.owns_student(student_id));
+
+drop policy if exists item_uses_read on public.item_uses;
+create policy item_uses_read on public.item_uses for select to authenticated
+  using (student_id = public.current_student_id() or public.owns_student(student_id));
+
+-- -----------------------------------------------------------------------------
+-- 重算成就。四十二個條件全部從來源資料算一遍，回傳「這次新解開的」。
+--
+-- 條件寫得囉嗦是故意的：一個條件一段 if，改一條不用讀懂另外四十一條。
+-- 時間一律轉 Asia/Taipei 再算「哪一天」——伺服器是 UTC，不轉的話台灣時間
+-- 早上八點以前玩的都會被算成前一天，連續天數會莫名其妙斷掉。
+-- -----------------------------------------------------------------------------
+create or replace function public.refresh_achievements()
+returns setof text
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_student uuid := public.current_student_id();
+  v_got     text[] := '{}';
+  v_n       int;
+  v_items   jsonb;
+  v_jobs    text[];
+  v_new     text;
+begin
+  if v_student is null then return; end if;
+
+  -- ---------------------------------------------------------------- 學習
+  if exists (select 1 from public.answer_events ae
+              where ae.student_id = v_student and ae.correct) then
+    v_got := array_append(v_got, 'first-answer');
+  end if;
+
+  select count(*) into v_n from public.answer_events ae
+   where ae.student_id = v_student and ae.correct;
+  if v_n >= 100 then v_got := array_append(v_got, 'hundred'); end if;
+
+  -- 錯過三次以上、現在連對三次＝真的把死對頭練起來了
+  if exists (select 1 from public.word_stats ws
+              where ws.student_id = v_student and ws.wrong >= 3 and ws.streak >= 3) then
+    v_got := array_append(v_got, 'nemesis');
+  end if;
+
+  select count(*) into v_n from (
+    select w.theme,
+           bool_and(exists (select 1 from public.answer_events ae
+                             where ae.student_id = v_student
+                               and ae.word_id = w.id and ae.correct)) as done
+      from public.words w
+     where w.theme <> ''
+     group by w.theme) t
+   where t.done;
+  if v_n >= 5 then v_got := array_append(v_got, 'theme-king'); end if;
+
+  -- 「熟」＝這個字這個能力連對三次。用掌握度而不是答對次數，
+  -- 不然一直刷同一個簡單的字也會過。
+  select count(distinct ws.word_id) into v_n from public.word_stats ws
+   where ws.student_id = v_student and ws.streak >= 3;
+  if v_n >= 50 then v_got := array_append(v_got, 'mastered-50'); end if;
+
+  select count(distinct ae.word_id) into v_n from public.answer_events ae
+   where ae.student_id = v_student and ae.correct;
+  if v_n >= (select count(*) from public.words) then v_got := array_append(v_got, 'literate'); end if;
+
+  -- ---------------------------------------------------------------- 技能
+  select count(*) into v_n from public.answer_events ae
+   where ae.student_id = v_student and ae.correct and ae.skill = 'recognize';
+  if v_n >= 100 then v_got := array_append(v_got, 'read-100'); end if;
+
+  select count(*) into v_n from public.answer_events ae
+   where ae.student_id = v_student and ae.correct and ae.skill = 'listen';
+  if v_n >= 100 then v_got := array_append(v_got, 'listen-100'); end if;
+
+  select count(*) into v_n from public.answer_events ae
+   where ae.student_id = v_student and ae.correct and ae.skill = 'spell';
+  if v_n >= 100 then v_got := array_append(v_got, 'spell-100'); end if;
+
+  if exists (
+    select 1 from public.answer_events ae
+     where ae.student_id = v_student
+     group by (ae.at at time zone 'Asia/Taipei')::date
+    having count(distinct ae.skill) = 3) then
+    v_got := array_append(v_got, 'triple-day');
+  end if;
+
+  select count(*) into v_n
+    from public.answer_events ae join public.words w on w.id = ae.word_id
+   where ae.student_id = v_student and ae.correct and ae.skill = 'spell'
+     and length(w.word) >= 8;
+  if v_n >= 10 then v_got := array_append(v_got, 'long-words'); end if;
+
+  select min(c) into v_n from (
+    select s.k, (select count(*) from public.word_stats ws
+                  where ws.student_id = v_student and ws.skill = s.k and ws.streak >= 3) as c
+      from (values ('recognize'),('spell'),('listen')) as s(k)) t;
+  if coalesce(v_n, 0) >= 50 then v_got := array_append(v_got, 'balanced'); end if;
+
+  -- ---------------------------------------------------------------- 守塔
+  if exists (select 1 from public.level_progress lp
+              where lp.student_id = v_student and lp.cleared_at is not null) then
+    v_got := array_append(v_got, 'first-clear');
+  end if;
+
+  if exists (select 1 from public.level_progress lp
+              where lp.student_id = v_student and lp.stars >= 3) then
+    v_got := array_append(v_got, 'three-star');
+  end if;
+
+  if exists (select 1 from public.level_progress lp
+              where lp.student_id = v_student and lp.cleared_at is not null
+                and lp.best_survival >= 1) then
+    v_got := array_append(v_got, 'no-damage');
+  end if;
+
+  select count(*) into v_n
+    from public.level_progress lp join public.levels l on l.id = lp.level_id
+   where lp.student_id = v_student and lp.cleared_at is not null and l.is_boss;
+  if v_n > 0 and v_n >= (select count(*) from public.levels where is_boss) then
+    v_got := array_append(v_got, 'boss-slayer');
+  end if;
+
+  select coalesce(sum(lp.stars), 0) into v_n from public.level_progress lp
+   where lp.student_id = v_student;
+  if v_n >= 30 then v_got := array_append(v_got, 'stars-30'); end if;
+
+  select count(*) into v_n from public.level_progress lp
+   where lp.student_id = v_student and lp.cleared_at is not null;
+  if v_n >= (select count(*) from public.levels) then v_got := array_append(v_got, 'all-clear'); end if;
+
+  -- ---------------------------------------------------------------- 對戰
+  if exists (select 1 from public.versus_matches m where m.student_id = v_student) then
+    v_got := array_append(v_got, 'first-match');
+  end if;
+
+  if exists (select 1 from public.versus_matches m
+              where m.student_id = v_student
+                and coalesce(array_length(m.lines_used, 1), 0) >= 3) then
+    v_got := array_append(v_got, 'all-lines');
+  end if;
+
+  if exists (select 1 from public.versus_matches m
+              where m.student_id = v_student and m.top_tier >= 3) then
+    v_got := array_append(v_got, 'top-tier');
+  end if;
+
+  -- 被推進自己半場（前線剩三成五以下）還贏回來
+  if exists (select 1 from public.versus_matches m
+              where m.student_id = v_student and m.won and m.lowest_front <= 0.35) then
+    v_got := array_append(v_got, 'comeback');
+  end if;
+
+  -- 連輸兩場之後又開了一場。**輸的人也拿得到的那一個**，整個對戰類就靠它
+  -- 不變成「強的越拿越多」。
+  if exists (
+    select 1 from (
+      select lag(m.won, 1) over (order by m.ended_at, m.id) as p1,
+             lag(m.won, 2) over (order by m.ended_at, m.id) as p2
+        from public.versus_matches m where m.student_id = v_student) t
+     where t.p1 is false and t.p2 is false) then
+    v_got := array_append(v_got, 'never-quit');
+  end if;
+
+  -- 只算贏同學的場次。打電腦不記戰績，這是一開始就講好的。
+  select count(*) into v_n from public.versus_matches m
+   where m.student_id = v_student and m.won and m.opponent_kind = 'student';
+  if v_n >= 5 then v_got := array_append(v_got, 'war-flag'); end if;
+
+  -- ---------------------------------------------------------------- 收集
+  select c.items, c.jobs_cleared into v_items, v_jobs
+    from public.characters c where c.student_id = v_student;
+  v_items := coalesce(v_items, '{}'::jsonb);
+
+  if exists (
+    select 1 from public.characters c
+      join lateral jsonb_array_elements_text(c.equipped) e on true
+      join public.shop_items i on i.id = e
+     where c.student_id = v_student and i.slot = 'frame') then
+    v_got := array_append(v_got, 'dressed');
+  end if;
+
+  -- 藍軍本來就有，所以是另外四個顏色
+  if v_items ?& array['color-red','color-yellow','color-purple','color-black'] then
+    v_got := array_append(v_got, 'five-colors');
+  end if;
+
+  if v_items ?& array['frame-gold','frame-ribbon','frame-crown','frame-rainbow'] then
+    v_got := array_append(v_got, 'all-frames');
+  end if;
+
+  select coalesce(jsonb_array_length(c.avatars_seen), 0) into v_n
+    from public.characters c where c.student_id = v_student;
+  if v_n >= 10 then v_got := array_append(v_got, 'avatar-10'); end if;
+
+  if coalesce(v_jobs, '{}') @> array['knight','mage'] then v_got := array_append(v_got, 'dual-job'); end if;
+
+  select count(distinct u.item_id) into v_n from public.item_uses u
+   where u.student_id = v_student;
+  if v_n >= 3 then v_got := array_append(v_got, 'item-taster'); end if;
+
+  -- ---------------------------------------------------------------- 習慣
+  -- 一律用「那一週來了幾天」，不是「連續幾天」。斷一天不歸零，
+  -- 不然請假、沒平板的小孩等於被懲罰。
+  select coalesce(max(d), 0) into v_n from (
+    select count(distinct (ae.at at time zone 'Asia/Taipei')::date) as d
+      from public.answer_events ae
+     where ae.student_id = v_student
+     group by date_trunc('week', ae.at at time zone 'Asia/Taipei')) t;
+  if v_n >= 3 then v_got := array_append(v_got, 'week-3'); end if;
+  if v_n >= 5 then v_got := array_append(v_got, 'week-5'); end if;
+
+  if exists (select 1 from public.answer_events ae
+              where ae.student_id = v_student
+                and extract(isodow from ae.at at time zone 'Asia/Taipei') in (6, 7)) then
+    v_got := array_append(v_got, 'weekend');
+  end if;
+
+  -- 回鍋：已經通關的關卡又回去玩。隔一分鐘以上才算，
+  -- 不然同一場結算前後的那幾題會被當成回鍋。
+  if exists (
+    select 1 from public.answer_events ae
+      join public.level_progress lp
+        on lp.student_id = ae.student_id and lp.level_id = ae.level_id
+     where ae.student_id = v_student and lp.cleared_at is not null
+       and ae.at > lp.cleared_at + interval '1 minute') then
+    v_got := array_append(v_got, 'replay');
+  end if;
+
+  select coalesce(max(d), 0) into v_n from (
+    select count(distinct (ae.at at time zone 'Asia/Taipei')::date) as d
+      from public.answer_events ae
+     where ae.student_id = v_student
+     group by date_trunc('month', ae.at at time zone 'Asia/Taipei')) t;
+  if v_n >= 12 then v_got := array_append(v_got, 'month-12'); end if;
+
+  if (select s.created_at from public.students s where s.id = v_student)
+       <= now() - interval '30 days'
+     and exists (select 1 from public.answer_events ae
+                  where ae.student_id = v_student and ae.at > now() - interval '7 days') then
+    v_got := array_append(v_got, 'old-friend');
+  end if;
+
+  -- ---------------------------------------------------------------- 彩蛋
+  if exists (select 1 from public.word_stats ws
+              where ws.student_id = v_student and ws.wrong >= 5 and ws.streak >= 1) then
+    v_got := array_append(v_got, 'persistent');
+  end if;
+
+  -- 十秒內連對五題：看第五題跟它前面第四題的時間差
+  if exists (
+    select 1 from (
+      select ae.at,
+             lag(ae.at, 4) over (order by ae.at, ae.id) as p4,
+             min(case when ae.correct then 1 else 0 end)
+               over (order by ae.at, ae.id rows between 4 preceding and current row) as mn
+        from public.answer_events ae where ae.student_id = v_student) t
+     where t.mn = 1 and t.p4 is not null and t.at - t.p4 <= interval '10 seconds') then
+    v_got := array_append(v_got, 'quick-hand');
+  end if;
+
+  -- 安慰獎：魔王關答對八成以上還是沒守住。**通關之後也不會被收回**
+  -- （只 insert 不 delete），不然他終於打贏那天徽章反而不見。
+  if exists (
+    select 1 from (
+      select ae.session_id, ae.level_id,
+             count(*) filter (where ae.correct) as c, count(*) as n
+        from public.answer_events ae
+       where ae.student_id = v_student and ae.level_id is not null
+         and ae.session_id is not null
+       group by ae.session_id, ae.level_id) t
+      join public.levels l on l.id = t.level_id
+     where l.is_boss and t.n >= 10 and t.c::numeric / t.n >= 0.8
+       and not exists (select 1 from public.level_progress lp
+                        where lp.student_id = v_student and lp.level_id = t.level_id
+                          and lp.cleared_at is not null)) then
+    v_got := array_append(v_got, 'so-close');
+  end if;
+
+  if exists (
+    select 1 from public.level_progress lp
+     where lp.student_id = v_student and lp.last_win_session is not null
+       and not exists (select 1 from public.item_uses u
+                        where u.session_id = lp.last_win_session)) then
+    v_got := array_append(v_got, 'bare-handed');
+  end if;
+
+  if exists (select 1 from public.answer_events ae
+              where ae.student_id = v_student and ae.correct and ae.combo >= 20) then
+    v_got := array_append(v_got, 'combo-20');
+  end if;
+
+  -- ---------------------------------------------------------------- 寫進去
+  -- 目錄裡沒有的 id 不寫（前端跑在新版、資料庫還沒灌新目錄的那段時間）。
+  for v_new in
+    insert into public.student_achievements (student_id, achievement_id)
+    select v_student, a.id from public.achievements a where a.id = any(v_got)
+    on conflict do nothing
+    returning achievement_id
+  loop
+    return next v_new;
+  end loop;
+
+  -- 全能生：七個大類每一類都至少一個（它自己不算）。要等上面寫完才數得準。
+  select count(distinct a.category) into v_n
+    from public.student_achievements sa
+    join public.achievements a on a.id = sa.achievement_id
+   where sa.student_id = v_student and a.id <> 'all-rounder';
+  if v_n >= 7 then
+    for v_new in
+      insert into public.student_achievements (student_id, achievement_id)
+      select v_student, 'all-rounder'
+       where exists (select 1 from public.achievements where id = 'all-rounder')
+      on conflict do nothing
+      returning achievement_id
+    loop
+      return next v_new;
+    end loop;
+  end if;
+
+  -- 獎品：成就限定的外框直接放進背包（不用去商店領，小朋友不會想到要去領）。
+  -- 已經有的不重複加，所以重算幾次都一樣。
+  update public.characters c
+     set items = c.items || coalesce((
+           select jsonb_object_agg(a.reward_item, 1)
+             from public.student_achievements sa
+             join public.achievements a on a.id = sa.achievement_id
+            where sa.student_id = v_student
+              and a.reward_item is not null
+              and not (c.items ? a.reward_item)), '{}'::jsonb),
+         updated_at = now()
+   where c.student_id = v_student
+     and exists (select 1 from public.student_achievements sa
+                  join public.achievements a on a.id = sa.achievement_id
+                 where sa.student_id = v_student and a.reward_item is not null
+                   and not (c.items ? a.reward_item));
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 記一場兵推。
+--
+-- 打電腦也記（「初上戰場」「三線通吃」要算），但**勝場只認同學**——
+-- won 照實存，要不要算成勝場是 refresh_achievements 在判斷的事。
+-- 前端送來的數字都夾住：前線 0~1、兵階 1~3、兵種線只認那三個。
+-- -----------------------------------------------------------------------------
+create or replace function public.record_versus_match(
+  p_session       uuid,
+  p_opponent_kind text,
+  p_won           boolean,
+  p_front         numeric default 0.5,
+  p_lowest_front  numeric default 0.5,
+  p_lines         text[] default '{}',
+  p_top_tier      int default 1,
+  p_opponent_name text default '',
+  p_opponent      uuid default null
+)
+returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_student uuid := public.current_student_id();
+  v_kind    text := case when p_opponent_kind = 'student' then 'student' else 'cpu' end;
+  v_id      uuid;
+begin
+  if v_student is null then raise exception '還沒加入班級'; end if;
+
+  -- 同一場只記一次。網路不好時前端會重送，重送不能變成兩場戰績。
+  if p_session is not null then
+    select m.id into v_id from public.versus_matches m
+     where m.student_id = v_student and m.session_id = p_session;
+    if v_id is not null then return v_id; end if;
+  end if;
+
+  insert into public.versus_matches
+    (student_id, session_id, opponent_kind, opponent_student, opponent_name,
+     won, front, lowest_front, lines_used, top_tier)
+  values
+    (v_student, p_session, v_kind,
+     case when v_kind = 'student' then p_opponent end,
+     left(coalesce(p_opponent_name, ''), 16),
+     coalesce(p_won, false),
+     least(greatest(coalesce(p_front, 0.5), 0), 1),
+     least(greatest(coalesce(p_lowest_front, 0.5), 0), 1),
+     coalesce((select array_agg(x) from unnest(coalesce(p_lines, '{}')) x
+                where x in ('recognize','spell','listen')), '{}'),
+     least(greatest(coalesce(p_top_tier, 1), 1), 3))
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+-- 我的徽章牆。回「全部目錄 ＋ 我拿到的時間」，沒拿到的 unlocked_at 是 null——
+-- 畫面要畫得出灰色剪影，所以沒拿到的那些也要回。
+create or replace function public.my_achievements()
+returns table (id text, category text, unlocked_at timestamptz)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select a.id, a.category, sa.unlocked_at
+    from public.achievements a
+    left join public.student_achievements sa
+      on sa.achievement_id = a.id and sa.student_id = public.current_student_id()
+   order by a.ord;
+$$;
+
+-- 別人的個人檔案。**一定要走這支**：別人的角色存檔 RLS 是讀不到的，
+-- 而且「可不可以看」要看對方有沒有把檔案關起來（老師不受限）。
+-- 只露暱稱、頭像、外框、稱號、徽章——不露登入帳號，也不露答題明細。
+create or replace function public.public_profile(p_student uuid)
+returns table (nickname text, avatar text, equipped jsonb, title text,
+               pinned jsonb, badges jsonb, stars int, level int)
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare
+  v_me   uuid := public.current_student_id();
+  v_open boolean;
+  v_code text;
+begin
+  select c.public_profile, s.class_code into v_open, v_code
+    from public.students s join public.characters c on c.student_id = s.id
+   where s.id = p_student;
+  if v_open is null then raise exception '沒有這個人'; end if;
+
+  -- 同班才看得到（排行榜只比班內，檔案也一樣）。老師看自己班的全部。
+  if p_student <> coalesce(v_me, p_student)
+     and not public.is_teacher_of(v_code)
+     and (v_code is distinct from public.current_class_code()) then
+    raise exception '看不到別班的檔案';
+  end if;
+  if not v_open and p_student <> v_me and not public.is_teacher_of(v_code) then
+    raise exception '這位同學把檔案關起來了';
+  end if;
+
+  return query
+    select s.nickname, c.avatar, c.equipped, c.title, c.pinned,
+           coalesce((select jsonb_agg(sa.achievement_id order by sa.unlocked_at)
+                       from public.student_achievements sa
+                      where sa.student_id = p_student), '[]'::jsonb),
+           coalesce((select sum(lp.stars)::int from public.level_progress lp
+                      where lp.student_id = p_student), 0),
+           public.level_of(c.exp)
+      from public.students s join public.characters c on c.student_id = s.id
+     where s.id = p_student;
+end;
+$$;
+
+-- 別在名字旁邊的三個徽章。**只能別自己拿到的**，不然打個 API 就能掛一排。
+create or replace function public.set_pinned(p_ids text[])
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_student uuid := public.current_student_id();
+  v_ok      jsonb;
+begin
+  if v_student is null then raise exception '還沒加入班級'; end if;
+  select coalesce(jsonb_agg(x), '[]'::jsonb) into v_ok
+    from (select x from unnest(coalesce(p_ids, '{}')) with ordinality as t(x, i)
+           where exists (select 1 from public.student_achievements sa
+                          where sa.student_id = v_student and sa.achievement_id = x)
+           order by t.i limit 3) q;
+  update public.characters set pinned = v_ok, updated_at = now()
+   where student_id = v_student;
+  return v_ok;
+end;
+$$;
+
+-- 稱號。一樣只能選自己拿到的那些（空字串＝不掛）。
+create or replace function public.set_title(p_id text)
+returns text language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_student uuid := public.current_student_id();
+  v_title   text := '';
+begin
+  if v_student is null then raise exception '還沒加入班級'; end if;
+  if coalesce(p_id, '') <> '' then
+    select a.reward_title into v_title
+      from public.student_achievements sa
+      join public.achievements a on a.id = sa.achievement_id
+     where sa.student_id = v_student and a.id = p_id and a.reward_title <> '';
+    if v_title is null then raise exception '這個稱號你還沒拿到'; end if;
+  end if;
+  update public.characters set title = coalesce(v_title, ''), updated_at = now()
+   where student_id = v_student;
+  return coalesce(v_title, '');
+end;
+$$;
+
+-- 檔案給不給同學看。預設開，自己隨時可以關；老師一律看得到。
+create or replace function public.set_public_profile(p_open boolean)
+returns boolean language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_student uuid := public.current_student_id();
+begin
+  if v_student is null then raise exception '還沒加入班級'; end if;
+  update public.characters set public_profile = coalesce(p_open, true), updated_at = now()
+   where student_id = v_student;
+  return coalesce(p_open, true);
+end;
+$$;
+
+grant execute on function
+  public.refresh_achievements(),
+  public.my_achievements(),
+  public.public_profile(uuid),
+  public.set_pinned(text[]),
+  public.set_title(text),
+  public.set_public_profile(boolean),
+  public.record_versus_match(uuid, text, boolean, numeric, numeric, text[], int, text, uuid)
 to authenticated;

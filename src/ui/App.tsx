@@ -26,12 +26,14 @@ import { Settings } from './Settings'
 import { CreateCharacter } from './CreateCharacter'
 import { Shop } from './Shop'
 import { Leaderboard } from './Leaderboard'
+import { PeerProfile, Profile } from './Profile'
 import { RoomList, RoomLobby, useRoomList, useRoomState } from './Room'
 import { Versus } from './Versus'
 
 type Screen =
   | 'login' | 'staff' | 'create' | 'select' | 'shop' | 'board'
   | 'play' | 'result' | 'teacher' | 'admin' | 'settings' | 'rooms' | 'lobby' | 'versus'
+  | 'profile' | 'peer'
 
 interface Playing {
   /** 對戰沒有關卡 */
@@ -60,11 +62,14 @@ export function App() {
   const [teacherOpen, setTeacherOpen] = useState<Set<string>>(new Set())
   const [stat, setStat] = useState<WordStat>(() => new WordStat())
   const [playing, setPlaying] = useState<Playing | null>(null)
-  const [result, setResult] = useState<{ r: SessionResult; coins: number; exp: number } | null>(null)
+  const [result, setResult] = useState<
+    { r: SessionResult; coins: number; exp: number; unlocked: string[] } | null>(null)
   const [rotateOff, setRotateOff] = useState(false)
   const [staff, setStaff] = useState<Staff | null>(null)
   /** 現在在哪一場房間裡。null＝沒參加。 */
   const [roomId, setRoomId] = useState<string | null>(null)
+  /** 正在看誰的徽章牆（從排行榜點進去的） */
+  const [peerId, setPeerId] = useState<string | null>(null)
 
   /**
    * 班上開著哪幾場，以及我在的那一場。玩的時候都不問——戰場那個迴圈不該被
@@ -98,6 +103,8 @@ export function App() {
     setProgress(new Map(p.map((x) => [x.levelId, x])))
     setStat(WordStat.fromEntries(stats))
     setTeacherOpen(new Set(open))
+    // 開機重算一次成就。不等它——徽章晚幾秒出現沒關係，但登入不能被它卡住。
+    void repo.refreshAchievements().catch(() => {})
     // 還沒選過職業和頭像的人先去創角，不然他永遠不知道自己可以選
     setScreen(needsCreation(c) ? 'create' : 'select')
   }, [])
@@ -303,10 +310,32 @@ export function App() {
       if (lv && nextProgress) setProgress((m) => new Map(m).set(lv.id, nextProgress))
       // 結算畫面上的星星也要是伺服器那一份，不然畫面上三顆、選關畫面上一顆，
       // 小朋友只會覺得星星會不見。
+      // 兵推：把這一場的輸贏記下來。答題事件看不出「三線通吃」「逆轉勝」
+      // 這些事，所以戰報要另外存一筆；同一場重送不會變成兩筆。
+      if (!lv && outcome.versus && playing.opponent) {
+        await repo.recordVersusMatch({
+          sessionId: playing.session.id,
+          // v1 只打電腦。**打電腦不算勝場**，換成真人時這裡改成 'student'。
+          opponentKind: 'cpu',
+          opponentName: playing.opponent.name,
+          won: outcome.win,
+          front: outcome.versus.front,
+          lowestFront: outcome.versus.lowestFront,
+          linesUsed: outcome.versus.linesUsed,
+          topTier: outcome.versus.topTier,
+        }).catch((e) => { console.warn('記戰績失敗', e) })
+      }
+
+      // 成就重算。放在最後而且吞掉錯誤：徽章晚一點出現沒關係，
+      // 但不能因為它失敗就讓小朋友看不到結算畫面。
+      const unlocked = await repo.refreshAchievements().catch(() => [] as string[])
+      // 解到新徽章就把角色再讀一次——成就限定的外框是直接放進背包的
+      if (unlocked.length) setCharacter(await repo.loadCharacter(student.id))
+
       const bonusCoins = saved?.bonusCoins ?? 0
       setResult({
         r: { ...r, stars: nextProgress?.stars ?? 0, bonusCoins },
-        coins: me.coins + bonusCoins, exp: me.exp,
+        coins: me.coins + bonusCoins, exp: me.exp, unlocked,
       })
       setSettling(null)
       setScreen('result')
@@ -348,6 +377,8 @@ export function App() {
         }),
       ])
       setStat(WordStat.fromEntries(stats))
+      // 中途離開一樣重算成就：他真的答了那些題，該拿的就要拿得到
+      await repo.refreshAchievements().catch(() => [])
       setCharacter(await repo.loadCharacter(student.id))
       setSettling(null)
       setPlaying(null)
@@ -367,14 +398,16 @@ export function App() {
   const useItem = useCallback(async (itemId: string) => {
     if (!character) return
     try {
-      const items = await repo.consumeItem(itemId)
+      // 帶上「用在哪一場、哪一關」：成就要分得出通關的那一場有沒有用道具
+      const items = await repo.consumeItem(
+        itemId, playing?.session.id, playing?.level?.id)
       setCharacter((c) => (c ? { ...c, items } : c))
     } catch (e) {
       // 道具在戰場上已經生效了，這裡只是記帳失敗。不要把遊戲打斷，
       // 下一次讀角色就會回到伺服器的版本。
       console.warn('扣道具失敗', e)
     }
-  }, [character])
+  }, [character, playing])
 
   const nextQuestion = useCallback((skill?: Skill) => {
     if (!playing) return null
@@ -451,7 +484,23 @@ export function App() {
       )}
 
       {screen === 'board' && student && (
-        <Leaderboard student={student} onBack={() => setScreen('select')} />
+        <Leaderboard
+          student={student}
+          onOpen={(id) => { setPeerId(id); setScreen('peer') }}
+          onBack={() => setScreen('select')}
+        />
+      )}
+
+      {screen === 'profile' && student && character && (
+        <Profile
+          student={student} character={character}
+          onCharacter={setCharacter}
+          onBack={() => setScreen('select')}
+        />
+      )}
+
+      {screen === 'peer' && peerId && (
+        <PeerProfile studentId={peerId} onBack={() => setScreen('board')} />
       )}
 
       {screen === 'rooms' && student && (
@@ -492,6 +541,7 @@ export function App() {
           onSettings={() => setScreen('settings')}
           onShop={() => setScreen('shop')}
           onBoard={() => setScreen('board')}
+          onProfile={() => setScreen('profile')}
         />
       )}
 
@@ -531,6 +581,7 @@ export function App() {
       {screen === 'result' && result && (
         <Result
           result={result.r} bonus={{ coins: result.coins, exp: result.exp }}
+          unlocked={result.unlocked}
           onRetry={() => {
             if (!playing) return
             if (playing.level) startLevel(playing.level)
