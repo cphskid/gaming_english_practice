@@ -438,6 +438,14 @@ export function App() {
         </div>
       )}
 
+      {/*
+        版號：學生回報問題時，請他念角落這一行，就知道是哪一版出的事。
+        玩的時候不顯示，免得擋到戰場。改版號只改 package.json。
+      */}
+      {screen !== 'play' && (
+        <div className="app-version">Beta v{__APP_VERSION__.replace(/\.0$/, '')}</div>
+      )}
+
       {screen === 'login' && (
         <Login onLogin={login} onRegister={register} onStaff={() => setScreen('staff')} />
       )}

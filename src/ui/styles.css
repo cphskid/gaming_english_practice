@@ -642,3 +642,14 @@ h2.sec small{font-size:12px;font-weight:400;color:var(--muted)}
 .mugbox.f-calendar{border-color:#47895f}
 .mugbox.f-calendar::before{content:'';position:absolute;left:12%;right:12%;top:-5px;height:4px;
   border-radius:2px;background:#47895f;pointer-events:none}
+
+/* 右下角小小的版號，不能擋到按鈕，也不能被點 */
+.app-version {
+  position: fixed;
+  right: 6px;
+  bottom: calc(4px + env(safe-area-inset-bottom));
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+  z-index: 5;
+}
