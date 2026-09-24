@@ -44,7 +44,7 @@ export const islandTwin: Layout = {
   slots: [
     { x: 176, y: 310, hi: true }, { x: 288, y: 310, hi: true },
     { x: 496, y: 310, hi: true }, { x: 616, y: 310, hi: true },
-    { x: 380, y: 146 }, { x: 800, y: 146 },
+    { x: 380, y: 146 }, { x: 840, y: 170 },
     { x: 380, y: 502 }, { x: 800, y: 502 },
   ],
   decor: [
@@ -72,7 +72,7 @@ export const zigzag: Layout = {
   castle: CASTLE,
   slots: [
     { x: 380, y: 310, hi: true }, { x: 510, y: 310, hi: true },
-    { x: 150, y: 300 }, { x: 740, y: 300 },
+    { x: 150, y: 300 }, { x: 780, y: 300 },
     { x: 240, y: 110 }, { x: 560, y: 110 }, { x: 800, y: 110 },
     { x: 150, y: 490 },
   ],
@@ -98,13 +98,13 @@ export const forestS: Layout = {
   castle: CASTLE,
   slots: [
     { x: 420, y: 310, hi: true }, { x: 530, y: 310, hi: true },
-    { x: 190, y: 300 }, { x: 470, y: 130 },
+    { x: 190, y: 310 }, { x: 470, y: 130 },
     { x: 760, y: 300 }, { x: 860, y: 400 },
     { x: 150, y: 480 }, { x: 820, y: 96 },
   ],
   decor: [
     { k: 'tree1', x: 70, y: 300 }, { k: 'tree2', x: 140, y: 210 },
-    { k: 'tree1', x: 420, y: 500 }, { k: 'tree2', x: 730, y: 330 },
+    { k: 'tree1', x: 420, y: 500 }, { k: 'tree2', x: 700, y: 340 },
     { k: 'tree1', x: 1020, y: 180 }, { k: 'tree2', x: 990, y: 470 },
     { k: 'rock1', x: 230, y: 520 }, { k: 'rock3', x: 540, y: 100 },
     { k: 'rock2', x: 700, y: 520 }, { k: 'rock4', x: 380, y: 250 },
@@ -114,7 +114,7 @@ export const forestS: Layout = {
 /** 4 食物與餐具：一條路走到一半分兩邊。前半段的塔打得到全部，後半段只能顧一邊。 */
 export const fork: Layout = {
   land: { r0: 1, r1: 7 },
-  plateaus: [{ c0: 9, c1: 11, r0: 4, r1: 5 }],
+  plateaus: [{ c0: 9, c1: 12, r0: 4, r1: 5 }],
   paths: [
     [
       { x: ENTRY, y: 300 }, { x: 420, y: 300 }, { x: 560, y: 160 },
@@ -127,7 +127,7 @@ export const fork: Layout = {
   ],
   castle: CASTLE,
   slots: [
-    { x: 640, y: 310, hi: true }, { x: 736, y: 310, hi: true },
+    { x: 640, y: 310, hi: true }, { x: 800, y: 310, hi: true },
     { x: 150, y: 176 }, { x: 320, y: 176 },
     { x: 150, y: 424 }, { x: 320, y: 424 },
     { x: 690, y: 90 }, { x: 690, y: 510 },
@@ -153,7 +153,7 @@ export const tripleRush: Layout = {
   slots: [
     { x: 220, y: 226 }, { x: 430, y: 226 }, { x: 640, y: 226 },
     { x: 220, y: 376 }, { x: 430, y: 376 }, { x: 640, y: 376 },
-    { x: 810, y: 88 }, { x: 810, y: 508 },
+    { x: 780, y: 220 }, { x: 810, y: 508 },
   ],
   decor: [
     { k: 'tree1', x: 60, y: 96 }, { k: 'tree2', x: 330, y: 92 },
@@ -182,7 +182,7 @@ export const homeLoop: Layout = {
     { x: 450, y: 380, hi: true }, { x: 570, y: 380, hi: true },
     { x: 400, y: 200 }, { x: 620, y: 200 },
     { x: 150, y: 200 }, { x: 960, y: 150 },
-    { x: 160, y: 490 }, { x: 890, y: 250 },
+    { x: 160, y: 490 }, { x: 830, y: 330 },
   ],
   decor: [
     { k: 'tree1', x: 60, y: 460 }, { k: 'tree2', x: 330, y: 380 },
@@ -195,7 +195,7 @@ export const homeLoop: Layout = {
 /** 7 學校：兩條路夾一條長高地。整條走廊都在塔的火網裡，但只有這麼一塊地可以蓋。 */
 export const corridor: Layout = {
   land: { r0: 1, r1: 7 },
-  plateaus: [{ c0: 3, c1: 9, r0: 4, r1: 5 }],
+  plateaus: [{ c0: 3, c1: 12, r0: 4, r1: 5 }],
   paths: [
     [{ x: ENTRY, y: 210 }, { x: 830, y: 210 }, { x: 920, y: 250 }, { x: 948, y: 276 }],
     [{ x: ENTRY, y: 410 }, { x: 830, y: 410 }, { x: 920, y: 340 }, { x: 948, y: 284 }],
@@ -205,7 +205,7 @@ export const corridor: Layout = {
     { x: 230, y: 310, hi: true }, { x: 320, y: 310, hi: true },
     { x: 410, y: 310, hi: true }, { x: 500, y: 310, hi: true },
     { x: 590, y: 310, hi: true },
-    { x: 130, y: 300 }, { x: 420, y: 96 }, { x: 420, y: 505 },
+    { x: 780, y: 310, hi: true }, { x: 420, y: 96 }, { x: 420, y: 505 },
   ],
   decor: [
     { k: 'tree1', x: 70, y: 96 }, { k: 'tree2', x: 620, y: 92 },
@@ -226,7 +226,7 @@ export const crossroads: Layout = {
   slots: [
     { x: 176, y: 310, hi: true }, { x: 288, y: 310, hi: true },
     { x: 560, y: 190 }, { x: 560, y: 410 },
-    { x: 400, y: 300 }, { x: 790, y: 300 },
+    { x: 400, y: 300 }, { x: 800, y: 300 },
     { x: 620, y: 90 }, { x: 620, y: 510 },
   ],
   decor: [
@@ -252,7 +252,7 @@ export const hairpin: Layout = {
   slots: [
     { x: 870, y: 180, hi: true }, { x: 945, y: 180, hi: true },
     { x: 300, y: 215 }, { x: 450, y: 215 }, { x: 600, y: 215 },
-    { x: 300, y: 365 }, { x: 450, y: 365 }, { x: 600, y: 365 },
+    { x: 300, y: 365 }, { x: 450, y: 365 }, { x: 760, y: 360 },
   ],
   decor: [
     { k: 'tree1', x: 60, y: 215 }, { k: 'tree2', x: 60, y: 365 },
@@ -272,9 +272,9 @@ export const stormTriple: Layout = {
   ],
   castle: CASTLE,
   slots: [
-    { x: 200, y: 198 }, { x: 400, y: 198 }, { x: 700, y: 225 },
-    { x: 200, y: 402 }, { x: 400, y: 402 }, { x: 700, y: 375 },
-    { x: 830, y: 110 }, { x: 830, y: 490 },
+    { x: 200, y: 198 }, { x: 420, y: 190 }, { x: 700, y: 225 },
+    { x: 200, y: 402 }, { x: 420, y: 410 }, { x: 700, y: 375 },
+    { x: 870, y: 160 }, { x: 830, y: 490 },
   ],
   decor: [
     { k: 'rock1', x: 60, y: 196 }, { k: 'rock3', x: 60, y: 404 },
@@ -305,8 +305,8 @@ export const twinLoops: Layout = {
   slots: [
     { x: 496, y: 310, hi: true }, { x: 610, y: 310, hi: true },
     { x: 180, y: 300 }, { x: 800, y: 300 },
-    { x: 500, y: 120 }, { x: 500, y: 490 },
-    { x: 180, y: 200 }, { x: 180, y: 400 },
+    { x: 500, y: 120 }, { x: 750, y: 390 },
+    { x: 760, y: 230 }, { x: 180, y: 400 },
   ],
   decor: [
     { k: 'tree1', x: 60, y: 300 }, { k: 'tree2', x: 330, y: 300 },
@@ -331,7 +331,7 @@ export const switchback: Layout = {
   castle: CASTLE,
   slots: [
     { x: 220, y: 200 }, { x: 380, y: 200 }, { x: 540, y: 200 }, { x: 700, y: 200 },
-    { x: 220, y: 400 }, { x: 380, y: 400 }, { x: 540, y: 400 }, { x: 700, y: 400 },
+    { x: 220, y: 400 }, { x: 380, y: 400 }, { x: 540, y: 400 }, { x: 840, y: 390 },
   ],
   decor: [
     { k: 'rock1', x: 60, y: 150 }, { k: 'rock3', x: 60, y: 450 },
@@ -356,10 +356,10 @@ export const clockTower: Layout = {
   ],
   castle: CASTLE,
   slots: [
-    { x: 420, y: 310, hi: true }, { x: 530, y: 310, hi: true },
+    { x: 420, y: 300, hi: true }, { x: 530, y: 310, hi: true },
     { x: 620, y: 310, hi: true }, { x: 200, y: 300 },
     { x: 200, y: 215 }, { x: 200, y: 385 },
-    { x: 700, y: 215 }, { x: 700, y: 385 },
+    { x: 700, y: 215 }, { x: 780, y: 360 },
   ],
   decor: [
     { k: 'tree1', x: 60, y: 300 }, { k: 'tree2', x: 330, y: 215 },
@@ -385,8 +385,8 @@ export const finalTrial: Layout = {
   slots: [
     { x: 440, y: 310, hi: true }, { x: 520, y: 310, hi: true },
     { x: 330, y: 156 }, { x: 620, y: 156 },
-    { x: 130, y: 200 }, { x: 130, y: 400 },
-    { x: 800, y: 300 }, { x: 560, y: 400 },
+    { x: 130, y: 200 }, { x: 890, y: 500 },
+    { x: 800, y: 260 }, { x: 560, y: 400 },
   ],
   decor: [
     { k: 'tree1', x: 60, y: 156 }, { k: 'tree2', x: 200, y: 400 },
