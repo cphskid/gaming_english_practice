@@ -7,7 +7,7 @@ name: pages
 
 on:
   push:
-    branches: [claude/project-thread-6xldmu]
+    branches: [claude/project-thread-BetaRun]
   workflow_dispatch:
 
 permissions:
