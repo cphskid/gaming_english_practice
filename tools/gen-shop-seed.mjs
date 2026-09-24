@@ -19,6 +19,8 @@ const items = [...src.matchAll(/\{\s*id:\s*'([^']+)'[^}]*?\}/g)].map((m) => {
     kind: one(/kind:\s*'([^']+)'/),
     slot: one(/slot:\s*'([^']+)'/),
     unlock: +one(/unlockLevel:\s*(\d+)/),
+    // 成就限定：商店買不到，只能解成就拿到
+    achievementOnly: /achievementOnly:\s*true/.test(body),
   }
 })
 if (!items.length) throw new Error('shop.ts 裡一個品項都沒抓到，格式是不是改了？')
@@ -30,11 +32,11 @@ for (const i of items) {
 const sql = `
 -- 商店品項。**這一段是 tools/gen-shop-seed.mjs 從 src/data/shop.ts 產生的，不要手改。**
 -- 價格放在資料庫是因為客戶端送來的價格不能信。
-insert into public.shop_items (id, price, kind, slot, unlock_level) values
-${items.map((i) => `  ('${i.id}', ${i.price}, '${i.kind}', ${i.slot ? `'${i.slot}'` : 'null'}, ${i.unlock})`).join(',\n')}
+insert into public.shop_items (id, price, kind, slot, unlock_level, achievement_only) values
+${items.map((i) => `  ('${i.id}', ${i.price}, '${i.kind}', ${i.slot ? `'${i.slot}'` : 'null'}, ${i.unlock}, ${i.achievementOnly})`).join(',\n')}
 on conflict (id) do update
   set price = excluded.price, kind = excluded.kind, slot = excluded.slot,
-      unlock_level = excluded.unlock_level;
+      unlock_level = excluded.unlock_level, achievement_only = excluded.achievement_only;
 
 -- 商店只認這份清單。舊品項留在資料庫裡會變成「買得到但畫面上沒有」的鬼品項，
 -- 所以不在清單裡的一律刪掉。

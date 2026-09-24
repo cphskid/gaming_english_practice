@@ -466,3 +466,83 @@ h2.sec small{font-size:12px;font-weight:400;color:var(--muted)}
   padding:4px 0;min-height:44px}
 .switch input{width:22px;height:22px;flex:none;accent-color:var(--gold);margin:0}
 .hint{margin:2px 0 0;font-size:12.5px;line-height:1.5;color:var(--muted)}
+
+/* ---------------------------------------------------------------------------
+   徽章牆。
+   手機直拿一排四個（390px 扣掉邊距剛好），所以格子用 auto-fill 不寫死欄數——
+   老師在電腦上看會自動變成一排八個，同一份樣式兩邊都成立。
+   徽記是行內 SVG（見 icons.ts），所以拿到的畫白色、沒拿到畫灰色都是改 fill，
+   不用兩套圖。
+--------------------------------------------------------------------------- */
+.badge{position:relative;flex:none;display:inline-grid;place-items:center;border-radius:13px;
+  background:var(--panel2);border:2px dashed #6b6b6b;box-sizing:border-box}
+.badge svg{width:56%;height:56%;fill:#8a8f88;display:block}
+.badge.got{border:2px solid color-mix(in srgb, var(--hue) 55%, #000);border-style:solid;
+  background:radial-gradient(120% 120% at 30% 18%,
+    color-mix(in srgb, var(--hue) 72%, #fff) 0%, var(--hue) 55%,
+    color-mix(in srgb, var(--hue) 62%, #000) 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45), 0 2px 5px -2px rgba(0,0,0,.6)}
+.badge.got svg{fill:#fff;filter:drop-shadow(0 1px 0 rgba(0,0,0,.35))}
+
+.pins{display:inline-flex;gap:5px;vertical-align:middle}
+
+.profile-head{display:flex;gap:14px;align-items:center;padding:12px 14px;width:100%;max-width:640px}
+.profile-who{min-width:0}
+.profile-who .nm{font-size:19px;font-weight:800;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.profile-who .sub{color:var(--muted);font-size:13px;margin-top:2px}
+.profile-who .pinrow{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+.title-chip{font-size:11px;font-weight:700;color:var(--gold);
+  border:1px solid currentColor;border-radius:5px;padding:1px 6px}
+
+.achblock{width:100%;max-width:640px}
+.achhead{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+.achhead .dot{width:9px;height:9px;border-radius:50%;background:var(--hue);flex:none}
+.achhead b{font-size:15px}
+.achhead .n{margin-left:auto;color:var(--muted);font-size:12px}
+.achgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:12px 8px}
+.achcell{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;
+  background:none;border:0;padding:4px 2px;color:inherit;font:inherit;border-radius:10px}
+.achcell:disabled{cursor:default}
+.achcell b{font-size:11.5px;line-height:1.3}
+.achcell small{font-size:10px;color:var(--muted);line-height:1.3}
+.achcell.pinned{background:rgba(242,178,41,.14);outline:2px solid var(--gold)}
+.achcell:not(:disabled):active{transform:translateY(1px)}
+
+.pubrow{display:flex;align-items:center;gap:12px;padding:12px 14px;width:100%;max-width:640px}
+.pubrow b{display:block;font-size:14px}
+.pubrow small{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
+.toggle{margin-left:auto;flex:none;width:46px;height:26px;border-radius:13px;border:0;
+  background:#5b5b5b;position:relative;cursor:pointer}
+.toggle.on{background:var(--leaf)}
+.toggle i{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+  background:#fff;transition:left .15s}
+.toggle.on i{left:23px}
+
+/* 解開新徽章。結算畫面上跳一排，這是整個系統唯一會主動找上門的時刻。 */
+.unlocked{display:flex;flex-direction:column;align-items:center;gap:8px;
+  background:rgba(242,178,41,.12);border:2px solid var(--gold);border-radius:12px;
+  padding:10px 14px;max-width:420px}
+.unlocked .ttl{font-size:13px;font-weight:800;color:var(--gold)}
+.unlocked .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.unlocked .one{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px}
+
+/* 排行榜點進去看同學的檔案 */
+.rank.link{cursor:pointer}
+.rank .badges{color:var(--muted);font-size:11px}
+
+/* 成就限定的六個外框。一樣是 CSS 畫的，不用等素材，任何尺寸都不糊。 */
+.mugbox.f-laurel{border-color:var(--leaf);box-shadow:0 0 0 1px #2f5a22, 0 0 9px rgba(111,191,74,.45)}
+.mugbox.f-wave{border-color:#8b5cc7;
+  box-shadow:0 0 0 3px rgba(139,92,199,.35), 0 0 0 5px rgba(139,92,199,.18)}
+.mugbox.f-flame{border-color:#ff7a3c;box-shadow:0 0 10px rgba(255,122,60,.65);
+  animation:flamepulse 1.6s ease-in-out infinite}
+@keyframes flamepulse{50%{box-shadow:0 0 16px rgba(255,160,60,.9)}}
+.mugbox.f-banner{border-color:var(--gold)}
+.mugbox.f-banner::after{content:'';position:absolute;right:-4px;top:-4px;width:36%;height:36%;
+  background:linear-gradient(135deg,var(--gold) 45%,transparent 46%);pointer-events:none}
+.mugbox.f-stardust{border-color:#9fd0ff;
+  box-shadow:0 0 0 1px #2a4f70, 0 0 8px rgba(159,208,255,.55),
+    3px -3px 0 -1px #fff, -4px 4px 0 -2px #fff}
+.mugbox.f-calendar{border-color:#47895f}
+.mugbox.f-calendar::before{content:'';position:absolute;left:12%;right:12%;top:-5px;height:4px;
+  border-radius:2px;background:#47895f;pointer-events:none}

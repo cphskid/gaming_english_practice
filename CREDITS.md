@@ -10,7 +10,17 @@
 
 授權為 Creative Commons Zero (CC0)。`assets/rpg-icons/` 完整收錄這 496 張 34×34 像素圖示，
 道具系統的圖示（寒霜陷阱、城牆修補、水晶、金幣、血量、箭塔、軍營等）出自此包。
-對照表見 `docs/icon-map.md`。
+實際用到的十四張由 `tools/build-icons.py` 產生到 `public/icons/`，對照表見 `docs/icon-map.md`。
+
+**game-icons.net 徽記** — [game-icons.net](https://game-icons.net/)
+
+授權為 [Creative Commons BY 3.0](https://creativecommons.org/licenses/by/3.0/)：可自由使用、修改與再散布，**但必須署名**。`src/ui/icons.ts` 內嵌的 42 個成就徽章圖示出自此站（只取路徑資料，顏色改由畫面控制）。哪一張是誰畫的標在 `src/ui/icons.ts` 每一張上面，也可用 `tools/gen-badge-icons.py` 重新抓取。作者：
+
+- **Lorc** — https://lorcblog.blogspot.com/ （24 張）
+- **Delapouite** — https://delapouite.com/ （14 張）
+- **Skoll** （2 張）
+- **Carl Olsen** — https://twitter.com/unstoppableCarl （1 張）
+- **Caro Asercion** （1 張）
 
 ## 單字題庫
 

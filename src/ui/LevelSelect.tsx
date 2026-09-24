@@ -9,7 +9,7 @@ import { Icon } from './Icon'
 
 export function LevelSelect({
   student, character, progress, teacherOpen, rooms,
-  onPlay, onRoom, onRooms, onVersus, onSettings, onShop, onBoard,
+  onPlay, onRoom, onRooms, onVersus, onSettings, onShop, onBoard, onProfile,
 }: {
   student: Student
   character: Character
@@ -26,6 +26,8 @@ export function LevelSelect({
   onShop: () => void
   onBoard: () => void
   onVersus: () => void
+  /** 我的徽章牆 */
+  onProfile: () => void
 }) {
   const cleared = new Set([...progress.values()].filter((p) => p.clearedAt).map((p) => p.levelId))
   const lv = levelFromExp(character.exp)
@@ -42,6 +44,7 @@ export function LevelSelect({
         <button className="btn ghost" onClick={onVersus}>對戰</button>
         <button className="btn ghost" onClick={onRooms}>一起玩</button>
         <button className="btn ghost" onClick={onBoard}>排行榜</button>
+        <button className="btn ghost" onClick={onProfile}>徽章</button>
         <button className="btn ghost" onClick={onShop}>商店</button>
         <button className="btn ghost" onClick={onSettings}>設定</button>
       </div>

@@ -1,11 +1,15 @@
 import type { SessionResult } from '@/core/session'
+import { ACH_BY_ID, CATEGORIES } from '@/data/achievements'
+import { Badge } from './Profile'
 import { Icon } from './Icon'
 
 export function Result({
-  result, bonus, onRetry, onBack,
+  result, bonus, unlocked = [], onRetry, onBack,
 }: {
   result: SessionResult
   bonus: { coins: number; exp: number }
+  /** 這一場解開的徽章。整個成就系統唯一會主動找上門的時刻，所以放在最顯眼的地方。 */
+  unlocked?: string[]
   onRetry: () => void
   onBack: () => void
 }) {
@@ -35,10 +39,32 @@ export function Result({
             <div className="row"><span>首次通關獎勵</span><b><Icon name="coin" size={15} /> {result.bonusCoins}</b></div>
           )}
         </div>
+        {unlocked.length > 0 && <Unlocked ids={unlocked} />}
+
         <div style={{ display: 'flex', gap: 10 }}>
           <button className="btn ghost" onClick={onBack}>回選關</button>
           <button className="btn" onClick={onRetry}>{versus ? '再來一場' : '再玩一次'}</button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/** 這一場解開的徽章。名字一定要寫出來——不然小朋友不知道自己做對了什麼。 */
+function Unlocked({ ids }: { ids: string[] }) {
+  const defs = ids.map((id) => ACH_BY_ID.get(id)).filter((a) => !!a)
+  if (!defs.length) return null
+  return (
+    <div className="unlocked">
+      <div className="ttl">🏅 解開 {defs.length} 個新徽章</div>
+      <div className="row">
+        {defs.map((a) => (
+          <div className="one" key={a!.id}>
+            <Badge def={a!} got size={44}
+              hue={CATEGORIES.find((c) => c.key === a!.category)!.hue} />
+            <b>{a!.name}</b>
+          </div>
+        ))}
       </div>
     </div>
   )

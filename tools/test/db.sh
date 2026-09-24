@@ -52,5 +52,10 @@ echo "── 權限測試"
   | grep -E "✓|✗|ERROR|──|全部通過" | sed 's/^psql:[^ ]* NOTICE:  //'
 
 echo
+echo "── 成就"
+"$PGBIN/psql" -h "$SOCK" -U postgres -d postgres -f "$ROOT/supabase/test/02_achievements_test.sql" 2>&1 \
+  | grep -E "✓|✗|ERROR|──|全部通過" | sed 's/^psql:[^ ]* NOTICE:  //'
+
+echo
 echo "── 金幣算式對帳（前端 economy.ts vs 後端 coin_value）"
 cd "$ROOT" && PGSOCK="$SOCK" PSQL="$PGBIN/psql" node tools/test/economy-parity.mjs

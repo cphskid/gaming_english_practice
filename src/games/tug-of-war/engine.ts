@@ -164,6 +164,14 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
      */
     line: 'recognize' as Line,
     /**
+     * 這一場的戰報，打完交給容器去記戰績（成就要用）。
+     * 開場那一條線就算用過了，因為開場就有一隊那條線的兵。
+     */
+    linesUsed: new Set<Line>(['recognize']),
+    topTier: 1,
+    /** 整場前線最落後的時候（0＝自己城牆）。逆轉勝要用。 */
+    lowestFront: 1,
+    /**
      * 這條線已經連對幾題。滿了兵階上限就出一隻該階的兵。
      * **答錯不會整個沒收，是結算成目前累積到的階**，不然沒有人敢賭四個字。
      */
@@ -493,6 +501,8 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   function cashOut() {
     if (S.pending <= 0) return
     const rank = Math.min(S.pending, S.battle.tier.me)
+    S.topTier = Math.max(S.topTier, rank)
+    S.linesUsed.add(S.line)
     const u = summon(S.battle, 'me', S.line, rank, R)
     S.pending = 0
     S.pops.push({
@@ -504,6 +514,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   /** 換一條兵種線。累積到一半的先結算出去，不然換線等於白答。 */
   function switchLine(line: Line) {
     if (S.done || paused || line === S.line) return
+    S.linesUsed.add(line)
     cashOut()
     S.line = line
     // 題型換了，場上那些牌子的字是舊題型抽的，整批換掉才對得上。
@@ -755,6 +766,9 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       if (S.buffs.length !== before && !S.buffs.length) elBuffs.innerHTML = ''
     }
 
+    // 整場最落後的時候。逆轉勝要看這個，結束時才看是看不出來的。
+    S.lowestFront = Math.min(S.lowestFront, pushed(S.battle, R))
+
     if (S.battle.over && !S.done) finish()
   }
 
@@ -773,6 +787,13 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       win,
       survival: Math.max(0, b.castleHp.me) / R.castleHp,
       detail: `${how}答對 ${S.correct} 題（正確率 ${acc}%），前線推到 ${pct}%。`,
+      // 戰報。容器拿去記戰績，成就那邊要用（從答題事件看不出這些）。
+      versus: {
+        front: pushed(b, R),
+        lowestFront: Math.min(S.lowestFront, pushed(b, R)),
+        linesUsed: [...S.linesUsed].map((l) => LINES[l].skill),
+        topTier: S.topTier,
+      },
     })
   }
 

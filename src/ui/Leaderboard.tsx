@@ -18,7 +18,12 @@ import type { IconName } from '@/data/icons'
  * 這裡是**收集品的展示場**：頭像外框在這一頁會被全班看到，
  * 「同學看得到」正是買外框的理由（見 src/data/cosmetics.ts）。
  */
-export function Leaderboard({ student, onBack }: { student: Student; onBack: () => void }) {
+export function Leaderboard({ student, onOpen, onBack }: {
+  student: Student
+  /** 點一列就去看那位同學的徽章牆。他把檔案關起來的話就點不下去。 */
+  onOpen: (studentId: string) => void
+  onBack: () => void
+}) {
   const [rows, setRows] = useState<LeaderRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [sort, setSort] = useState<'exp' | 'stars' | 'coins'>('exp')
@@ -63,7 +68,14 @@ export function Leaderboard({ student, onBack }: { student: Student; onBack: () 
           {sorted.map((r, i) => {
             const frame = frameOf(r.equipped)
             return (
-              <div className={'rank' + (r.me ? ' me' : '')} key={r.nickname + i}>
+              <div className={'rank' + (r.me ? ' me' : '') + (r.viewable ? ' link' : '')}
+                key={r.studentId || r.nickname + i}
+                role={r.viewable ? 'button' : undefined}
+                tabIndex={r.viewable ? 0 : undefined}
+                onClick={() => { if (r.viewable) onOpen(r.studentId) }}
+                onKeyDown={(e) => {
+                  if (r.viewable && (e.key === 'Enter' || e.key === ' ')) onOpen(r.studentId)
+                }}>
                 <span className="rk">
                   {i < 3 ? <Icon name={MEDAL[i]} size={24} alt={`第 ${i + 1} 名`} /> : i + 1}
                 </span>
@@ -71,7 +83,11 @@ export function Leaderboard({ student, onBack }: { student: Student; onBack: () 
                   <img src={avatarSrc(r.avatar)} alt="" />
                   {frame?.badge && <i className="mugbadge">{frame.badge}</i>}
                 </span>
-                <span className="nm">{r.nickname}{r.me && <small>　（你）</small>}</span>
+                <span className="nm">
+                  {r.nickname}{r.me && <small>　（你）</small>}
+                  {r.title && <small className="badges">　{r.title}</small>}
+                  {r.badges > 0 && <small className="badges">　🏅 {r.badges}</small>}
+                </span>
                 <span className="sc">
                   <b>Lv.{levelFromExp(r.exp)}</b>
                   <small>⭐ {r.stars}　<Icon name="coin" size={13} /> {r.coins}</small>
