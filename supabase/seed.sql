@@ -312,31 +312,34 @@ on conflict (id) do update set
 
 -- 商店品項。**這一段是 tools/gen-shop-seed.mjs 從 src/data/shop.ts 產生的，不要手改。**
 -- 價格放在資料庫是因為客戶端送來的價格不能信。
-insert into public.shop_items (id, price, kind, slot, unlock_level, achievement_only) values
-  ('slow-30', 60, 'consumable', null, 1, false),
-  ('heal-5', 80, 'consumable', null, 2, false),
-  ('crystal-40', 120, 'consumable', null, 3, false),
-  ('color-red', 150, 'cosmetic', 'color', 1, false),
-  ('color-yellow', 150, 'cosmetic', 'color', 2, false),
-  ('color-purple', 220, 'cosmetic', 'color', 4, false),
-  ('color-black', 300, 'cosmetic', 'color', 6, false),
-  ('frame-gold', 120, 'cosmetic', 'frame', 1, false),
-  ('frame-ribbon', 180, 'cosmetic', 'frame', 3, false),
-  ('frame-crown', 260, 'cosmetic', 'frame', 5, false),
-  ('frame-rainbow', 400, 'cosmetic', 'frame', 7, false),
-  ('frame-laurel', 1, 'cosmetic', 'frame', 1, true),
-  ('frame-wave', 1, 'cosmetic', 'frame', 1, true),
-  ('frame-flame', 1, 'cosmetic', 'frame', 1, true),
-  ('frame-banner', 1, 'cosmetic', 'frame', 1, true),
-  ('frame-stardust', 1, 'cosmetic', 'frame', 1, true),
-  ('frame-calendar', 1, 'cosmetic', 'frame', 1, true)
+insert into public.shop_items (id, price, kind, slot, unlock_level, achievement_only, free, need_achievement) values
+  ('slow-30', 60, 'consumable', null, 1, false, false, null),
+  ('heal-5', 80, 'consumable', null, 2, false, false, null),
+  ('crystal-40', 120, 'consumable', null, 3, false, false, null),
+  ('color-red', 1, 'cosmetic', 'color', 1, false, true, null),
+  ('color-yellow', 1, 'cosmetic', 'color', 1, false, true, null),
+  ('color-purple', 1, 'cosmetic', 'color', 1, false, true, null),
+  ('color-black', 1, 'cosmetic', 'color', 1, false, true, null),
+  ('legion-goblin', 300, 'cosmetic', 'legion', 3, false, false, null),
+  ('legion-pig', 600, 'cosmetic', 'legion', 6, false, false, 'top-tier'),
+  ('frame-gold', 120, 'cosmetic', 'frame', 1, false, false, null),
+  ('frame-ribbon', 180, 'cosmetic', 'frame', 3, false, false, null),
+  ('frame-crown', 260, 'cosmetic', 'frame', 5, false, false, null),
+  ('frame-rainbow', 400, 'cosmetic', 'frame', 7, false, false, null),
+  ('frame-laurel', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-wave', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-flame', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-banner', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-stardust', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-calendar', 1, 'cosmetic', 'frame', 1, true, false, null)
 on conflict (id) do update
   set price = excluded.price, kind = excluded.kind, slot = excluded.slot,
-      unlock_level = excluded.unlock_level, achievement_only = excluded.achievement_only;
+      unlock_level = excluded.unlock_level, achievement_only = excluded.achievement_only,
+      free = excluded.free, need_achievement = excluded.need_achievement;
 
 -- 商店只認這份清單。舊品項留在資料庫裡會變成「買得到但畫面上沒有」的鬼品項，
 -- 所以不在清單裡的一律刪掉。
-delete from public.shop_items where id not in ('slow-30', 'heal-5', 'crystal-40', 'color-red', 'color-yellow', 'color-purple', 'color-black', 'frame-gold', 'frame-ribbon', 'frame-crown', 'frame-rainbow', 'frame-laurel', 'frame-wave', 'frame-flame', 'frame-banner', 'frame-stardust', 'frame-calendar');
+delete from public.shop_items where id not in ('slow-30', 'heal-5', 'crystal-40', 'color-red', 'color-yellow', 'color-purple', 'color-black', 'legion-goblin', 'legion-pig', 'frame-gold', 'frame-ribbon', 'frame-crown', 'frame-rainbow', 'frame-laurel', 'frame-wave', 'frame-flame', 'frame-banner', 'frame-stardust', 'frame-calendar');
 
 
 -- 成就目錄。**這一段是 tools/gen-achievements-seed.mjs 從 src/data/achievements.ts

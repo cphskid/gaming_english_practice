@@ -4,6 +4,8 @@ import { firstClearBonus, levelFromExp, mergeProgress, starsFor } from '@/core/p
 import { LEVELS } from '@/data/levels'
 import type { LevelData } from '@/core/types'
 import { ITEMS } from '@/data/shop'
+import { colorOf } from '@/data/cosmetics'
+import { legionOf } from '@/data/legions'
 import { WordStat } from '@/core/wordStat'
 import type {
   AdminClassRow, AnswerEvent, Character, ClassRoom, LevelProgress, Mode, Staff, Student,
@@ -206,8 +208,13 @@ export class LocalRepository implements Repository {
     const c = this.current()
     const item = ITEMS.find((i) => i.id === itemId)
     if (!item) throw new Error('商店裡沒有這個東西')
+    if (item.free) throw new Error('這個是送的，不用買，去「我的角色」直接換上')
     if (levelFromExp(c.exp) < item.unlockLevel) {
       throw new Error(`等級不夠，要 ${item.unlockLevel} 級才買得到`)
+    }
+    if (item.needAchievement
+      && !read<LocalAch[]>(k.achievements(c.studentId), []).some((a) => a.id === item.needAchievement)) {
+      throw new Error('要先拿到指定的成就才買得到')
     }
     const r = buy(c, item)
     if (!r.ok) throw new Error(r.why)
@@ -220,7 +227,7 @@ export class LocalRepository implements Repository {
     const item = ITEMS.find((i) => i.id === itemId)
     if (!item) throw new Error('沒有這個東西')
     if (item.kind !== 'cosmetic') throw new Error('這個不是穿戴的東西')
-    if (on && !count(c, itemId)) throw new Error('你還沒有這個東西')
+    if (on && !count(c, itemId) && !item.free) throw new Error('你還沒有這個東西')
     // 一個欄位一次只能穿一件。正式版這條規則是資料庫在管（equip_item），
     // 本地版要跟著做，不然本機測起來對、上線又是另一回事。
     const slot = item.slot ?? null
@@ -292,6 +299,9 @@ export class LocalRepository implements Repository {
         write(k.character(id), { ...cur, jobsCleared: [...(cur.jobsCleared ?? []), cur.job] })
       }
     }
+
+    // 真的有答題才算「穿著這個顏色打過一場」（跟資料庫的 note_color_played 同一條）
+    if (mine.length > 0) this.noteColorPlayed()
 
     // 首通獎金也在這裡發，跟資料庫那邊同一條規則：第一次真的通關才有
     const bonusCoins = win && !was?.clearedAt ? firstClearBonus(level.no, false) : 0
@@ -704,6 +714,16 @@ export class LocalRepository implements Repository {
       endedAt: Date.now(),
     })
     write(k.matches(c.studentId), all)
+    this.noteColorPlayed()
+  }
+
+  /** 記下穿著哪個顏色打了一場。換上別的軍團時顏色沒作用，不算。 */
+  private noteColorPlayed() {
+    const c = this.current()
+    if (legionOf(c.equipped).id) return
+    const color = colorOf(c.equipped).id || 'blue'
+    const seen = c.colorsPlayed ?? []
+    if (!seen.includes(color)) write(k.character(c.studentId), { ...c, colorsPlayed: [...seen, color] })
   }
 
   async classLeaderboard(classCode?: string): Promise<LeaderRow[]> {

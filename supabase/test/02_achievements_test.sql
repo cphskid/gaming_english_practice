@@ -258,6 +258,57 @@ select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'war-flag') = 1
 select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'veteran') = 1,
                '打完十六場＝戰場老兵銅階（輸贏都算，打電腦也算）');
 
+\echo '── 五色軍團：顏色免費送之後，要五色都真的穿上場才算'
+select test_ok((select colors_played from public.characters
+                 where student_id = 'b1000000-0000-0000-0000-000000000001') ? 'blue',
+               '剛剛那幾場穿的是預設藍，伺服器自己記下來了');
+select public.equip_item('color-red', true);
+select public.record_versus_match(gen_random_uuid(), 'cpu', false);
+select public.equip_item('color-yellow', true);
+select public.record_versus_match(gen_random_uuid(), 'cpu', false);
+select public.equip_item('color-purple', true);
+select public.record_versus_match(gen_random_uuid(), 'cpu', false);
+select public.refresh_achievements();
+select test_ok(not test_has('b1000000-0000-0000-0000-000000000001', 'five-colors'), '四色還不夠');
+
+-- 換上別的軍團時顏色是灰的，穿著黑色去打也不算黑色
+select test_force($$ update public.characters set items = items || '{"legion-goblin":1}'
+                     where student_id = 'b1000000-0000-0000-0000-000000000001' $$);
+select public.equip_item('legion-goblin', true);
+select public.equip_item('color-black', true);
+select public.record_versus_match(gen_random_uuid(), 'cpu', false);
+select public.refresh_achievements();
+select test_ok(not ((select colors_played from public.characters
+                      where student_id = 'b1000000-0000-0000-0000-000000000001') ? 'color-black'),
+               '穿著哥布林軍團打的那一場，黑色不算');
+select test_ok(not test_has('b1000000-0000-0000-0000-000000000001', 'five-colors'), '所以還是沒有五色軍團');
+
+select public.equip_item('legion-goblin', false);
+select public.record_versus_match(gen_random_uuid(), 'cpu', false);
+select public.refresh_achievements();
+select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'five-colors'),
+               '脫下軍團、穿黑色打一場＝五色軍團');
+
+\echo '── 軍團包：稀有級要先拿到「頂階降臨」才買得到'
+select test_force($$ update public.characters set coins = 5000, exp = 1200
+                     where student_id in ('b1000000-0000-0000-0000-000000000001',
+                                          'b1000000-0000-0000-0000-000000000002') $$);
+select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'top-tier'), '小明推過三階兵');
+select public.buy_item('legion-pig');
+select test_ok(test_item('b1000000-0000-0000-0000-000000000001', 'legion-pig') = 1, '所以買得到豬軍團');
+select public.equip_item('legion-goblin', true);
+select public.equip_item('legion-pig', true);
+select test_ok((select equipped ? 'legion-pig' and not equipped ? 'legion-goblin' and equipped ? 'color-black'
+                  from public.characters where student_id = 'b1000000-0000-0000-0000-000000000001'),
+               '軍團一次只能穿一套，換軍團不會把顏色脫掉（換回王國軍時顏色還在）');
+select test_as('b0000000-0000-0000-0000-000000000002', true);
+select test_ok(not test_has('b1000000-0000-0000-0000-000000000002', 'top-tier'), '小就沒推過三階兵');
+select test_denied($$ select public.buy_item('legion-pig') $$, '沒拿到頂階降臨就想買豬軍團');
+select public.buy_item('legion-goblin');
+select test_ok(test_item('b1000000-0000-0000-0000-000000000002', 'legion-goblin') = 1,
+               '普通級只看等級和金幣，哥布林買得到');
+select test_as('b0000000-0000-0000-0000-000000000001', true);
+
 \echo '── 對戰：連輸兩場之後又開一場（輸的人也拿得到的那一個）'
 select test_ok(not test_has('b1000000-0000-0000-0000-000000000002', 'never-quit'),
                '小就還沒輸過');

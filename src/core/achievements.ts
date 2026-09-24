@@ -181,7 +181,8 @@ export function evaluateAchievements(input: AchInput): AchEval {
   // ---------------------------------------------------------------- 收集
   const has = (id: string) => (c.items[id] ?? 0) > 0
   win('dressed', c.equipped.some((e) => e.startsWith('frame-')))
-  win('five-colors', ['color-red', 'color-yellow', 'color-purple', 'color-black'].every(has))
+  win('five-colors', ['blue', 'color-red', 'color-yellow', 'color-purple', 'color-black']
+    .every((x) => (c.colorsPlayed ?? []).includes(x)))
   win('all-frames', ['frame-gold', 'frame-ribbon', 'frame-crown', 'frame-rainbow'].every(has))
   win('avatar-10', new Set(c.avatarsSeen ?? []).size >= 10)
   win('dual-job', ['knight', 'mage'].every((j) => (c.jobsCleared ?? []).includes(j)))

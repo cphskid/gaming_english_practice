@@ -189,9 +189,15 @@ export interface GameContext {
   job: Job
   /**
    * 陣營顏色的美術後綴（例如 '_red'，預設藍色是空字串）。
-   * 這是裝飾品唯一會進到遊戲裡的東西，而且**只能改外觀，不准改數值**。
+   * 這和 legion 是裝飾品唯二會進到遊戲裡的東西，而且**只能改外觀，不准改數值**。
+   * 穿著王國軍以外的軍團時一律是空字串（顏色只對王國軍有效）。
    */
   color: string
+  /**
+   * 身上那一套軍團的品項 id，王國軍是空字串（見 data/legions.ts）。
+   * 兵推整套換（兵、城堡、塔、戰場）；守塔只換軍營士兵和箭塔。
+   */
+  legion: string
   /**
    * 下一題。回傳 null 代表題庫用完了。
    *
@@ -368,6 +374,12 @@ export interface Character {
   avatarsSeen?: string[]
   /** 用哪些職業通關過（「雙修」要用）。職業隨時能改，所以要在通關那一刻記。 */
   jobsCleared?: string[]
+  /**
+   * 穿過哪些陣營顏色打過一場（「五色軍團」要用）。藍色是 'blue'。
+   * **只有本地版會填**：正式版是資料庫自己記、自己判成就，前端不讀這一欄——
+   * 前端多讀一個新欄位，資料庫還沒升級時整個登入就會壞掉（2026-09-24 踩過）。
+   */
+  colorsPlayed?: string[]
 }
 
 export interface LevelProgress {

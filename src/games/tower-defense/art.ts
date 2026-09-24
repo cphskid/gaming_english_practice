@@ -23,7 +23,11 @@
 export const ART: Record<string, HTMLImageElement> = {}
 
 /** 地形是先畫在一張暫存畫布上再整張貼的，用到這幾張；它們到了就得重畫一次。 */
-export const TERRAIN_KEYS = ['water', 'tiles', 'rock1', 'rock2', 'rock3', 'rock4', 'tree1', 'tree2']
+export const TERRAIN_KEYS = [
+  'water', 'tiles', 'rock1', 'rock2', 'rock3', 'rock4', 'tree1', 'tree2',
+  // 豬軍團兵推戰場的城堡室內（見 tug-of-war/engine.ts 的 buildCastleHall）
+  'pig_wall', 'pig_floor', 'pig_under', 'pig_window',
+]
 
 const listeners = new Set<(key: string) => void>()
 let running: Promise<void> | null = null

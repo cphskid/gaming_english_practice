@@ -4,6 +4,7 @@ import { Session, type SessionResult } from '@/core/session'
 import { WordStat } from '@/core/wordStat'
 import { needsCreation } from '@/core/character'
 import { colorOf } from '@/data/cosmetics'
+import { legionOf } from '@/data/legions'
 import type {
   Character, GameModule, GameOutcome, LevelData, LevelProgress, Opponent, Skill, Staff, Student,
 } from '@/core/types'
@@ -579,7 +580,8 @@ export function App() {
         <GameHost
           game={playing.game} level={playing.level} session={playing.session}
           studentId={student.id} job={character.job}
-          color={colorOf(character.equipped).suffix} items={character.items}
+          color={legionOf(character.equipped).usesColor ? colorOf(character.equipped).suffix : ''}
+          legion={legionOf(character.equipped).id} items={character.items}
           opponent={playing.opponent}
           nextQuestion={nextQuestion}
           onFinish={(o) => void finish(o)}

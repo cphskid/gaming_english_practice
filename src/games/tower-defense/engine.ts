@@ -4,6 +4,7 @@ import type { GameContext, GameHandle, LevelData, Point, Word } from '@/core/typ
 import { ART, TERRAIN_KEYS, loadArt, onArt } from './art'
 import { PLATE_RULES, layoutPlates as runPlateLayout, plateY } from './plates'
 import { iconImg, iconUrl } from '@/data/icons'
+import { legionById } from '@/data/legions'
 
 const W = 1088
 const H = 576
@@ -132,6 +133,9 @@ const SHELL = `
   </div>
 </div>`
 
+/** 守塔裡會跟著軍團換的圖 */
+const LEGION_KEYS = ['warrior', 'archery']
+
 export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHandle {
   const level = ctx.level as LevelData
   const { layout, rules } = level
@@ -158,6 +162,11 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
 
   // 素材是一張一張進來的，ART 這個物件會就地長大，所以拿參考就好，不用重新指派。
   const img = ART
+  /**
+   * 身上那一套軍團。**守塔只換軍營士兵和箭塔**（Chuck 2026-09-24 定案），
+   * 地圖、城堡、軍營都不動——豬軍團的地形是側視的，做不出守塔的俯視彎路。
+   */
+  const legion = legionById(ctx.legion)
   let terrain: HTMLCanvasElement | null = null
   // 地形先畫在暫存畫布上再整張貼；地形用到的圖後到的話得把它作廢重畫。
   const unArt = onArt((k) => { if (TERRAIN_KEYS.includes(k)) terrain = null })
@@ -850,6 +859,10 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
    * 藍色是預設所以鍵名不帶後綴。沒有那一色就退回藍色，畫面不會空掉。
    */
   function art(key: string): HTMLImageElement | undefined {
+    if (LEGION_KEYS.includes(key)) {
+      const im = img[legion.prefix + key]
+      if (legion.prefix && im) return im
+    }
     return img[key + ctx.color] ?? img[key]
   }
 

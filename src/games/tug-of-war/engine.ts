@@ -2,6 +2,7 @@ import type { GameContext, GameHandle, Opponent, Word } from '@/core/types'
 import { makeFeeder } from '@/core/opponent'
 import { iconImg, iconUrl } from '@/data/icons'
 import { ART, TERRAIN_KEYS, loadArt, onArt } from '../tower-defense/art'
+import { legionById, legionUnitArt } from '@/data/legions'
 import {
   LINES, LINE_COST, LINE_IDS, MAX_TIER, RULES, nextCost, newBattle, pushed, statsOf, step,
   strike, summon, upgrade, type Line, type Unit,
@@ -208,12 +209,26 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   }
 
   /**
+   * 我方穿哪一套軍團（2026-09-24）。兵、城堡、塔、戰場整套換；
+   * 某張圖那一套沒有，就退回王國軍那張，畫面不會開天窗。
+   */
+  const legion = legionById(ctx.legion)
+
+  /**
    * 敵我的顏色。自己穿什麼色就用什麼色，對手一定換成另一色——
    * 兩邊同色的話，戰場上根本分不出哪一隻是自己的兵。
+   * **電腦對手是紅色王國軍**（Chuck 定案）；我方剛好也穿紅的王國軍時才換黑色。
+   * 之後好友對戰兩邊可能都是豬，所以敵我另外靠腳下的色圈分（見 drawUnit）。
    */
-  const foeSuffix = ctx.color === '_red' ? '_black' : '_red'
-  const mine = (key: string) => img[key + ctx.color] ?? img[key]
+  const foeSuffix = ctx.color === '_red' && !legion.id ? '_black' : '_red'
+  const mine = (key: string) =>
+    img[legion.prefix + key + ctx.color] ?? img[legion.prefix + key] ?? img[key + ctx.color] ?? img[key]
   const theirs = (key: string) => img[key + foeSuffix] ?? img[key]
+  /** 我方某條線某一階的圖。有的軍團每一階長得不一樣（豬軍團的大砲、豬王）。 */
+  const myUnit = (u: Unit, rank: number) =>
+    img[legionUnitArt(legion, u.line, LINES[u.line].art, rank)] ?? img[LINES[u.line].art + ctx.color] ?? img[LINES[u.line].art]
+  /** 戰場的底圖有沒有到。沒到的話 loop 會每三秒再敲一次 loadArt。 */
+  const fieldKey = legion.field === 'castle' ? legion.prefix + 'wall' : 'tiles'
 
   /**
    * 飄字用的道具圖示。畫布沒辦法直接畫 CSS 的 <img>，所以自己留一份。
@@ -483,7 +498,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     elMine.innerHTML = `${iconImg('castle', 15)} ${Math.max(0, Math.ceil(S.battle.castleHp.me))}`
     elTheirs.textContent = `🏯 ${Math.max(0, Math.ceil(S.battle.castleHp.foe))}`
     // 電腦對手一定要寫出來。被騙到才會真的不爽。
-    elFoe.textContent = foe.isBot ? `🤖 ${foe.name}` : `🧒 ${foe.name}`
+    elFoe.textContent = foe.isBot ? `🤖 電腦對手．${foe.name}` : `🧒 ${foe.name}`
   }
 
   function toast(text: string) {
@@ -803,7 +818,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     last = now
     if (!S.done && !paused) update(dt)
     // 戰場的圖還沒到就每三秒再敲一次，在戰場裡也救得回來，不用退出去重進。
-    if (!img.tiles && now - artKick > 3000) { artKick = now; void loadArt() }
+    if (!img[fieldKey] && now - artKick > 3000) { artKick = now; void loadArt() }
     draw()
     syncUI()
     syncBar()
@@ -812,6 +827,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
 
   // ------------------------------------------------------------------ 畫面
   function buildTerrain() {
+    if (legion.field === 'castle') return buildCastleHall()
     const c = document.createElement('canvas')
     c.width = W; c.height = H
     const g = c.getContext('2d')!
@@ -842,6 +858,38 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       const im = img[d.k]
       if (im?.complete) g.drawImage(im, d.x - 32, d.y - 52, 64, 64)
     }
+    terrain = c
+  }
+
+  /**
+   * 豬軍團的戰場：側視的城堡室內（Kings and Pigs 的地形）。
+   * 背後一整面磚牆開幾扇窗，兵走在一條石頭地板上，地板以下是暗的——
+   * 拼字的字母磚剛好落在暗色上，比落在草地上還清楚。
+   * 圖塊 32 像素放大兩倍，剛好是遊戲的 64 一格。
+   */
+  function buildCastleHall() {
+    const c = document.createElement('canvas')
+    c.width = W; c.height = H
+    const g = c.getContext('2d')!
+    g.imageSmoothingEnabled = false
+    const p = legion.prefix
+    const wall = img[p + 'wall'], floor = img[p + 'floor'], under = img[p + 'under']
+    const floorY = 6 * TILE
+    g.fillStyle = '#3f3851'; g.fillRect(0, 0, W, H)
+    for (let x = 0; x < W; x += TILE) {
+      for (let y = 0; y < floorY; y += TILE) if (wall?.complete) g.drawImage(wall, x, y, TILE, TILE)
+      if (floor?.complete) g.drawImage(floor, x, floorY, TILE, TILE)
+      for (let y = floorY + TILE; y < H; y += TILE) if (under?.complete) g.drawImage(under, x, y, TILE, TILE)
+    }
+    // 窗戶排在城堡與塔中間的那一段牆上，不要被城堡擋住
+    const win = img[p + 'window']
+    if (win?.complete) {
+      for (const x of [300, 544, 788]) g.drawImage(win, x - win.width / 2, 196, win.width, win.height)
+    }
+    // 牆腳一條陰影，兵才像站在地板上而不是貼在牆上
+    const sh = g.createLinearGradient(0, floorY - 26, 0, floorY)
+    sh.addColorStop(0, 'rgba(40,30,50,0)'); sh.addColorStop(1, 'rgba(40,30,50,.45)')
+    g.fillStyle = sh; g.fillRect(0, floorY - 26, W, 26)
     terrain = c
   }
 
@@ -885,11 +933,26 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     c2d.restore()
   }
 
+  /**
+   * 腳下的色圈：綠的是我方、紅的是對方。
+   * 本來敵我靠陣營顏色分，換成軍團之後兩邊可能都是豬（之後的好友對戰），
+   * 顏色靠不住了，所以一律在腳下畫一圈。
+   */
+  function footRing(x: number, y: number, r: number, side: 'me' | 'foe') {
+    c2d.save()
+    c2d.strokeStyle = side === 'me' ? 'rgba(120,220,90,.85)' : 'rgba(240,90,80,.85)'
+    c2d.lineWidth = 2.5
+    c2d.beginPath(); c2d.ellipse(x, y, r, r * 0.34, 0, 0, 7); c2d.stroke()
+    c2d.restore()
+  }
+
   function drawUnit(u: Unit) {
     const spec = statsOf(u.line, u.rank)
     const y = laneY(u)
     const art = LINES[u.line].art
-    const im = u.side === 'me' ? mine(art) : theirs(art)
+    const im = u.side === 'me' ? myUnit(u, u.rank) : theirs(art)
+    // 隨從一律畫一階的樣子：豬軍團三階是大砲，後面跟的還是丟箱子的小豬
+    const follower = u.side === 'me' ? myUnit(u, 1) : im
     const flip = u.side === 'foe'
     const back = u.side === 'me' ? -1 : 1      // 「後面」是朝自己城堡那一邊
 
@@ -901,9 +964,10 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       const fx = u.x + back * i * 17
       const fy = y + (i % 2 === 0 ? 7 : -7)
       shadow(fx, fy + 2, 15 * spec.size)
-      drawFigure(im, fx, fy, spec.size * 0.72, flip)
+      drawFigure(follower, fx, fy, spec.size * 0.72, flip)
     }
     shadow(u.x, y + 2, 20 * spec.size)
+    footRing(u.x, y + 2, 20 * spec.size, u.side)
     drawFigure(im, u.x, y, spec.size, flip)
 
     // 軍階標記：二階一槓、三階兩槓、四階一顆星。畫在縮放之外，高度跟血條一樣固定，
@@ -937,6 +1001,19 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     c2d.restore()
     bar(x - 44, ROAD_Y - 138, 88, 8,
       Math.max(0, S.battle.castleHp[side]) / R.castleHp, side === 'me' ? '#6fbf4a' : '#d4504a')
+    // 電腦對手直接寫在它的城堡上。上面那條的對手名字在手機橫拿時放不下（會被藏起來），
+    // 只靠開場那一下提示，小朋友打到一半會忘記對面是電腦。
+    if (side === 'foe' && foe.isBot) {
+      c2d.save()
+      c2d.font = 'bold 15px system-ui'
+      c2d.textAlign = 'center'; c2d.textBaseline = 'middle'
+      const w = c2d.measureText('電腦對手').width + 18
+      c2d.fillStyle = 'rgba(40,24,20,.78)'
+      roundRect(x - w / 2, ROAD_Y - 190, w, 22, 11); c2d.fill()
+      c2d.fillStyle = '#ffd9d4'
+      c2d.fillText('電腦對手', x, ROAD_Y - 178)
+      c2d.restore()
+    }
   }
 
   /**
@@ -1288,6 +1365,10 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       /** 換兵種線／買升階，測試用 */
       setLine: (l: Line) => switchLine(l),
       buyTier: () => buyTier(),
+      /** 直接放一隻兵上場，看軍團各階長相用（legion-e2e.mjs） */
+      summon: (side: 'me' | 'foe', l: Line, rank: number) => summon(S.battle, side, l, rank, R),
+      /** 定格（畫面照畫、戰場不動），截圖用 */
+      freeze: (on: boolean) => { paused = on },
       /** 點某一個目標；測試用它模擬小朋友的正確率 */
       tapId: (id: string) => { const t = S.targets.get(id); if (t) tap(t) },
       ids: () => [...S.targets.keys()],

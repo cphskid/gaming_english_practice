@@ -71,10 +71,9 @@ try {
   console.log('── 買裝飾品，去「我的角色」穿起來')
   await page.locator('.item', { hasText: '金邊框' }).locator('button.btn').click()
   await page.waitForSelector('.note')
-  await page.locator('.item', { hasText: '紅軍' }).locator('button.btn').click()
-  await page.waitForTimeout(300)
-  await page.locator('.item', { hasText: '黃軍' }).locator('button.btn').click()
-  await page.waitForTimeout(300)
+  // 陣營顏色 2026-09-24 起免費送，商店裡不賣了，下面直接在「我的角色」換
+  if (await page.locator('.item', { hasText: '紅軍' }).count()) fail('商店還在賣顏色')
+  else ok('商店不賣顏色了（送的）')
 
   // 「我的角色」搬出商店了，買到的裝飾品那行字就是捷徑
   await page.locator('.item', { hasText: '金邊框' }).locator('.i-go').click()

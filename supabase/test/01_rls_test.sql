@@ -426,13 +426,15 @@ begin
   perform test_ok(v_after = v_before - 60, '買完金幣扣掉正確的價錢');
   perform test_ok((v_items ->> 'slow-30')::int = 1, '東西進背包了');
 
-  -- 錢不夠要被擋（紅軍 150，剛剛買完剩不到）
-  perform test_denied($q$ select public.buy_item('color-red') $q$, '錢不夠還想買');
+  -- 錢不夠要被擋（金邊框 120，剛剛買完剩不到）
+  perform test_denied($q$ select public.buy_item('frame-gold') $q$, '錢不夠還想買');
 
   -- 補一點錢進去（用 security definer 的輔助函式，學生自己是改不動的），
   -- 才測得到後面穿脫裝飾品那幾條
   perform test_force(format('update public.characters set coins = 900 where student_id = %L', v_id));
-  perform public.buy_item('color-red');
+  -- 陣營五色 2026-09-24 起是送的：不能買（買了會白花錢），不用買就穿得上
+  perform test_denied($q$ select public.buy_item('color-red') $q$, '買送的東西');
+  perform test_ok((select coins from public.characters where student_id = v_id) = 900, '沒有被扣錢');
 
   -- 消耗品用一次就沒了，第二次要被擋
   perform public.consume_item('slow-30');
@@ -448,14 +450,20 @@ begin
 
   -- 一個欄位只能穿一件：換顏色會自動把原本那個顏色脫掉，
   -- 不然存進去會變成「同時穿紅色和黃色」，畫面就不知道要顯示哪一個
-  -- 黃軍要 2 級，先把經驗補上去（一樣走 security definer，學生自己改不動）
-  perform test_force(format('update public.characters set exp = 200 where student_id = %L', v_id));
-  perform public.buy_item('color-yellow');
   perform public.equip_item('color-red', true);
   perform public.equip_item('color-yellow', true);
   perform test_ok((select equipped from public.characters where student_id = v_id) ? 'color-yellow'
               and not ((select equipped from public.characters where student_id = v_id) ? 'color-red'),
               '換顏色會把原本的脫掉');
+
+  -- 軍團包：普通級要 3 級。1 級買不到，補到 3 級才買得到
+  perform test_denied($q$ select public.buy_item('legion-goblin') $q$, '等級不夠買軍團');
+  perform test_denied($q$ select public.equip_item('legion-goblin', true) $q$, '軍團要買了才穿得上');
+  perform test_force(format('update public.characters set exp = 240 where student_id = %L', v_id));
+  perform public.buy_item('legion-goblin');
+  perform test_ok((select coins from public.characters where student_id = v_id) = 600, '軍團扣 300');
+  perform public.equip_item('legion-goblin', true);
+  perform test_ok((select equipped from public.characters where student_id = v_id) ? 'legion-goblin', '軍團穿上了');
 
   -- 但不同欄位可以同時穿：顏色歸顏色、外框歸外框
   perform public.buy_item('frame-gold');

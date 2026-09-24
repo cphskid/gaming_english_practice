@@ -160,10 +160,18 @@ create table if not exists public.shop_items (
 -- 這條規則放在資料庫而不是前端，因為「同時穿四種顏色」這種狀態一旦存進去，
 -- 畫面要顯示哪一個就變成沒有答案的問題。
 alter table public.shop_items add column if not exists slot text;
-do $$ begin
-  alter table public.shop_items add constraint shop_items_slot_ck
-    check (slot is null or slot in ('color','frame'));
-exception when duplicate_object then null; end $$;
+-- 2026-09-24 多一個欄位 legion（整套軍團，見 src/data/legions.ts）。
+-- 約束要先拆再建，不然舊資料庫會一直停在只認 color／frame 的那一版。
+alter table public.shop_items drop constraint if exists shop_items_slot_ck;
+alter table public.shop_items add constraint shop_items_slot_ck
+  check (slot is null or slot in ('color','frame','legion'));
+
+-- 軍團包（2026-09-24）：
+--   free              送的，不用買就能穿。陣營五色從這天起免費，equip_item 看這一欄。
+--   need_achievement  要先拿到這個成就才開放購買（稀有級綁「頂階降臨」）。
+--                     不設外鍵：seed.sql 先灌商店才灌成就目錄，設了新資料庫會灌不進去。
+alter table public.shop_items add column if not exists free boolean not null default false;
+alter table public.shop_items add column if not exists need_achievement text;
 
 -- 2026-09-20 的品項搬家。第一版賣的「小皇冠／紅披風」是要畫在頭像上的，
 -- 但那 25 張頭像是完成品不是可以疊圖層的人偶，所以改成了「皇冠框／金邊框」。
@@ -273,6 +281,10 @@ alter table public.characters add column if not exists title text not null defau
 alter table public.characters add column if not exists public_profile boolean not null default true;
 alter table public.characters add column if not exists avatars_seen jsonb not null default '[]'::jsonb;
 alter table public.characters add column if not exists jobs_cleared text[] not null default '{}';
+-- 穿過哪些陣營顏色打過一場（「五色軍團」要用）。2026-09-24 顏色改成免費送之後，
+-- 「買齊四色」變成白拿，所以改成五色都要真的穿上場。藍色存 'blue'，其他存品項 id。
+-- 由伺服器在一場結束時照「那一刻身上穿什麼」記，前端送不進來。
+alter table public.characters add column if not exists colors_played jsonb not null default '[]'::jsonb;
 
 -- 成就限定的品項：商店買不到，只能解成就拿到。**買不到才有稀缺性。**
 alter table public.shop_items add column if not exists achievement_only boolean not null default false;
@@ -925,6 +937,33 @@ $$;
 
 -- 參數變了，舊的那支要丟掉，不然會變成兩支同名函式，前端呼叫誰全看運氣。
 drop function if exists public.save_progress(text, int, int, boolean);
+/*
+  記下「穿著什麼顏色打了一場」（「五色軍團」要用）。一場結束時由 save_progress 與
+  record_versus_match 叫。**看的是那一刻身上穿什麼**，前端送不進來。
+  換上別的軍團時顏色是灰的（沒作用），那一場就不算哪一色。
+*/
+create or replace function public.note_color_played(p_student uuid)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_color text;
+begin
+  select case
+           when exists (select 1 from jsonb_array_elements_text(c.equipped) e
+                          join public.shop_items i on i.id = e and i.slot = 'legion') then null
+           else coalesce((select e from jsonb_array_elements_text(c.equipped) e
+                            join public.shop_items i on i.id = e and i.slot = 'color'
+                           limit 1), 'blue')
+         end
+    into v_color
+    from public.characters c where c.student_id = p_student;
+  if v_color is null then return; end if;
+  update public.characters c
+     set colors_played = c.colors_played || to_jsonb(v_color)
+   where c.student_id = p_student and not (c.colors_played @> to_jsonb(v_color));
+end;
+$$;
+revoke all on function public.note_color_played(uuid) from public, anon, authenticated;
+
 create or replace function public.save_progress(
   p_level_id  text,
   p_session   uuid,
@@ -1008,6 +1047,9 @@ begin
      where c.student_id = v_student;
   end if;
 
+  -- 真的有答題才算「打過一場」，進去馬上離開的不算
+  if v_asked > 0 then perform public.note_color_played(v_student); end if;
+
   return query
     select lp.stars::int, lp.best_correct, lp.cleared_at, v_bonus, v_correct, v_asked, v_win
       from public.level_progress lp
@@ -1063,14 +1105,24 @@ language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_student uuid := public.current_student_id();
   v_price int; v_unlock int; v_coins int; v_exp int; v_only boolean;
+  v_free boolean; v_need text;
 begin
   if v_student is null then raise exception '還沒加入班級'; end if;
-  select i.price, i.unlock_level, i.achievement_only into v_price, v_unlock, v_only
+  select i.price, i.unlock_level, i.achievement_only, i.free, i.need_achievement
+    into v_price, v_unlock, v_only, v_free, v_need
     from public.shop_items i where i.id = p_item;
   if v_price is null then raise exception '商店裡沒有這個東西'; end if;
   -- 成就限定的東西買不到。買得到就不稀有了，而且商店根本沒把它畫出來，
   -- 會走到這一行的只有自己打 API 的人。
   if v_only then raise exception '這個要解成就才拿得到，買不到'; end if;
+  -- 送的東西不用買（陣營五色）。不擋的話舊版前端還是會讓人花錢買。
+  if v_free then raise exception '這個是送的，不用買，去「我的角色」直接換上'; end if;
+  -- 稀有級軍團：先拿到指定成就才開放購買。分階徽章拿到第一階就算。
+  if v_need is not null and not exists (
+       select 1 from public.student_achievements sa
+        where sa.student_id = v_student and sa.achievement_id = v_need) then
+    raise exception '要先拿到指定的成就才買得到';
+  end if;
 
   select c.coins, c.exp into v_coins, v_exp
     from public.characters c where c.student_id = v_student for update;
@@ -1095,16 +1147,18 @@ create or replace function public.equip_item(p_item text, p_on boolean)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_student uuid := public.current_student_id();
-  v_kind text; v_slot text; v_have int; v_equipped jsonb;
+  v_kind text; v_slot text; v_have int; v_equipped jsonb; v_free boolean;
 begin
   if v_student is null then raise exception '還沒加入班級'; end if;
-  select i.kind, i.slot into v_kind, v_slot from public.shop_items i where i.id = p_item;
+  select i.kind, i.slot, i.free into v_kind, v_slot, v_free
+    from public.shop_items i where i.id = p_item;
   if v_kind is null then raise exception '沒有這個東西'; end if;
   if v_kind <> 'cosmetic' then raise exception '這個不是穿戴的東西'; end if;
 
   select coalesce((c.items ->> p_item)::int, 0) into v_have
     from public.characters c where c.student_id = v_student;
-  if p_on and v_have <= 0 then raise exception '你還沒有這個東西'; end if;
+  -- 送的東西（陣營五色）不用擁有就能穿
+  if p_on and v_have <= 0 and not v_free then raise exception '你還沒有這個東西'; end if;
 
   -- 穿上同欄位的東西時，先把那個欄位原本那件脫下來。
   -- 不做這件事的話會出現「同時穿紅色和紫色」，畫面就不知道要顯示哪一個。
@@ -2343,8 +2397,10 @@ begin
     v_got := array_append(v_got, 'dressed');
   end if;
 
-  -- 藍軍本來就有，所以是另外四個顏色
-  if v_items ?& array['color-red','color-yellow','color-purple','color-black'] then
+  -- 五色都穿上打過一場（2026-09-24 起顏色免費送，「買齊」變成白拿，所以改成要上場）
+  if exists (select 1 from public.characters c
+              where c.student_id = v_student
+                and c.colors_played ?& array['blue','color-red','color-yellow','color-purple','color-black']) then
     v_got := array_append(v_got, 'five-colors');
   end if;
 
@@ -2558,6 +2614,7 @@ begin
                 where x in ('recognize','spell','listen')), '{}'),
      least(greatest(coalesce(p_top_tier, 1), 1), 3))
   returning id into v_id;
+  perform public.note_color_played(v_student);
   return v_id;
 end;
 $$;

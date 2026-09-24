@@ -4,6 +4,8 @@ import { levelFromExp } from '@/core/progress'
 import type { Character } from '@/core/types'
 import { ITEMS } from '@/data/shop'
 import { COLORS, FRAMES, colorOf, frameOf } from '@/data/cosmetics'
+import { LEGIONS, TIERS, legionOf } from '@/data/legions'
+import { LegionThumb } from './LegionThumb'
 import { JOB_NAME } from '@/core/character'
 import { repo } from '@/net'
 import { avatarSrc } from '@/data/jobs'
@@ -37,6 +39,7 @@ export function MyCharacter({
   const has = (id: string) => count(character, id) > 0
   const wornColor = colorOf(character.equipped)
   const wornFrame = frameOf(character.equipped)
+  const wornLegion = legionOf(character.equipped)
 
   async function run(what: () => Promise<string>) {
     if (busy) return
@@ -56,8 +59,8 @@ export function MyCharacter({
     return on ? `換上「${name}」了` : `脫下「${name}」了`
   })
 
-  // 成就限定的外框不算進收集進度——那是另一面牆（徽章）的事
-  const cosmetics = ITEMS.filter((i) => i.kind === 'cosmetic' && !i.achievementOnly)
+  // 成就限定的外框不算進收集進度——那是另一面牆（徽章）的事；送的顏色也不算
+  const cosmetics = ITEMS.filter((i) => i.kind === 'cosmetic' && !i.achievementOnly && !i.free)
   const ownedCosmetics = cosmetics.filter((i) => has(i.id)).length
 
   return (
@@ -78,25 +81,44 @@ export function MyCharacter({
           <Avatar character={character} size={96} />
           <div className="hero-txt">
             <b>{JOB_NAME[character.job]}　Lv.{level}</b>
-            <span>{wornColor.name}　{wornFrame ? wornFrame.name : '沒戴外框'}</span>
+            <span>{wornLegion.usesColor ? `${wornLegion.name}．${wornColor.name}` : wornLegion.name}　{wornFrame ? wornFrame.name : '沒戴外框'}</span>
             <span className="i-tag">收集進度 {ownedCosmetics} / {cosmetics.length}</span>
           </div>
         </div>
 
-        <h2 className="sec">陣營顏色<small>　換了之後整個戰場都是你的顏色</small></h2>
+        <h2 className="sec">軍團<small>　兵推整套換；守塔換士兵和箭塔</small></h2>
         <div className="picks">
-          {COLORS.map((c) => {
-            const owned = !c.id || has(c.id)
-            const on = wornColor.id === c.id
-            const price = ITEMS.find((i) => i.id === c.id)?.price
+          {LEGIONS.map((l) => {
+            const owned = !l.id || has(l.id)
+            const on = wornLegion.id === l.id
+            const t = TIERS[l.tier]
             return (
-              <button key={c.id || 'default'} className={'pick' + (on ? ' on' : '') + (owned ? '' : ' locked')}
-                disabled={busy || !owned}
+              <button key={l.id || 'default'} className={'pick' + (on ? ' on' : '') + (owned ? '' : ' locked')}
+                disabled={busy || !owned || on}
+                onClick={() => void (l.id ? wear(l.id, true, l.name)
+                  : wornLegion.id && wear(wornLegion.id, false, wornLegion.name))}>
+                <LegionThumb legion={l} size={30} />
+                {l.name}
+                {!owned && <small>Lv{t.unlockLevel}．<Icon name="coin" size={12} /> {t.price}</small>}
+              </button>
+            )
+          })}
+        </div>
+
+        <h2 className="sec">陣營顏色<small>　送的，隨你換</small></h2>
+        {!wornLegion.usesColor && (
+          <p className="pick-note">顏色只有王國軍有，換回王國軍才看得到</p>
+        )}
+        <div className={'picks' + (wornLegion.usesColor ? '' : ' off')}>
+          {COLORS.map((c) => {
+            const on = wornColor.id === c.id
+            return (
+              <button key={c.id || 'default'} className={'pick' + (on ? ' on' : '')}
+                disabled={busy || !wornLegion.usesColor}
                 onClick={() => void (c.id ? wear(c.id, true, c.name)
                   : wornColor.id && wear(wornColor.id, false, wornColor.name))}>
                 <span className="sw" style={{ background: c.swatch }} />
                 {c.name}
-                {!owned && <small><Icon name="coin" size={12} /> {price}</small>}
               </button>
             )
           })}
