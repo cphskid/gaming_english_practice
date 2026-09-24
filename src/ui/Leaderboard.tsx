@@ -5,6 +5,8 @@ import { repo } from '@/net'
 import type { LeaderRow } from '@/net/repository'
 import { avatarSrc } from '@/data/jobs'
 import { frameOf } from '@/data/cosmetics'
+import { Icon } from './Icon'
+import type { IconName } from '@/data/icons'
 
 /**
  * 班內排行榜。
@@ -62,7 +64,9 @@ export function Leaderboard({ student, onBack }: { student: Student; onBack: () 
             const frame = frameOf(r.equipped)
             return (
               <div className={'rank' + (r.me ? ' me' : '')} key={r.nickname + i}>
-                <span className="rk">{MEDAL[i] ?? i + 1}</span>
+                <span className="rk">
+                  {i < 3 ? <Icon name={MEDAL[i]} size={24} alt={`第 ${i + 1} 名`} /> : i + 1}
+                </span>
                 <span className={'mugbox' + (frame ? ' ' + frame.className : '')}>
                   <img src={avatarSrc(r.avatar)} alt="" />
                   {frame?.badge && <i className="mugbadge">{frame.badge}</i>}
@@ -70,7 +74,7 @@ export function Leaderboard({ student, onBack }: { student: Student; onBack: () 
                 <span className="nm">{r.nickname}{r.me && <small>　（你）</small>}</span>
                 <span className="sc">
                   <b>Lv.{levelFromExp(r.exp)}</b>
-                  <small>⭐ {r.stars}　🪙 {r.coins}</small>
+                  <small>⭐ {r.stars}　<Icon name="coin" size={13} /> {r.coins}</small>
                 </span>
               </div>
             )
@@ -82,4 +86,4 @@ export function Leaderboard({ student, onBack }: { student: Student; onBack: () 
 }
 
 /** 前三名給獎牌。第四名以後看數字就好，不然整頁都是圖案反而看不出順序。 */
-const MEDAL: Record<number, string> = { 0: '🥇', 1: '🥈', 2: '🥉' }
+const MEDAL: Record<number, IconName> = { 0: 'medal1', 1: 'medal2', 2: 'medal3' }

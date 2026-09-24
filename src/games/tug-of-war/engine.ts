@@ -1,5 +1,6 @@
 import type { GameContext, GameHandle, Opponent, Word } from '@/core/types'
 import { makeFeeder } from '@/core/opponent'
+import { iconImg, iconUrl } from '@/data/icons'
 import { ART, TERRAIN_KEYS, loadArt, onArt } from '../tower-defense/art'
 import {
   LINES, LINE_COST, LINE_IDS, MAX_TIER, RULES, nextCost, newBattle, pushed, statsOf, step,
@@ -30,17 +31,29 @@ const PRESS = 0.22
 const ARROW_LIFE = 0.32
 /** 剩下這麼多秒的時候，音樂開始變快。Chuck 要的「最後三十秒節奏變急」。 */
 const RUSH_AT = 30
+/**
+ * 寒霜陷阱在兵推凍多久。
+ *
+ * 守塔是 15 秒，這裡砍成 8——守塔一波打完要一分多鐘，兵推整場才三分鐘，
+ * 15 秒等於一場的十二分之一都在單方面推進。
+ */
+const FREEZE_SECONDS = 8
+/** 城牆修補在兵推補多少血。兵推城堡 100 血，守塔是 20 血補 5，同樣是一成五到兩成五之間。 */
+const VERSUS_HEAL = 15
+/** 水晶補給。兵推升階是 30／80，所以 40 剛好是「馬上升得起一階」。 */
+const VERSUS_CRYSTALS = 40
 
 const SHELL = `
 <div class="td-hud">
-  <span class="td-stat td-clock">⏱️ 3:00</span>
-  <span class="td-stat tw-mine">🏰 100</span>
+  <span class="td-stat td-clock">${iconImg('clock', 15)} 3:00</span>
+  <span class="td-stat tw-mine">${iconImg('castle', 15)} 100</span>
   <span class="td-stat tw-theirs">🏯 100</span>
   <div class="td-quiz">
     <span class="td-qemoji">⚔️</span>
     <span class="td-qzh">準備開打</span>
     <span class="td-qhint"></span>
   </div>
+  <span class="td-buffs"></span>
   <span class="tw-foe"></span>
   <button class="td-say" disabled aria-label="再念一次">🔊</button>
 </div>
@@ -48,11 +61,11 @@ const SHELL = `
   <canvas class="td-cv" width="1088" height="576"></canvas>
   <div class="td-toast"></div>
   <div class="tw-bar">
-    <button class="tw-line" data-line="recognize">👁️<b>認字</b></button>
+    <button class="tw-line" data-line="recognize">${iconImg('eye', 20)}<b>認字</b></button>
     <button class="tw-line" data-line="listen">👂<b>聽音</b></button>
-    <button class="tw-line" data-line="spell">✍️<b>拼字</b></button>
+    <button class="tw-line" data-line="spell">${iconImg('quill', 20)}<b>拼字</b></button>
     <button class="tw-up">⬆️<b>升階</b><i></i></button>
-    <span class="tw-crystal">💎 0</span>
+    <span class="tw-crystal">${iconImg('crystal', 15)} 0</span>
   </div>
 </div>`
 
@@ -114,6 +127,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   const elUp = $<HTMLButtonElement>('.tw-up')
   const elUpCost = $('.tw-up i')
   const elCrystal = $('.tw-crystal')
+  const elBuffs = $('.td-buffs')
   const elToast = $('.td-toast')
 
   // 對手一定要有，不然這個遊戲沒有意義；容器負責給。
@@ -178,7 +192,9 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     botCredit: 0,
     /** 最後三十秒的音樂加速只做一次 */
     rushed: false,
-    pops: [] as { x: number; y: number; text: string; color: string; life: number }[],
+    pops: [] as { x: number; y: number; text: string; color: string; life: number; icon?: string }[],
+    /** 道具開出來的效果，上面那一條會跑倒數。現在只有寒霜。 */
+    buffs: [] as { id: string; icon: string; name: string; left: number; dur: number }[],
     flashes: [] as { x: number; life: number }[],
     done: false,
   }
@@ -190,6 +206,21 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   const foeSuffix = ctx.color === '_red' ? '_black' : '_red'
   const mine = (key: string) => img[key + ctx.color] ?? img[key]
   const theirs = (key: string) => img[key + foeSuffix] ?? img[key]
+
+  /**
+   * 飄字用的道具圖示。畫布沒辦法直接畫 CSS 的 <img>，所以自己留一份。
+   * **沒載好就不畫**——沒畫完的圖 drawImage 會丟例外，那會把整個畫面定住。
+   */
+  const popIcons = new Map<string, HTMLImageElement>()
+  function popIcon(name: string): HTMLImageElement | null {
+    let im = popIcons.get(name)
+    if (!im) {
+      im = new Image()
+      im.src = iconUrl(name as Parameters<typeof iconUrl>[0])
+      popIcons.set(name, im)
+    }
+    return im.complete && im.naturalWidth > 0 ? im : null
+  }
 
   /** 某一邊最前面那幾隻（＝畫面上掛得到字牌、點得到的那幾隻） */
   function tappable(side: 'me' | 'foe') {
@@ -439,8 +470,9 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
 
   function syncUI() {
     const left = Math.max(0, R.seconds - S.battle.t)
-    elClock.textContent = `⏱️ ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`
-    elMine.textContent = `🏰 ${Math.max(0, Math.ceil(S.battle.castleHp.me))}`
+    const mm = `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`
+    elClock.innerHTML = `${iconImg('clock', 15)} ${mm}`
+    elMine.innerHTML = `${iconImg('castle', 15)} ${Math.max(0, Math.ceil(S.battle.castleHp.me))}`
     elTheirs.textContent = `🏯 ${Math.max(0, Math.ceil(S.battle.castleHp.foe))}`
     // 電腦對手一定要寫出來。被騙到才會真的不爽。
     elFoe.textContent = foe.isBot ? `🤖 ${foe.name}` : `🧒 ${foe.name}`
@@ -500,8 +532,81 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     const cost = nextCost(S.battle, 'me')
     const can = cost !== null && S.battle.crystal.me >= cost
     elUp.disabled = !can
-    elUpCost.textContent = cost === null ? `已滿 ${MAX_TIER} 階` : `💎 ${cost}`
-    elCrystal.textContent = `💎 ${Math.floor(S.battle.crystal.me)}　${S.battle.tier.me} 階`
+    elUpCost.innerHTML = cost === null ? `已滿 ${MAX_TIER} 階` : `${iconImg('crystal', 13)} ${cost}`
+    elCrystal.innerHTML = `${iconImg('crystal', 15)} ${Math.floor(S.battle.crystal.me)}　${S.battle.tier.me} 階`
+  }
+
+  // ---------------------------------------------------------------- 道具
+  /**
+   * 用一個道具。
+   *
+   * **跟守塔是同一份道具、不同的效果**——守塔有地面可以結霜、有一座要守的城堡，
+   * 兵推兩邊都在推進，所以「減速」在這裡的意思是「對方停下來」。
+   * 界線一樣：容器管背包，這裡只管效果長什麼樣；回傳 false 代表現在用了會浪費，
+   * 容器就不會把道具扣掉。
+   *
+   * 2026-09-21 之前這支根本不存在，但容器照樣把道具列畫出來，
+   * 所以在兵推裡按道具是完全沒反應。現在三個都做了。
+   */
+  function useItem(id: string): boolean {
+    if (S.done || S.battle.over) return false
+    switch (id) {
+      case 'slow-30': {
+        if (S.buffs.some((b) => b.id === id)) { toast('對面還凍著，等退了再用'); return false }
+        S.battle.chill.foe = FREEZE_SECONDS
+        S.buffs.push({ id, icon: 'frost', name: '寒霜', left: FREEZE_SECONDS, dur: FREEZE_SECONDS })
+        // 每一隻凍住的兵身上冒一朵雪花，不然只看到「對面不動了」會以為是當掉
+        for (const u of S.battle.units) {
+          if (u.side !== 'foe' || u.hp <= 0) continue
+          S.pops.push({ x: u.x, y: ROAD_Y - 96, text: '', icon: 'frost', color: '#bfe6ff', life: 1.0 })
+        }
+        toast(`對方全軍凍住 ${FREEZE_SECONDS} 秒`)
+        ctx.audio.play('explosion')
+        syncBuffs()
+        return true
+      }
+      case 'heal-5': {
+        if (S.battle.castleHp.me >= R.castleHp) { toast('城堡是滿血的，留著下次用'); return false }
+        S.battle.castleHp.me = Math.min(R.castleHp, S.battle.castleHp.me + VERSUS_HEAL)
+        S.pops.push({
+          x: R.homeMe + 40, y: ROAD_Y - 110,
+          text: `+${VERSUS_HEAL}`, icon: 'heart', color: '#9de8a0', life: 1.3,
+        })
+        toast('城牆補好了')
+        ctx.audio.play('tower-build')
+        syncUI()
+        return true
+      }
+      case 'crystal-40': {
+        S.battle.crystal.me += VERSUS_CRYSTALS
+        // 一顆一顆冒出來，比一個 +40 有感（跟守塔同一套做法）
+        for (let i = 0; i < 8; i++) {
+          S.pops.push({
+            x: R.homeMe + 20 + Math.random() * 170, y: ROAD_Y - 70 - Math.random() * 60,
+            text: '', icon: 'crystal', color: '#8fd8ff', life: 0.7 + i * 0.09,
+          })
+        }
+        toast(`補給到了，${VERSUS_CRYSTALS} 顆水晶`)
+        ctx.audio.play('coin')
+        syncBar()
+        return true
+      }
+      default:
+        return false
+    }
+  }
+
+  /** 上面那一條的道具倒數。每整秒才重畫一次，不然每一格都在動很吵。 */
+  let buffShown = -1
+  function syncBuffs() {
+    const now = S.buffs.length ? Math.ceil(S.buffs[0].left) : -1
+    if (now === buffShown && S.buffs.length) return
+    buffShown = now
+    elBuffs.innerHTML = S.buffs
+      .map((b) => `<span class="td-buff"><i><img class="ic-img" src="${iconUrl('frost')}" alt=""></i>`
+        + `${b.name}<b>${Math.ceil(b.left)}s</b>`
+        + `<u style="width:${Math.round((b.left / b.dur) * 100)}%"></u></span>`)
+      .join('')
   }
 
   for (const b of elLines) {
@@ -642,6 +747,13 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     S.flashes = S.flashes.filter((f) => f.life > 0)
     for (const a of S.arrows) a.life -= dt
     S.arrows = S.arrows.filter((a) => a.life > 0)
+    if (S.buffs.length) {
+      for (const b of S.buffs) b.left -= dt
+      const before = S.buffs.length
+      S.buffs = S.buffs.filter((b) => b.left > 0)
+      syncBuffs()
+      if (S.buffs.length !== before && !S.buffs.length) elBuffs.innerHTML = ''
+    }
 
     if (S.battle.over && !S.done) finish()
   }
@@ -1013,6 +1125,44 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     c2d.restore()
   }
 
+  /**
+   * 對方被凍住的時候，他那半邊鋪一層藍。
+   *
+   * 守塔那邊試過 alpha 0.16，在草地上根本看不出來，所以這裡直接用 0.3——
+   * 「有效果、看不到」是這個遊戲最常犯的毛病。
+   *
+   * **範圍是從對方最前面那隻往右，不是從前線往右**：用前線當界線的話，
+   * 自己的兵也會站在藍色裡面，看起來像兩邊一起被凍到。從敵兵算起，
+   * 藍色蓋到哪裡就等於「這些人現在不動」，一眼對得起來。
+   */
+  function drawFrost() {
+    if (S.battle.chill.foe <= 0) return
+    const foes = S.battle.units.filter((u) => u.side === 'foe' && u.hp > 0)
+    const x0 = Math.max(0, foes.length
+      ? Math.min(...foes.map((u) => u.x)) - 44
+      : R.homeFoe - 90)
+    const y0 = LAND.r0 * TILE
+    const y1 = (LAND.r1 + 1) * TILE
+    c2d.save()
+    c2d.globalAlpha = 0.3
+    c2d.fillStyle = '#9fd0ff'
+    c2d.fillRect(x0, y0, W - x0, y1 - y0)
+    // 上緣掛一排冰稜，讓它看起來是結霜不是一塊色板
+    c2d.globalAlpha = 0.55
+    c2d.fillStyle = '#e4f4ff'
+    for (let x = x0; x < W; x += 26) {
+      c2d.beginPath()
+      c2d.moveTo(x, y0); c2d.lineTo(x + 13, y0); c2d.lineTo(x + 6.5, y0 + 18)
+      c2d.closePath(); c2d.fill()
+    }
+    // 每一隻腳下一圈冰，凍住的是「人」不是「那塊地」
+    c2d.globalAlpha = 0.5
+    for (const u of foes) {
+      c2d.beginPath(); c2d.ellipse(u.x, laneY(u) - 4, 26, 10, 0, 0, 7); c2d.fill()
+    }
+    c2d.restore()
+  }
+
   function draw() {
     if (!terrain && img.tiles) buildTerrain()
     if (terrain) c2d.drawImage(terrain, 0, 0)
@@ -1025,6 +1175,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     drawTower('me')
     drawTower('foe')
     for (const u of [...S.battle.units].sort((a, b) => laneY(a) - laneY(b))) drawUnit(u)
+    drawFrost()
     drawArrows()
     drawFront()
 
@@ -1045,10 +1196,23 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     }
     for (const p of S.pops) {
       c2d.globalAlpha = Math.min(1, p.life * 1.6)
-      c2d.fillStyle = p.color
-      c2d.font = 'bold 19px system-ui, sans-serif'
       c2d.textAlign = 'center'; c2d.textBaseline = 'middle'
-      c2d.fillText(p.text, p.x, p.y)
+      // 有圖示就畫圖示（還沒載好就只寫字，畫壞掉的圖會丟例外把整個迴圈打斷）
+      const im = p.icon ? popIcon(p.icon) : null
+      const S_ = 24
+      c2d.font = 'bold 19px system-ui, sans-serif'
+      c2d.fillStyle = p.color
+      if (im && p.text) {
+        // 圖示和字當成一整塊置中，不然 +15 會歪一邊
+        const left = p.x - (S_ + 4 + c2d.measureText(p.text).width) / 2
+        c2d.drawImage(im, left, p.y - S_ / 2, S_, S_)
+        c2d.textAlign = 'left'
+        c2d.fillText(p.text, left + S_ + 4, p.y)
+      } else if (im) {
+        c2d.drawImage(im, p.x - S_ / 2, p.y - S_ / 2, S_, S_)
+      } else {
+        c2d.fillText(p.text, p.x, p.y)
+      }
       c2d.globalAlpha = 1
     }
   }
@@ -1121,6 +1285,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   raf = requestAnimationFrame(loop)
 
   return {
+    useItem,
     setPaused(on: boolean) {
       paused = on
       if (!on) last = performance.now()

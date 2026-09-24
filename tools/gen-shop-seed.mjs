@@ -40,10 +40,17 @@ on conflict (id) do update
 -- 所以不在清單裡的一律刪掉。
 delete from public.shop_items where id not in (${items.map((i) => `'${i.id}'`).join(', ')});
 `
+// 換掉舊的那一段就好，**後面的東西要原封不動留著**。
+// 本來是「砍掉 marker 之後的全部再接上」，於是排在後面的關卡那一段
+// 每跑一次就被吃掉一次（要再跑一次 gen-levels-seed.mjs 才長回來）。
 const marker = '-- 商店品項。'
 let seed = readFileSync('supabase/seed.sql', 'utf8')
 const i = seed.indexOf(marker)
-if (i >= 0) seed = seed.slice(0, i).replace(/\n+$/, '\n')
-else seed = seed.replace(/\ncommit;\s*$/, '\n')
-writeFileSync('supabase/seed.sql', seed + sql + '\ncommit;\n')
+if (i >= 0) {
+  const end = seed.indexOf('\n', seed.indexOf('delete from public.shop_items', i))
+  seed = seed.slice(0, i) + sql.trimStart() + seed.slice(end + 1)
+} else {
+  seed = seed.replace(/\ncommit;\s*$/, '\n' + sql + '\ncommit;\n')
+}
+writeFileSync('supabase/seed.sql', seed)
 console.log('寫進 seed.sql：' + items.length + ' 個品項')

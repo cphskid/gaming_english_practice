@@ -3,6 +3,7 @@ import { JOB_EFFECT } from '@/data/jobs'
 import type { GameContext, GameHandle, LevelData, Point, Word } from '@/core/types'
 import { ART, TERRAIN_KEYS, loadArt, onArt } from './art'
 import { PLATE_RULES, layoutPlates as runPlateLayout, plateY } from './plates'
+import { iconImg, iconUrl } from '@/data/icons'
 
 const W = 1088
 const H = 576
@@ -67,7 +68,11 @@ interface Enemy {
 
 interface Soldier { x: number; y: number; path: number; dist: number; hp: number; respawn: number }
 interface Tower { slot: number; kind: string; soldier: Soldier | null; builtAtWave: number }
-interface Pop { x: number; y: number; text: string; color: string; life: number }
+interface Pop {
+  x: number; y: number; text: string; color: string; life: number
+  /** 字前面要不要擺一張圖示（data/icons.ts 的鍵）。沒載好就只寫字。 */
+  icon?: string
+}
 /** 播一次就結束的圖片特效（例如治療）。t 從 0 走到 dur。 */
 interface Fx { kind: string; x: number; y: number; t: number; dur: number; size: number }
 
@@ -105,8 +110,8 @@ function pointAt(pts: Point[], dist: number): Point {
 
 const SHELL = `
 <div class="td-hud">
-  <span class="td-stat td-hp">❤️ 20</span>
-  <span class="td-stat td-coin">💎 0</span>
+  <span class="td-stat td-hp">${iconImg('heart', 15)} 20</span>
+  <span class="td-stat td-coin">${iconImg('crystal', 15)} 0</span>
   <span class="td-wave">第 1 波</span>
   <div class="td-quiz">
     <span class="td-qemoji">🛡️</span>
@@ -120,8 +125,8 @@ const SHELL = `
   <canvas class="td-cv" width="1088" height="576"></canvas>
   <div class="td-toast"></div>
   <div class="td-tray">
-    <button class="td-card td-sel" data-kind="archery"><b>🏹 箭塔 <i>40</i></b><span>射程內的怪會被它射中</span></button>
-    <button class="td-card" data-kind="barracks"><b>🛡️ 軍營 <i>30</i></b><span>派士兵擋路，替你爭取時間</span></button>
+    <button class="td-card td-sel" data-kind="archery"><b>${iconImg('bow', 15)} 箭塔 <i>40</i></b><span>射程內的怪會被它射中</span></button>
+    <button class="td-card" data-kind="barracks"><b>${iconImg('shield', 15)} 軍營 <i>30</i></b><span>派士兵擋路，替你爭取時間</span></button>
     <button class="td-btn td-sell" hidden>拆除</button>
     <button class="td-btn td-go">開始第 1 波</button>
   </div>
@@ -217,7 +222,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
    */
   function gainCrystals(n: number, x: number, y: number) {
     S.crystals += n
-    S.pops.push({ x, y, text: '+' + n + ' 💎', color: '#8fd8ff', life: 1 })
+    S.pops.push({ x, y, text: '+' + n, icon: 'crystal', color: '#8fd8ff', life: 1 })
     ctx.audio.play('coin')
     syncUI()
   }
@@ -429,14 +434,14 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       case 'slow-30': {
         if (S.phase !== 'battle') { toast('開戰之後才用得到，不然會浪費'); return false }
         if (S.buffs.some((b) => b.id === id)) { toast('地面已經結霜了，等它退了再用'); return false }
-        S.buffs.push({ id, icon: '❄️', name: '寒霜', left: SLOW_SECONDS, dur: SLOW_SECONDS })
+        S.buffs.push({ id, icon: 'frost', name: '寒霜', left: SLOW_SECONDS, dur: SLOW_SECONDS })
         toast('地面結霜了，怪走得很慢')
         // 從城堡往外掃一圈，讓人看得出來是整片地結霜，不是只有一個點
         S.rings.push({ x: layout.castle.x - 200, y: (layout.land.r0 + layout.land.r1) * 32,
           r: 20, max: 900, life: 1.1, dur: 1.1, color: '#9fd0ff' })
         for (const e of S.enemies) {
           S.rings.push({ x: e.x, y: e.y - 18, r: 6, max: 46, life: 0.55, dur: 0.55, color: '#bfe6ff' })
-          S.pops.push({ x: e.x, y: e.y - 52, text: '❄️', color: '#bfe6ff', life: 0.9 })
+          S.pops.push({ x: e.x, y: e.y - 52, text: '', icon: 'frost', color: '#bfe6ff', life: 0.9 })
         }
         ctx.audio.play('explosion')
         syncUI()
@@ -448,7 +453,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         toast('城牆補好了')
         // 修士的治療特效，素材包裡本來就有（見 tools/build-td-art.py）
         S.fx.push({ kind: 'heal', x: layout.castle.x - 6, y: layout.castle.y - 54, t: 0, dur: 0.9, size: 190 })
-        S.pops.push({ x: layout.castle.x - 40, y: layout.castle.y - 70, text: '+5 ❤️', color: '#9de8a0', life: 1.2 })
+        S.pops.push({ x: layout.castle.x - 40, y: layout.castle.y - 70, text: '+5', icon: 'heart', color: '#9de8a0', life: 1.2 })
         ctx.audio.play('tower-build')
         syncUI()
         return true
@@ -456,7 +461,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         // 一顆一顆冒出來，比一個 +40 有感
         for (let i = 0; i < 8; i++)
           S.pops.push({ x: layout.castle.x - 150 + Math.random() * 180,
-            y: layout.castle.y - 60 - Math.random() * 60, text: '💎', color: '#8fd8ff', life: 0.7 + i * 0.09 })
+            y: layout.castle.y - 60 - Math.random() * 60, text: '', icon: 'crystal', color: '#8fd8ff', life: 0.7 + i * 0.09 })
         gainCrystals(40, layout.castle.x - 60, layout.castle.y - 110)
         toast('補給到了，多蓋一座塔吧')
         return true
@@ -586,7 +591,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         if (e.dist >= PATH_LEN[e.path]) {
           S.hp -= e.boss ? 3 : 1
           ctx.audio.play('castle-hit')
-          S.pops.push({ x: layout.castle.x - 40, y: layout.castle.y - 70, text: '-1 ❤️', color: '#ff9a94', life: 1.1 })
+          S.pops.push({ x: layout.castle.x - 40, y: layout.castle.y - 70, text: '-1', icon: 'heart', color: '#ff9a94', life: 1.1 })
           killEnemy(e)
           syncUI()
         }
@@ -782,10 +787,24 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     }
     for (const p of S.pops) {
       c2d.globalAlpha = Math.min(1, p.life)
-      c2d.font = 'bold 17px system-ui, sans-serif'; c2d.textAlign = 'center'; c2d.textBaseline = 'alphabetic'
+      c2d.font = 'bold 17px system-ui, sans-serif'; c2d.textBaseline = 'alphabetic'
       c2d.lineWidth = 3.5; c2d.strokeStyle = 'rgba(0,0,0,.6)'
-      c2d.strokeText(p.text, p.x, p.y)
-      c2d.fillStyle = p.color; c2d.fillText(p.text, p.x, p.y)
+      // 圖示還沒載好就只寫字——畫沒載好的圖會丟例外，那會把整個迴圈打斷。
+      const im = p.icon ? popIcon(p.icon) : null
+      const SZ = 20
+      if (im && p.text) {
+        c2d.textAlign = 'left'
+        const left = p.x - (SZ + 3 + c2d.measureText(p.text).width) / 2
+        c2d.drawImage(im, left, p.y - SZ + 3, SZ, SZ)
+        c2d.strokeText(p.text, left + SZ + 3, p.y)
+        c2d.fillStyle = p.color; c2d.fillText(p.text, left + SZ + 3, p.y)
+      } else if (im) {
+        c2d.drawImage(im, p.x - SZ / 2, p.y - SZ, SZ, SZ)
+      } else {
+        c2d.textAlign = 'center'
+        c2d.strokeText(p.text, p.x, p.y)
+        c2d.fillStyle = p.color; c2d.fillText(p.text, p.x, p.y)
+      }
       c2d.globalAlpha = 1
     }
   }
@@ -900,8 +919,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       c2d.fillStyle = '#9fd0ff'
       c2d.beginPath(); c2d.ellipse(e.x + sh, e.y - 22, 24, 27, 0, 0, 7); c2d.fill()
       c2d.globalAlpha = 1
-      c2d.font = '13px system-ui, sans-serif'; c2d.textAlign = 'center'
-      c2d.fillText('❄️', e.x + sh, e.y - 56)
+      const fi = popIcon('frost')
+      if (fi) c2d.drawImage(fi, e.x + sh - 9, e.y - 65, 18, 18)
     }
     c2d.restore()
     bar(e.x + sh - 22 * e.scale, e.y - 46 * e.scale, 44 * e.scale, 5, e.hp / e.maxHp, e.boss ? '#ff7a3c' : '#d4504a')
@@ -940,10 +959,25 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     c2d.restore()
   }
 
+  /**
+   * 飄字用的道具圖示。畫布畫不了 CSS 的 <img>，所以自己留一份。
+   * **沒載好就不畫**——沒載完的圖 drawImage 會丟例外，畫面會直接定住。
+   */
+  const popIcons = new Map<string, HTMLImageElement>()
+  function popIcon(name: string): HTMLImageElement | null {
+    let im = popIcons.get(name)
+    if (!im) {
+      im = new Image()
+      im.src = iconUrl(name as 'frost')
+      popIcons.set(name, im)
+    }
+    return im.complete && im.naturalWidth > 0 ? im : null
+  }
+
   // ---------------------------------------------------------------- UI
   function syncUI() {
-    elHp.textContent = '❤️ ' + Math.max(0, S.hp)
-    elCoin.textContent = '💎 ' + S.crystals
+    elHp.innerHTML = iconImg('heart', 15) + ' ' + Math.max(0, S.hp)
+    elCoin.innerHTML = iconImg('crystal', 15) + ' ' + S.crystals
     elWave.textContent = `第 ${S.wave} / ${rules.waves.length} 波`
     const build = S.phase === 'build'
     elTray.hidden = !build
@@ -953,7 +987,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     elSell.hidden = !sel
     if (sel) {
       const back = refundOf(TOWERS[sel.kind].cost, sel.builtAtWave < S.wave)
-      elSell.textContent = `拆除 ${TOWERS[sel.kind].name}（退 ${back} 💎）`
+      elSell.innerHTML = `拆除 ${TOWERS[sel.kind].name}（退 ${back} ${iconImg('crystal', 13)}）`
     }
   }
 
@@ -968,18 +1002,19 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     if (sig === buffSig) return
     buffSig = sig
     elBuffs.innerHTML = S.buffs
-      .map((b) => `<span class="td-buff"><i>${b.icon}</i>${b.name}<b>${Math.ceil(b.left)}s</b>`
+      .map((b) => `<span class="td-buff"><i><img class="ic-img" src="${iconUrl(b.icon as 'frost')}" alt=""></i>${b.name}<b>${Math.ceil(b.left)}s</b>`
         + `<u style="width:${Math.max(0, Math.min(100, (b.left / b.dur) * 100)).toFixed(1)}%"></u></span>`)
       .join('')
   }
 
   function syncQuiz() {
     if (S.target) {
+      // 題目的 emoji 是題庫的內容不是介面圖示，所以照樣用 textContent
       elEmoji.textContent = S.target.word.emoji
       elZh.textContent = S.target.word.zh
       elHint.textContent = `（${S.target.word.pos}）點出寫著這個字的怪`
     } else if (S.phase === 'build') {
-      elEmoji.textContent = '🛡️'
+      elEmoji.innerHTML = iconImg('shield', 24)
       elZh.textContent = '準備防守'
       elHint.textContent = '點空地蓋塔，點已有的塔可以拆掉'
     } else {

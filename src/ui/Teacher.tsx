@@ -5,6 +5,7 @@ import { WordStat } from '@/core/wordStat'
 import { SKILL_NAME, type ClassRoom, type Staff } from '@/core/types'
 import { repo, type ClassRosterRow } from '@/net'
 import { TeacherRoom } from './Room'
+import { Icon } from './Icon'
 
 /**
  * 老師後台。
@@ -184,7 +185,7 @@ export function Teacher({
               {roster.map((r) => (
                 <div className="r" key={r.studentId}>
                   <span className="n">{r.nickname}</span>
-                  <span className="s">⭐ {r.stars}　🪙 {r.coins}　答過 {r.answers} 題</span>
+                  <span className="s">⭐ {r.stars}　<Icon name="coin" size={13} /> {r.coins}　答過 {r.answers} 題</span>
                   <button className="btn ghost small" onClick={() => {
                     const pw = prompt(`幫「${r.nickname}」設一個新密碼（6 個以上英文或數字）`)
                     if (pw) void run(async () => {

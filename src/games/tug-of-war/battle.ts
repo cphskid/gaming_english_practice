@@ -240,6 +240,13 @@ export interface BattleState {
   crystal: Record<Side, number>
   /** 兵階上限，1~4。三條線共用同一個上限：一顆鈕，沒有第三層選單。 */
   tier: Record<Side, number>
+  /**
+   * 這一邊還要被凍住幾秒（寒霜陷阱）。**只停腳步，不停打架**——
+   * 打得到的照樣打，不然一個道具就等於八秒不用還手，那不是減速是無敵。
+   * 平常一直是 0，所以不用道具的時候規則跟以前一模一樣
+   * （tug-balance.mjs 量出來的數字才不會因為加了這個欄位就變掉）。
+   */
+  chill: Record<Side, number>
 }
 
 export interface Hit {
@@ -260,6 +267,7 @@ export function newBattle(r: BattleRules = RULES): BattleState {
     units: [], castleHp: { me: r.castleHp, foe: r.castleHp },
     front: (r.homeMe + r.homeFoe) / 2, over: false, winner: null, reason: null,
     crystal: { me: 0, foe: 0 }, tier: { me: 1, foe: 1 },
+    chill: { me: 0, foe: 0 },
   }
   for (let i = 0; i < r.openingUnits; i++) {
     summon(s, 'me', 'recognize', 1, r)
@@ -324,6 +332,7 @@ export function step(s: BattleState, dt: number, r: BattleRules = RULES): Hit[] 
   if (s.over) return []
   s.t += dt
   const hits: Hit[] = []
+  for (const side of ['me', 'foe'] as Side[]) s.chill[side] = Math.max(0, s.chill[side] - dt)
 
   // --- 誰擋在我前面。同一邊的兵排成一列，不會疊在一起。
   const ahead = new Map<number, Unit | null>()
@@ -389,6 +398,9 @@ export function step(s: BattleState, dt: number, r: BattleRules = RULES): Hit[] 
     u.fighting = false
     const block = ahead.get(u.id)
     if (block && block.fighting) continue
+    // 被凍住就停在原地。放在這裡而不是把 speed 乘 0，是因為上面幾段
+    // 「打兵」「打城堡」都已經 continue 掉了：凍住的兵還是會還手。
+    if (s.chill[u.side] > 0) continue
     u.x += spec.speed * dir(u.side) * dt
   }
 

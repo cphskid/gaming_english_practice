@@ -5,6 +5,9 @@ import type {
 import type { Session } from '@/core/session'
 import { audio } from '@/audio'
 import { ITEMS } from '@/data/shop'
+import { bagFor } from '@/core/inventory'
+import { Icon } from './Icon'
+import type { IconName } from '@/data/icons'
 
 /**
  * 把 GameModule 掛到畫面上。
@@ -71,8 +74,12 @@ export function GameHost({
    * 道具列放在容器，不放在遊戲裡——跟離開鍵同一個道理：
    * 「我有什麼道具」是角色的事，不是守塔的事，換一個遊戲也該有這一排。
    * 遊戲只回答「這個效果現在做得出來嗎」，做不出來就不扣。
+   *
+   * **只列這個遊戲做得出效果的道具**（ItemDef.modes）。本來是有就列，
+   * 於是兵推也長出三顆按鈕，但兵推根本沒實作 useItem——按下去完全沒反應，
+   * 沒訊息也不扣道具。列不出來比列出來但沒用好。
    */
-  const bag = ITEMS.filter((it) => it.kind === 'consumable' && (items[it.id] ?? 0) > 0)
+  const bag = bagFor(items, ITEMS, game.id)
 
   function use(id: string) {
     audio.play('ui-tap')
@@ -95,7 +102,7 @@ export function GameHost({
             {bag.map((it) => (
               <button key={it.id} className="bagitem" onClick={() => use(it.id)}
                 title={it.name + '：' + it.desc}>
-                <span className="ic">{it.icon}</span>
+                <span className="ic"><Icon name={it.icon as IconName} size={16} /></span>
                 <span className="nm">{it.name}</span>
                 <b>×{items[it.id]}</b>
               </button>

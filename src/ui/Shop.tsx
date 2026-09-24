@@ -1,13 +1,16 @@
 import { useState } from 'react'
-import { count } from '@/core/inventory'
+import { count, MODE_LABEL } from '@/core/inventory'
 import { levelFromExp } from '@/core/progress'
 import type { Character } from '@/core/types'
+import type { ItemDef } from '@/core/inventory'
 import { ITEMS } from '@/data/shop'
 import { COLORS, FRAMES, colorOf, frameOf } from '@/data/cosmetics'
 import { JOB_NAME } from '@/core/character'
 import { repo } from '@/net'
 import { avatarSrc } from '@/data/jobs'
 import { Avatar } from './Avatar'
+import { Icon } from './Icon'
+import type { IconName } from '@/data/icons'
 
 /**
  * 商店與「我的角色」。
@@ -20,6 +23,29 @@ import { Avatar } from './Avatar'
  * 「我的角色」這一頁是**收集感的主場**：買到的排在前面、沒買到的畫成灰色剪影
  * 並標上價錢。看得到自己還缺什麼，才會想再打一關。
  */
+/**
+ * 商店那一格左上角的縮圖。
+ *
+ * **裝飾品不給圖示，給它自己**——顏色就畫那塊顏色，外框就套一張小頭像。
+ * 一個外觀品項最好的縮圖就是它自己，另外找一張圖來代表它只會對不起來
+ * （而且素材包裡根本沒有皇冠跟彩虹）。「我的角色」那一頁本來就是這樣做的。
+ */
+function thumb(i: ItemDef) {
+  if (i.slot === 'color') {
+    const c = COLORS.find((x) => x.id === i.id)
+    return <span className="sw" style={{ background: c?.swatch }} />
+  }
+  if (i.slot === 'frame') {
+    const f = FRAMES.find((x) => x.id === i.id)
+    return (
+      <span className={'mugbox ' + (f?.className ?? '')} style={{ width: 22, height: 22 }}>
+        {f?.badge && <i className="mugbadge" style={{ fontSize: 9 }}>{f.badge}</i>}
+      </span>
+    )
+  }
+  return <Icon name={i.icon as IconName} size={20} />
+}
+
 export function Shop({
   character, onChanged, onBack,
 }: {
@@ -70,7 +96,7 @@ export function Shop({
         <Avatar character={character} />
         <span className="who">{JOB_NAME[character.job]}　Lv.{level}</span>
         <span className="spacer" />
-        <span className="coins">🪙 {character.coins}</span>
+        <span className="coins"><Icon name="coin" size={15} /> {character.coins}</span>
         <button className="btn ghost small" onClick={onBack}>回去</button>
       </div>
 
@@ -99,14 +125,22 @@ export function Shop({
                     const poor = character.coins < i.price
                     return (
                       <div className={'item' + (locked ? ' locked' : '')} key={i.id}>
-                        <span className="i-name">{i.icon} {i.name}</span>
+                        <span className="i-name">{thumb(i)} {i.name}</span>
                         <span className="i-desc">{i.desc}</span>
+                        {i.modes && (
+                          <span className="i-modes">
+                            {i.modes.map((m) => <em key={m}>{MODE_LABEL[m]}</em>)}
+                            都用得到
+                          </span>
+                        )}
                         {owned && i.kind === 'cosmetic'
                           ? <span className="i-tag">已經有了，去「我的角色」換上</span>
                           : <span className="i-tag">{owned ? `已有 ${count(character, i.id)} 個` : ''}</span>}
                         <button className="btn small" disabled={busy || locked || (owned && i.kind === 'cosmetic')}
                           onClick={() => void buy(i.id, i.name)}>
-                          {locked ? `${i.unlockLevel} 級解鎖` : owned && i.kind === 'cosmetic' ? '已擁有' : `🪙 ${i.price}`}
+                          {locked ? `${i.unlockLevel} 級解鎖`
+                            : owned && i.kind === 'cosmetic' ? '已擁有'
+                              : <><Icon name="coin" size={13} /> {i.price}</>}
                         </button>
                         {!locked && poor && !owned && <span className="i-poor">還差 {i.price - character.coins}</span>}
                       </div>
@@ -142,7 +176,7 @@ export function Shop({
                     : wornColor.id && wear(wornColor.id, false, wornColor.name))}>
                   <span className="sw" style={{ background: c.swatch }} />
                   {c.name}
-                  {!owned && <small>🪙 {price}</small>}
+                  {!owned && <small><Icon name="coin" size={12} /> {price}</small>}
                 </button>
               )
             })}
@@ -164,7 +198,7 @@ export function Shop({
                     {f.badge && <i className="mugbadge" style={{ fontSize: 11 }}>{f.badge}</i>}
                   </span>
                   {f.name}
-                  {!owned && <small>🪙 {price}</small>}
+                  {!owned && <small><Icon name="coin" size={12} /> {price}</small>}
                 </button>
               )
             })}
@@ -174,7 +208,8 @@ export function Shop({
           <div className="picks">
             {ITEMS.filter((i) => i.kind === 'consumable').map((i) => (
               <span key={i.id} className={'pick' + (has(i.id) ? '' : ' locked')}>
-                {i.icon} {i.name}<small>{has(i.id) ? `×${count(character, i.id)}` : '沒有'}</small>
+                <Icon name={i.icon as IconName} size={20} /> {i.name}
+                <small>{has(i.id) ? `×${count(character, i.id)}` : '沒有'}</small>
               </span>
             ))}
           </div>

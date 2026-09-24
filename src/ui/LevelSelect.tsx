@@ -5,6 +5,7 @@ import type { Character, LevelData, LevelProgress, Student } from '@/core/types'
 import { JOB_NAME } from '@/core/character'
 import type { RoomBrief } from '@/net'
 import { Avatar } from './Avatar'
+import { Icon } from './Icon'
 
 export function LevelSelect({
   student, character, progress, teacherOpen, rooms,
@@ -37,7 +38,7 @@ export function LevelSelect({
         <span className="who">{student.nickname}</span>
         <span className="stat">{JOB_NAME[character.job]}　Lv.{lv}　{into}/{need} exp</span>
         <span className="spacer" />
-        <span className="stat">🪙 {character.coins}</span>
+        <span className="stat"><Icon name="coin" size={15} /> {character.coins}</span>
         <button className="btn ghost" onClick={onVersus}>對戰</button>
         <button className="btn ghost" onClick={onRooms}>一起玩</button>
         <button className="btn ghost" onClick={onBoard}>排行榜</button>

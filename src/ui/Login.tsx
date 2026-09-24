@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Icon } from './Icon'
 
 /**
  * 學生的登入與註冊。**不收真實姓名、不收 email**——使用者是國小學生。
@@ -62,7 +63,7 @@ export function Login({
 
   return (
     <div className="screen">
-      <h1>🏰 單字守塔</h1>
+      <h1><Icon name="castle" size={30} alt="" /> 單字守塔</h1>
 
       <div className="tabs">
         <button className={tab === 'login' ? 'on' : ''}

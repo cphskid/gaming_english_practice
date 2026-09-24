@@ -1,4 +1,5 @@
 import type { SessionResult } from '@/core/session'
+import { Icon } from './Icon'
 
 export function Result({
   result, bonus, onRetry, onBack,
@@ -28,10 +29,10 @@ export function Result({
         <div className="rows">
           <div className="row"><span>答對</span><b>{me?.correct ?? 0} / {me?.asked ?? 0} 題（{acc}%）</b></div>
           <div className="row"><span>最長連擊</span><b>{me?.bestCombo ?? 0}</b></div>
-          <div className="row"><span>獲得銅幣</span><b>🪙 {bonus.coins}</b></div>
+          <div className="row"><span>獲得銅幣</span><b><Icon name="coin" size={15} /> {bonus.coins}</b></div>
           <div className="row"><span>獲得經驗</span><b>{bonus.exp} exp</b></div>
           {result.bonusCoins > 0 && (
-            <div className="row"><span>首次通關獎勵</span><b>🪙 {result.bonusCoins}</b></div>
+            <div className="row"><span>首次通關獎勵</span><b><Icon name="coin" size={15} /> {result.bonusCoins}</b></div>
           )}
         </div>
         <div style={{ display: 'flex', gap: 10 }}>

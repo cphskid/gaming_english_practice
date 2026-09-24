@@ -1,4 +1,7 @@
-import type { ItemDef } from '@/core/inventory'
+import type { ItemDef, ItemMode } from '@/core/inventory'
+
+/** 守塔和對戰都吃得下的道具。三個消耗品現在都是。 */
+const BOTH: ItemMode[] = ['tower-defense', 'tug-of-war']
 
 /**
  * 裝飾品純外觀不給數值，道具才有效果——不然付費就是變強。
@@ -12,24 +15,37 @@ import type { ItemDef } from '@/core/inventory'
  * **顏色**會換掉整個戰場的陣營色，**外框**套在頭像外面。一個欄位只能穿一件，
  * 這條規則由資料庫執行，前端只是顯示。
  *
+ * **每個道具都要寫 `modes`**：道具的效果是各遊戲各自實作的，沒實作就不能列出來。
+ * 2026-09-21 之前兵推沒有實作任何道具，但道具列照樣長出來，按下去完全沒反應——
+ * 這個欄位就是為了不再發生那件事。只有某個遊戲吃得下的道具就只填那一個遊戲。
+ *
  * 價格與解鎖等級這裡寫的只是顯示用，**真正算數的是資料庫的 shop_items**
  * （seed.sql 由 tools/gen-shop-seed.mjs 從這份產生）。
  */
 export const ITEMS: ItemDef[] = [
-  // 道具：效果只活在這一場戰鬥裡
-  { id: 'slow-30', name: '寒霜陷阱', icon: '🧊', desc: '15 秒內怪全部慢下來', price: 60, kind: 'consumable', unlockLevel: 1 },
-  { id: 'heal-5', name: '城牆修補', icon: '🧱', desc: '城堡回復 5 點血', price: 80, kind: 'consumable', unlockLevel: 2 },
-  { id: 'crystal-40', name: '水晶補給', icon: '💎', desc: '戰場上馬上多 40 顆水晶', price: 120, kind: 'consumable', unlockLevel: 3 },
+  // 道具：效果只活在這一場戰鬥裡。三個在守塔和對戰都做得出來，
+  // 但**效果不一樣**，因為兩個遊戲的戰場不一樣（各自的實作在兩支 engine.ts 的 useItem）。
+  { id: 'slow-30', name: '寒霜陷阱', icon: 'frost', modes: BOTH,
+    desc: '守塔：地面結霜 15 秒，怪剩三成速度。對戰：對方全軍凍住 8 秒',
+    price: 60, kind: 'consumable', unlockLevel: 1 },
+  { id: 'heal-5', name: '城牆修補', icon: 'repair', modes: BOTH,
+    desc: '守塔：城堡回 5 點血。對戰：城堡回 15 點血',
+    price: 80, kind: 'consumable', unlockLevel: 2 },
+  { id: 'crystal-40', name: '水晶補給', icon: 'crystal', modes: BOTH,
+    desc: '兩邊都是馬上多 40 顆水晶。守塔夠多蓋一座塔，對戰夠升一階',
+    price: 120, kind: 'consumable', unlockLevel: 3 },
 
-  // 陣營顏色：城堡、箭塔、軍營、士兵整套變色
-  { id: 'color-red', name: '紅軍', icon: '🟥', desc: '城堡、塔、士兵全部變紅色', price: 150, kind: 'cosmetic', slot: 'color', unlockLevel: 1 },
-  { id: 'color-yellow', name: '黃軍', icon: '🟨', desc: '城堡、塔、士兵全部變黃色', price: 150, kind: 'cosmetic', slot: 'color', unlockLevel: 2 },
-  { id: 'color-purple', name: '紫軍', icon: '🟪', desc: '城堡、塔、士兵全部變紫色', price: 220, kind: 'cosmetic', slot: 'color', unlockLevel: 4 },
-  { id: 'color-black', name: '黑軍', icon: '⬛', desc: '城堡、塔、士兵全部變黑色', price: 300, kind: 'cosmetic', slot: 'color', unlockLevel: 6 },
+  // 陣營顏色：城堡、塔、士兵整套變色。
+  // **裝飾品沒有 icon**——商店直接畫色塊、外框直接套一張小頭像給你看，
+  // 一個外觀品項最好的縮圖就是它自己。見 Shop.tsx。
+  { id: 'color-red', name: '紅軍', icon: '', desc: '城堡、塔、士兵全部變紅色', price: 150, kind: 'cosmetic', slot: 'color', unlockLevel: 1 },
+  { id: 'color-yellow', name: '黃軍', icon: '', desc: '城堡、塔、士兵全部變黃色', price: 150, kind: 'cosmetic', slot: 'color', unlockLevel: 2 },
+  { id: 'color-purple', name: '紫軍', icon: '', desc: '城堡、塔、士兵全部變紫色', price: 220, kind: 'cosmetic', slot: 'color', unlockLevel: 4 },
+  { id: 'color-black', name: '黑軍', icon: '', desc: '城堡、塔、士兵全部變黑色', price: 300, kind: 'cosmetic', slot: 'color', unlockLevel: 6 },
 
   // 頭像外框：排行榜和上面那一條都看得到
-  { id: 'frame-gold', name: '金邊框', icon: '🖼️', desc: '頭像加一圈金邊', price: 120, kind: 'cosmetic', slot: 'frame', unlockLevel: 1 },
-  { id: 'frame-ribbon', name: '緞帶框', icon: '🎗️', desc: '頭像下面掛一條緞帶', price: 180, kind: 'cosmetic', slot: 'frame', unlockLevel: 3 },
-  { id: 'frame-crown', name: '皇冠框', icon: '👑', desc: '金框加一頂小皇冠', price: 260, kind: 'cosmetic', slot: 'frame', unlockLevel: 5 },
-  { id: 'frame-rainbow', name: '彩虹框', icon: '🌈', desc: '會跑的彩虹邊，最難買到的那個', price: 400, kind: 'cosmetic', slot: 'frame', unlockLevel: 7 },
+  { id: 'frame-gold', name: '金邊框', icon: '', desc: '頭像加一圈金邊', price: 120, kind: 'cosmetic', slot: 'frame', unlockLevel: 1 },
+  { id: 'frame-ribbon', name: '緞帶框', icon: '', desc: '頭像下面掛一條緞帶', price: 180, kind: 'cosmetic', slot: 'frame', unlockLevel: 3 },
+  { id: 'frame-crown', name: '皇冠框', icon: '', desc: '金框加一頂小皇冠', price: 260, kind: 'cosmetic', slot: 'frame', unlockLevel: 5 },
+  { id: 'frame-rainbow', name: '彩虹框', icon: '', desc: '會跑的彩虹邊，最難買到的那個', price: 400, kind: 'cosmetic', slot: 'frame', unlockLevel: 7 },
 ]
