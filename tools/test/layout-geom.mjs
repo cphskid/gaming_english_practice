@@ -111,6 +111,43 @@ function inPlateau(p, pl) {
     && p.y >= pl.r0 * TILE && p.y <= (pl.r1 + 1) * TILE
 }
 
+/** 城堡圖寬 150（engine.ts drawCastle），塔位蓋在上面會把城堡遮住 */
+const CASTLE_HALF_W = 90
+
+/**
+ * 死角：這段路就算八個塔位全蓋箭塔，也沒有一座打得到。
+ *
+ * 2026-09-24 Chuck 回報第 7 關城堡前最後一段怎麼樣都蓋不到。原因是最右邊的塔位
+ * 在 x=590，射程只到 760，後面 240px 怪可以大搖大擺走進城堡，點對了也只跳
+ * 「沒有塔打得到」。那時一查，十四張裡有十二張有同樣的洞，大多在城堡前。
+ *
+ * 判定跟 engine.ts 的 volley 同一套（塔心 y-20、怪 y-22）。例外只有剛進畫面那一段
+ * （x < ENTRY_GRACE），開場的怪本來就要走一下才進火網，不算洞。
+ * 比 DEAD_MAX 短的縫是取樣邊界，不到 0.2 秒，不算。
+ */
+const DEAD_MAX = 20
+const ENTRY_GRACE = 150
+
+function deadRuns(pts, slots) {
+  const range = TOWERS.archery.range
+  const covered = (p) => slots.some((s) => Math.hypot(s.x - p.x, s.y - 20 - (p.y - 22)) <= range)
+  const total = pathLength(pts)
+  const runs = []
+  let run = null
+  for (let d = 0; d <= total; d += 4) {
+    const p = pointAtDist(pts, d)
+    if (p.x < 0) continue
+    if (!covered(p)) {
+      if (!run) run = { a: p, da: d }
+      run.b = p; run.db = d
+    } else if (run) { runs.push(run); run = null }
+  }
+  if (run) { run.toCastle = true; runs.push(run) }
+  return runs
+    .map((r) => ({ ...r, len: r.db - r.da }))
+    .filter((r) => r.len >= DEAD_MAX && r.a.x >= ENTRY_GRACE)
+}
+
 let bad = 0
 const fail = (name, m) => { console.error(`  ✗ [${name}] ${m}`); bad++ }
 
@@ -151,6 +188,18 @@ for (const [name, L] of Object.entries(LAYOUTS)) {
 
   for (const d of L.decor) {
     if (distToAnyPath(d, L) < DECOR_CLEAR) fail(name, `裝飾物 ${d.k} 長在路上（${d.x},${d.y}）`)
+  }
+
+  for (const [i, s] of L.slots.entries()) {
+    if (Math.abs(s.x - L.castle.x) < CASTLE_HALF_W && s.y > L.castle.y - 140 && s.y < L.castle.y + 50)
+      fail(name, `第 ${i + 1} 個塔位蓋在城堡上（${s.x},${s.y}）`)
+  }
+
+  for (const [i, pts] of L.paths.entries()) {
+    for (const r of deadRuns(pts, L.slots)) {
+      fail(name, `第 ${i + 1} 條路有 ${Math.round(r.len)}px 是任何塔位都打不到的`
+        + `（${Math.round(r.a.x)},${Math.round(r.a.y)} → ${Math.round(r.b.x)},${Math.round(r.b.y)}${r.toCastle ? '，一路到城堡' : ''}）`)
+    }
   }
 }
 
