@@ -63,7 +63,7 @@ try {
     await page.getByRole('button', { name: '商店' }).click()
     await page.waitForSelector('.items .item')
     const before = Number((await page.locator('.coins').innerText()).replace(/\D/g, ''))
-    await page.locator('.item', { hasText: '寒霜陷阱' }).locator('button').click()
+    await page.locator('.item', { hasText: '寒霜陷阱' }).locator('button.btn').click()
     await page.waitForSelector('.note, .error')
     const after = Number((await page.locator('.coins').innerText()).replace(/\D/g, ''))
     before - after === 60 ? ok(`買到了，金幣 ${before} → ${after}（價錢是資料庫算的）`)
@@ -72,7 +72,7 @@ try {
     // 這支腳本會對同一個帳號重跑，而裝飾品買過就買不了第二次（按鈕會變成「已擁有」）。
     // 所以已經有的就跳過，不然第二次跑一定卡在這裡。
     const buyOnce = async (name) => {
-      const btn = page.locator('.item', { hasText: name }).locator('button')
+      const btn = page.locator('.item', { hasText: name }).locator('button.btn')
       if (await btn.isDisabled()) { ok(name + ' 之前就買過了，跳過'); return }
       await btn.click()
       await page.waitForSelector('.note, .error')
@@ -80,7 +80,7 @@ try {
     await buyOnce('金邊框')
     await buyOnce('紅軍')
 
-    await page.getByRole('button', { name: '我的角色' }).click()
+    await page.locator('.item', { hasText: '金邊框' }).locator('.i-go').click()
     await page.waitForSelector('.hero')
     await page.locator('.pick', { hasText: '金邊框' }).click()
     // 正式站是真的連線，按下去到畫面更新中間隔一趟往返，等結果出現再看

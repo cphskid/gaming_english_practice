@@ -9,7 +9,7 @@ import { Icon } from './Icon'
 
 export function LevelSelect({
   student, character, progress, teacherOpen, rooms,
-  onPlay, onRoom, onRooms, onVersus, onSettings, onShop, onBoard, onProfile,
+  onPlay, onRoom, onRooms, onVersus, onSettings, onShop, onCharacter, onBoard, onProfile,
 }: {
   student: Student
   character: Character
@@ -24,6 +24,7 @@ export function LevelSelect({
   onRooms: () => void
   onSettings: () => void
   onShop: () => void
+  onCharacter: () => void
   onBoard: () => void
   onVersus: () => void
   /** 我的徽章牆 */
@@ -45,6 +46,7 @@ export function LevelSelect({
         <button className="btn ghost" onClick={onRooms}>一起玩</button>
         <button className="btn ghost" onClick={onBoard}>排行榜</button>
         <button className="btn ghost" onClick={onProfile}>徽章</button>
+        <button className="btn ghost" onClick={onCharacter}>我的角色</button>
         <button className="btn ghost" onClick={onShop}>商店</button>
         <button className="btn ghost" onClick={onSettings}>設定</button>
       </div>
