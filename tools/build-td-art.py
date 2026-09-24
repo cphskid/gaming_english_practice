@@ -6,6 +6,7 @@
 
     python3 tools/build-td-art.py
 """
+import glob
 from PIL import Image
 import json, os
 
@@ -275,6 +276,113 @@ def legions():
     win = D.crop((64, 96, 128, 160))
     win = win.crop(win.getbbox())
     put('pig_window', win.resize((win.width * 2, win.height * 2), Image.NEAREST))
+
+
+    # ---- 第二批（2026-09-24 Chuck：「免費版的先上架」）。四套都是可以放公開 repo 的授權，
+    # 來源與三條線怎麼對見各自資料夾的 README。一律縮到跟王國軍差不多高（26~31 像素），
+    # 傳說級也不放大——體型大會讓小朋友以為比較強，軍團只換外觀。
+    def pngs(path, i=0):
+        """一張 PNG 一幀的資料夾裡第 i 幀（檔名是 1.png、2.png…，照數字排）。"""
+        fs = sorted(glob.glob(path), key=lambda f: int(''.join(c for c in os.path.basename(f) if c.isdigit()) or 0))
+        return Image.open(fs[i]).convert('RGBA')
+
+    # Pixel Frog 的敵人大多面向左（朝著玩家），我方要面向右，所以翻過來。
+    # 例外是大塊頭：丟炸彈那幾幀是朝右丟的。
+    flip = lambda im: im.transpose(Image.FLIP_LEFT_RIGHT)
+
+    def soldier(key, im, scale, nearest=False, flip=False):
+        """守塔的軍營士兵：64 方框、腳底在 48 那一列（跟王國軍的 warrior 一樣）。"""
+        im = im.crop(im.getbbox())
+        w, h = max(1, round(im.width * scale)), max(1, round(im.height * scale))
+        if nearest:
+            im = im.resize((im.width * 4, im.height * 4), Image.NEAREST)
+        im = im.resize((w, h), Image.LANCZOS)
+        if flip:
+            im = im.transpose(Image.FLIP_LEFT_RIGHT)
+        s = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
+        s.paste(im, (34 - w // 2, 48 - h), im)
+        put(key, s)
+
+    def hall(prefix, sheet, cell, wall, floor, under, window):
+        """側視船艙當兵推戰場（引擎的 buildCastleHall 照前綴拿這四張）。"""
+        T = Image.open(sheet).convert('RGBA')
+        k = 64 // cell
+        tile = lambda c, r: T.crop((c * cell, r * cell, c * cell + cell, r * cell + cell)).resize((64, 64), Image.NEAREST)
+        put(prefix + 'wall', tile(*wall))
+        put(prefix + 'floor', tile(*floor))
+        put(prefix + 'under', tile(*under))
+        win = window.crop(window.getbbox())
+        put(prefix + 'window', win.resize((win.width * k, win.height * k), Image.NEAREST))
+
+    # ---- 炸彈海盜（普通級）。Pirate Bomb，CC0，Kings and Pigs 同作者。一張 PNG 一幀，人約 60 像素高。
+    PB = 'assets/pirate-bomb/'
+    bald = flip(pngs(PB + '2-Enemy-Bald Pirate/1-Idle/*.png'))
+    big = pngs(PB + '4-Enemy-Big Guy/11-Throw (Bomb)/*.png', 4)   # 手伸出去那一幀
+    whale = flip(pngs(PB + '6-Enemy-Whale/1-Idle/*.png'))
+    capt = flip(pngs(PB + '5-Enemy-Captain/1-Idle/*.png'))
+    gun = flip(pngs(PB + '7-Objects/16-Enemy-Cannon/1-Idle/*.png'))
+    S = 0.47
+    #   認字 禿頭海盜；聽音 大塊頭丟炸彈 → 頂階推大砲；拼字 鯨魚 → 頂階換船長
+    put('pb_u_spear', unit_box(bald, S, False))
+    put('pb_u_bow', unit_box(big, S, False))
+    put('pb_u_bow3', unit_box(side((big, 0), (gun, 10)), S, False))
+    put('pb_u_shield', unit_box(whale, S, False))
+    put('pb_u_shield3', unit_box(capt, S, False))
+    put('pb_castle', fit_bottom(pngs(PB + '7-Objects/2-Door/1-Closed/*.png'), (160, 128), 0, 0, False, 1.2))
+    barrel = Image.open(PB + '7-Objects/12-Other Objects/Barrel.png').convert('RGBA')
+    put('pb_archery', fit_bottom(stack((barrel, 0, 0), (gun, 0, 2)), (96, 128), 92, 110))
+    soldier('pb_warrior', bald, 0.55, False)
+    hall('pb_', PB + '8-Tile-Sets/Tile-Sets (64-64).png', 64, (4, 1), (1, 0), (1, 1),
+         Image.open(PB + '7-Objects/12-Other Objects/Windows.png').convert('RGBA'))
+
+    # ---- 寶藏海盜（普通級）。Treasure Hunters，CC0，早就在 repo 裡。兵只有 23 像素高，放大 1.25 倍。
+    TH = 'assets/treasure-hunters/'
+    CREW = TH + 'The Crusty Crew/Sprites/'
+    tooth = flip(pngs(CREW + 'Fierce Tooth/01-Idle/*.png'))
+    crab = pngs(CREW + 'Crabby/01-Idle/*.png')
+    star = pngs(CREW + 'Pink Star/01-Idle/*.png')
+    clown = flip(pngs(TH + 'Captain Clown Nose/Sprites/Captain Clown Nose/Captain Clown Nose with Sword/20-Throw Sword/*.png', 1))
+    tcan = flip(pngs(TH + 'Shooter Traps/Sprites/Cannon/Cannon Idle/*.png'))
+    TS = 1.25
+    #   這包沒有現成的遠程小兵，聽音借船長丟劍，頂階推大砲；拼字 螃蟹 → 頂階換粉紅海星
+    put('th_u_spear', unit_box(tooth, TS, True))
+    put('th_u_bow', unit_box(clown, TS, True))
+    put('th_u_bow3', unit_box(side((clown, 0), (tcan, 4)), TS, True))
+    put('th_u_shield', unit_box(crab, TS, True))
+    put('th_u_shield3', unit_box(star, TS * 1.1, True))
+    put('th_castle', fit_bottom(pngs(TH + 'Pirate Ship/Sprites/Decorations/Door/Opening/*.png'), (160, 128), 0, 0, True, 2))
+    tbox = pngs(TH + 'Merchant Ship/Sprites/Box/Idle/*.png')
+    put('th_archery', fit_bottom(stack((tbox, 0, 0), (tbox, 0, 0), (tcan, 0, 0)), (96, 128), 0, 0, True, 2))
+    soldier('th_warrior', tooth, 1.4, True)
+    hall('th_', TH + 'Pirate Ship/Sprites/Tilesets/Terrain and Back Wall (32x32).png', 32, (2, 8), (2, 1), (2, 2),
+         pngs(TH + 'Pirate Ship/Sprites/Decorations/Window/Window/*.png'))
+
+    # ---- 怪物小隊（普通級）。Monsters Creatures Fantasy，CC0。橫向連續圖、一格 150×150。
+    # 沒附地形，戰場用王國軍的草地；城堡和箭塔也沿用王國軍（缺的圖引擎自己退回）。
+    MC = 'assets/monsters-creatures-fantasy/'
+    mgob = frame(MC + 'Goblin/Idle.png', 150)
+    eye = frame(MC + 'Flying eye/Flight.png', 150)
+    skel = frame(MC + 'Skeleton/Shield.png', 150, i=1)
+    mush = frame(MC + 'Mushroom/Idle.png', 150)
+    MS = 0.75
+    #   認字 哥布林；聽音 飛眼；拼字 舉盾骷髏 → 頂階換蘑菇怪
+    put('mc_u_spear', unit_box(mgob, MS))
+    put('mc_u_bow', unit_box(eye, MS))
+    put('mc_u_shield', unit_box(skel, MS * 0.9))
+    put('mc_u_shield3', unit_box(mush, MS))
+    soldier('mc_warrior', mgob, 0.95)
+
+    # ---- 元素大師（傳說級）。Elementals 免費版，CC-BY 4.0（CREDITS.md 已署名 chierit）。
+    # 一格 288×128、人約 44 像素高，兩邊留白是給攻擊特效的。免費版沒有變身，頂階先不換圖。
+    EL = 'assets/elementals/'
+    fire = pngs(EL + 'fire-knight/01_idle/*.png')
+    leaf = pngs(EL + 'leaf-ranger/idle/*.png')
+    crys = pngs(EL + 'crystal-mauler/idle/*.png')
+    ES = 0.65
+    put('el_u_spear', unit_box(fire, ES))
+    put('el_u_bow', unit_box(leaf, ES))
+    put('el_u_shield', unit_box(crys, ES * 1.05))
+    soldier('el_warrior', fire, 0.72)
 
 
 if __name__ == '__main__':

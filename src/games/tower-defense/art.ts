@@ -27,6 +27,9 @@ export const TERRAIN_KEYS = [
   'water', 'tiles', 'rock1', 'rock2', 'rock3', 'rock4', 'tree1', 'tree2',
   // 豬軍團兵推戰場的城堡室內（見 tug-of-war/engine.ts 的 buildCastleHall）
   'pig_wall', 'pig_floor', 'pig_under', 'pig_window',
+  // 炸彈海盜、寶藏海盜的船艙（同一個 buildCastleHall，照前綴拿）
+  'pb_wall', 'pb_floor', 'pb_under', 'pb_window',
+  'th_wall', 'th_floor', 'th_under', 'th_window',
 ]
 
 const listeners = new Set<(key: string) => void>()

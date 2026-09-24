@@ -322,6 +322,10 @@ insert into public.shop_items (id, price, kind, slot, unlock_level, achievement_
   ('color-black', 1, 'cosmetic', 'color', 1, false, true, null),
   ('legion-goblin', 300, 'cosmetic', 'legion', 3, false, false, null),
   ('legion-pig', 600, 'cosmetic', 'legion', 6, false, false, 'top-tier'),
+  ('legion-pirate-bomb', 300, 'cosmetic', 'legion', 3, false, false, null),
+  ('legion-treasure', 300, 'cosmetic', 'legion', 3, false, false, null),
+  ('legion-monsters', 300, 'cosmetic', 'legion', 3, false, false, null),
+  ('legion-elementals', 1000, 'cosmetic', 'legion', 10, false, false, null),
   ('frame-gold', 120, 'cosmetic', 'frame', 1, false, false, null),
   ('frame-ribbon', 180, 'cosmetic', 'frame', 3, false, false, null),
   ('frame-crown', 260, 'cosmetic', 'frame', 5, false, false, null),
@@ -339,7 +343,7 @@ on conflict (id) do update
 
 -- 商店只認這份清單。舊品項留在資料庫裡會變成「買得到但畫面上沒有」的鬼品項，
 -- 所以不在清單裡的一律刪掉。
-delete from public.shop_items where id not in ('slow-30', 'heal-5', 'crystal-40', 'color-red', 'color-yellow', 'color-purple', 'color-black', 'legion-goblin', 'legion-pig', 'frame-gold', 'frame-ribbon', 'frame-crown', 'frame-rainbow', 'frame-laurel', 'frame-wave', 'frame-flame', 'frame-banner', 'frame-stardust', 'frame-calendar');
+delete from public.shop_items where id not in ('slow-30', 'heal-5', 'crystal-40', 'color-red', 'color-yellow', 'color-purple', 'color-black', 'legion-goblin', 'legion-pig', 'legion-pirate-bomb', 'legion-treasure', 'legion-monsters', 'legion-elementals', 'frame-gold', 'frame-ribbon', 'frame-crown', 'frame-rainbow', 'frame-laurel', 'frame-wave', 'frame-flame', 'frame-banner', 'frame-stardust', 'frame-calendar');
 
 
 -- 成就目錄。**這一段是 tools/gen-achievements-seed.mjs 從 src/data/achievements.ts

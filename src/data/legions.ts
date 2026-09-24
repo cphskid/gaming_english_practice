@@ -42,7 +42,7 @@ export const TIERS: Record<LegionTier, TierDef> = {
   common: { name: '普通', unlockLevel: 3, price: 300, tint: '#5d9a4a' },
   // 稀有級綁「頂階降臨」（對戰推出過頂階兵）：豬軍團在對戰最有感，拿到的人正好最會用它
   rare: { name: '稀有', unlockLevel: 6, price: 600, needAchievement: 'top-tier', tint: '#4f7fd0' },
-  // 傳說級第一版是空的，之後擴充最帥的那一套。成就等那一套來了再挑。
+  // 傳說級先放元素大師（免費版）。要綁哪個成就還沒定，之後再挑。
   legendary: { name: '傳說', unlockLevel: 10, price: 1000, badgeLater: true, tint: '#c98a1c' },
 }
 
@@ -94,6 +94,38 @@ export const LEGIONS: LegionDef[] = [
       spell: ['u_shield', 'u_shield', 'u_shield3'],
     },
     thumb: 'pig_u_spear', roster: '豬兵／丟炸彈豬→大砲／箱中豬→豬王',
+  },
+  // ---- 第二批（2026-09-24，Chuck：「免費版的先上架」）。素材來源與授權見 assets/ 各資料夾的 README。
+  {
+    id: 'legion-pirate-bomb', name: '炸彈海盜', tier: 'common', prefix: 'pb_', usesColor: false, field: 'castle',
+    desc: '在船艙裡開打。大塊頭會丟炸彈，升到頂階推出大砲、船長親自上陣',
+    ranks: {
+      listen: ['u_bow', 'u_bow', 'u_bow3'],
+      spell: ['u_shield', 'u_shield', 'u_shield3'],
+    },
+    thumb: 'pb_u_bow', roster: '禿頭海盜／大塊頭→大砲／鯨魚→船長',
+  },
+  {
+    id: 'legion-treasure', name: '寶藏海盜', tier: 'common', prefix: 'th_', usesColor: false, field: 'castle',
+    desc: '海盜船上的怪咖船員。船長會丟劍，頂階推大砲、海星登場',
+    ranks: {
+      listen: ['u_bow', 'u_bow', 'u_bow3'],
+      spell: ['u_shield', 'u_shield', 'u_shield3'],
+    },
+    thumb: 'th_u_spear', roster: '尖牙怪／船長→大砲／螃蟹→海星',
+  },
+  {
+    id: 'legion-monsters', name: '怪物小隊', tier: 'common', prefix: 'mc_', usesColor: false, field: 'grass',
+    desc: '哥布林、飛眼、舉盾骷髏。拼字升到頂階換蘑菇怪',
+    ranks: {
+      spell: ['u_shield', 'u_shield', 'u_shield3'],
+    },
+    thumb: 'mc_u_spear', roster: '哥布林／飛眼／骷髏→蘑菇怪',
+  },
+  {
+    id: 'legion-elementals', name: '元素大師', tier: 'legendary', prefix: 'el_', usesColor: false, field: 'grass',
+    desc: '火焰騎士、森林遊俠、水晶巨鎚。畫得最細的一套',
+    thumb: 'el_u_spear', roster: '火焰騎士／森林遊俠／水晶巨鎚',
   },
 ]
 
