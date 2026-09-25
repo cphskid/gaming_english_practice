@@ -22,6 +22,15 @@
 
 `assets/elementals/` 的三位元素大師出自此系列。授權為 Creative Commons Attribution 4.0 (CC BY 4.0)，**須標註作者 chierit 並附連結**。
 
+**魔王團戰的魔王** — `public/raid/<魔王>/` 的動畫條由 `tools/build-raid-art.py` 從原始素材切出：
+
+- 寒冰守衛、惡魔史萊姆、牛頭人、深海克蘇魯 — [chierit](https://chierit.itch.io/)（Frost Guardian、Boss Demon Slime、Minotaur、Cthulu）。授權為 Creative Commons Attribution 4.0 (CC BY 4.0)，**須標註作者 chierit 並附連結**。
+- 邪惡巫師（三款）、火焰巨蟲、暴君國王、寶箱怪 — [LuizMelo](https://luizmelo.itch.io/)（Evil Wizard 1/2/3、Fire Worm、Medieval King Pack、Monsters Creatures Fantasy 2）。授權為 Creative Commons Zero (CC0)，不強制標註；此處仍列出以示感謝。
+
+**魔王團戰的戰場背景** — [ansimuz](https://ansimuz.itch.io/)
+
+`public/raid/bg/` 的十張背景由 Gothicvania Cemetery／Town、Magic Cliffs、Sunnyland Forest、Warped Caves、Super Grotto Escape、Underwater Diving 等素材包合成。授權為 Creative Commons Zero (CC0)，不強制標註；此處仍列出以示感謝。
+
 **Kings and Pigs** — [Pixel Frog](https://pixelfrog-assets.itch.io/kings-and-pigs)
 
 `assets/kings-and-pigs/` 的豬兵、豬王、大砲與地形出自此素材包。授權為 Creative Commons Zero (CC0)，不強制標註；此處仍列出以示感謝。
@@ -34,9 +43,9 @@
 
 **game-icons.net 徽記** — [game-icons.net](https://game-icons.net/)
 
-授權為 [Creative Commons BY 3.0](https://creativecommons.org/licenses/by/3.0/)：可自由使用、修改與再散布，**但必須署名**。`src/ui/icons.ts` 內嵌的 45 個成就徽章圖示出自此站（只取路徑資料，顏色改由畫面控制）。哪一張是誰畫的標在 `src/ui/icons.ts` 每一張上面，也可用 `tools/gen-badge-icons.py` 重新抓取。作者：
+授權為 [Creative Commons BY 3.0](https://creativecommons.org/licenses/by/3.0/)：可自由使用、修改與再散布，**但必須署名**。`src/ui/icons.ts` 內嵌的 46 個成就徽章圖示出自此站（只取路徑資料，顏色改由畫面控制）。哪一張是誰畫的標在 `src/ui/icons.ts` 每一張上面，也可用 `tools/gen-badge-icons.py` 重新抓取。作者：
 
-- **Lorc** — https://lorcblog.blogspot.com/ （27 張）
+- **Lorc** — https://lorcblog.blogspot.com/ （28 張，含魔王剋星的 crowned-skull）
 - **Delapouite** — https://delapouite.com/ （14 張）
 - **Skoll** （2 張）
 - **Carl Olsen** — https://twitter.com/unstoppableCarl （1 張）
@@ -71,3 +80,7 @@
 **Their Coming (generic horn sound)** — [StumpyStrust](https://opengameart.org/content/their-coming-generic-horn-sound)
 
 授權為 Creative Commons Zero (CC0)。對戰開場的號角 `public/audio/sfx/battle-horn.ogg`，已裁切為 3.4 秒並轉為單聲道。
+
+**Epic Boss Battle** — [Juhani Junkala](https://opengameart.org/content/boss-battle-music)
+
+授權為 Creative Commons Zero (CC0)。魔王團戰的背景音樂 `public/audio/music/boss.ogg`，已轉為單聲道 Ogg Vorbis。

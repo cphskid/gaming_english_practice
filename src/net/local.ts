@@ -457,6 +457,10 @@ export class LocalRepository implements Repository {
       room.members = [{
         studentId: me.id, nickname: me.nickname, host: true, team: null,
         avatar: c.avatar, equipped: c.equipped, finished: false, rate, familiar: familiar ?? null,
+      }, {
+        // 本地版只有一個人，補一位練習夥伴湊滿兩個人（見上面的說明）
+        studentId: 'local-buddy', nickname: '練習夥伴', host: false, team: null,
+        avatar: '', equipped: [], finished: false, rate, familiar: null,
       }]
     }
     this.putRooms(code, [...this.rooms(code).filter((r) => !me || r.hostStudent !== me.id), room])
@@ -473,10 +477,6 @@ export class LocalRepository implements Repository {
         seat: i, studentId: m.studentId, nickname: m.nickname, rate: m.rate,
         avatar: m.avatar, equipped: m.equipped,
       }))
-      if (seats.length < 2) {
-        seats.push({ seat: seats.length, studentId: 'local-buddy', nickname: '練習夥伴',
-          rate: seats[0]?.rate ?? 14, avatar: '', equipped: [] })
-      }
       return { ...r, status: 'playing', startedAt: Date.now(), seed: 1 + ((Math.random() * 2e9) | 0), seats }
     })
   }

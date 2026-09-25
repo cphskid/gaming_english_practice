@@ -1745,7 +1745,7 @@ create table if not exists public.room_members (
   team       text,
   -- 他這一場的 Session.id。之後要算即時分數就是拿它去 answer_events 加總。
   session_id uuid,
-  joined_at   timestamptz not null default now(),
+  joined_at   timestamptz not null default clock_timestamp(),
   -- 心跳。學生每幾秒問一次房間狀態，順手更新這一格，
   -- 關掉分頁的人就會停在那裡，別人看得出來他不在了。
   seen_at     timestamptz not null default now(),
@@ -1757,6 +1757,8 @@ create index if not exists room_members_student on public.room_members(student_i
 -- ---- 魔王團戰（2026-09-25）：房間改成打魔王，舊的「一起打同一關」拿掉 --------------
 -- 見下面「魔王團戰」那一段的說明。欄位放在這裡是因為下面房間的函式就會用到。
 alter table public.rooms alter column level_id drop not null;
+-- 誰先進來誰坐 0 號。now() 在同一筆交易裡都一樣，排不出先後，改用真的時間。
+alter table public.room_members alter column joined_at set default clock_timestamp();
 alter table public.rooms drop constraint if exists rooms_mode_check;
 alter table public.rooms add constraint rooms_mode_check
   check (mode in ('solo', 'versus', 'team', 'raid'));
