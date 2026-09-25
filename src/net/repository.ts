@@ -310,6 +310,8 @@ export interface RoomBrief {
   mine: boolean
   /** 現在有幾個人在線上 */
   here: number
+  /** 裡面有幾位還沒跟我一起打完過團戰（「新隊友」）。本地版沒有。 */
+  fresh?: number
 }
 
 /** 現在這一場。房間只管「誰在、什麼時候一起開始」，分數不存在這裡。 */
@@ -352,6 +354,8 @@ export interface RoomMember {
   rate: number
   /** 這隻魔王的字他認得幾成（0~1），沒回報是 null */
   familiar: number | null
+  /** 還沒跟我一起打完過團戰（「新隊友」）。本地版沒有。 */
+  fresh?: boolean
 }
 
 export interface RaidSeat {
@@ -492,6 +496,8 @@ export interface LivePerson {
   avatar: string
   /** 正在跟別人打 */
   busy?: boolean
+  /** 還沒跟我真人對戰過。本地版沒有。 */
+  fresh?: boolean
 }
 
 export interface LiveLobby {

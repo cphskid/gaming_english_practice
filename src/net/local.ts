@@ -22,7 +22,7 @@ import { evaluateAchievements, tierOf, type AchValue, type VersusRecord } from '
 
 /** 本地版存的徽章。舊資料沒有 tier，當成 1。 */
 interface LocalAch { id: string; at: number; tier?: number; tierAt?: number }
-import { ACHIEVEMENTS, ACH_BY_ID } from '@/data/achievements'
+import { ACHIEVEMENTS, ACH_BY_ID, CATEGORIES } from '@/data/achievements'
 
 /** 本地版的真人對戰「伺服器」（見 livePoll） */
 interface LocalLiveLobby {
@@ -719,6 +719,8 @@ export class LocalRepository implements Repository {
       matches: read<VersusRecord[]>(k.matches(id), []),
       itemUses: read<{ itemId: string; sessionId: string | null }[]>(k.itemUses(id), []),
       createdAt: student?.createdAt ?? 0,
+      raidKills: read<Record<string, number>>(k.raidKills(id), {}),
+      bossCount: ITEMS.filter((x) => x.id.startsWith('frame-boss-')).length,
     })
     write(k.achProgress(id), values)
 
@@ -740,10 +742,10 @@ export class LocalRepository implements Repository {
       }
     }
 
-    // 全能生：七個大類每一類都至少一個（它自己不算）
+    // 全能生：每一個大類都至少一個（它自己不算）
     const cats = new Set(ACHIEVEMENTS.filter((a) => byId.has(a.id) && a.id !== 'all-rounder')
       .map((a) => a.category))
-    if (cats.size >= 7 && !byId.has('all-rounder')) {
+    if (cats.size >= CATEGORIES.length && !byId.has('all-rounder')) {
       byId.set('all-rounder', { id: 'all-rounder', at: now, tier: 1 })
       out.push('all-rounder')
     }
@@ -836,6 +838,8 @@ export class LocalRepository implements Repository {
       sessionId: m.sessionId,
       opponentKind: m.opponentKind,
       opponentName: m.opponentName,
+      opponentStudent: m.opponentStudent,
+      liveMatch: m.liveMatch,
       won: m.won,
       front: m.front,
       lowestFront: m.lowestFront,

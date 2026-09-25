@@ -94,7 +94,6 @@ function match(meRate, foeRate, seed, rules, flip = false) {
       }
       return
     }
-    s.crystal[side] += r.answerCrystal
     pending[side]++
     if (pending[side] >= s.tier[side]) {
       M.summon(s, side, line, s.tier[side], r)
@@ -108,7 +107,7 @@ function match(meRate, foeRate, seed, rules, flip = false) {
       .sort((a, b) => (a.x - b.x) * dir)
       .slice(0, TAPPABLE)
     const i = Math.floor(picks[side]() * TAPPABLE)
-    M.strike(s, side, units[i] ?? null, r)
+    M.answered(s, side, line, units[i] ?? null, r)
   }
   const feedMe = M.makeFeeder(me, act('me'))
   const feedFoe = M.makeFeeder(foe, act('foe'))

@@ -120,6 +120,7 @@ function MemberRow({ m, playing, canKick, onKick }: {
       <span className="nm">
         {m.nickname}{m.host && <small>　👑</small>}{m.me && <small>　（你）</small>}
         {m.familiar !== null && <small>　認得 {pct(m.familiar)}</small>}
+        {m.fresh && <small className="fresh">✨ 新隊友</small>}
       </span>
       <span className="sc"><b>{state}</b></span>
       {canKick && <button className="btn ghost small" onClick={onKick}>請離開</button>}
@@ -136,6 +137,7 @@ function RoomRow({ r, children }: { r: RoomBrief; children: React.ReactNode }) {
       <span className="nm">
         {r.locked && '🔒 '}{b?.name ?? r.bossId}
         <small>　{hostLabel(r)}　{r.members}/{MAX_PLAYERS} 人{r.status === 'playing' ? '　已開打' : ''}</small>
+        {!!r.fresh && r.status !== 'playing' && <small className="fresh">✨ {r.fresh} 位還沒一起打過的同學</small>}
       </span>
       {children}
     </div>
@@ -216,6 +218,9 @@ export function RoomList({ rooms, stat, onJoin, onOpen, onBack }: {
       {error && <p className="error">{error}</p>}
 
       <h2 className="sec">現在開著的<small>　按一下就進去</small></h2>
+      {rooms.some((r) => r.fresh) && (
+        <p className="lede left small">✨＝還沒跟你一起打完過魔王的同學。跟新隊友打完，「廣結善緣」徽章會升階。</p>
+      )}
       <div className="board">
         {rooms.length === 0 && <p className="lede">現在沒有人在揪。你可以自己開一場。</p>}
         {rooms.map((r) => (

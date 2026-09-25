@@ -414,6 +414,7 @@ export class SupabaseRepository implements Repository {
     fail('讀取場次失敗', error)
     return ((data as RoomBrief[] | null) ?? []).map((r) => ({
       ...r, here: Number(r.here), members: Number(r.members ?? 0), locked: !!r.locked,
+      fresh: Number(r.fresh ?? 0),
     }))
   }
 
@@ -437,6 +438,7 @@ export class SupabaseRepository implements Repository {
       members: (row.members ?? []).map((m) => ({
         ...m, equipped: m.equipped ?? [], rate: Number(m.rate ?? 14),
         familiar: m.familiar === null || m.familiar === undefined ? null : Number(m.familiar),
+        fresh: !!m.fresh,
       })),
       seats: (row.seats ?? []).map((s) => ({ ...s, equipped: s.equipped ?? [], rate: Number(s.rate ?? 14) })),
     }
@@ -706,14 +708,14 @@ export class SupabaseRepository implements Repository {
     fail('連不上對戰大廳', error)
     const d = (data ?? {}) as {
       match: RawLiveMatch | null; inviting: string | null
-      invites: RawPerson[] | null; online: (RawPerson & { busy?: boolean })[] | null
+      invites: RawPerson[] | null; online: (RawPerson & { busy?: boolean; fresh?: boolean })[] | null
     }
     return {
       match: d.match ? liveMatchOf(d.match) : null,
       inviting: d.inviting ?? null,
       invites: (d.invites ?? []).map((p) => ({ id: p.id, nickname: p.nickname, avatar: p.avatar ?? '' })),
       online: (d.online ?? []).map((p) => ({
-        id: p.id, nickname: p.nickname, avatar: p.avatar ?? '', busy: !!p.busy,
+        id: p.id, nickname: p.nickname, avatar: p.avatar ?? '', busy: !!p.busy, fresh: !!p.fresh,
       })),
     }
   }

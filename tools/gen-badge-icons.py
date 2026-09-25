@@ -43,7 +43,12 @@ ICONS = [
     ('comeback', 'anticlockwise-rotation', 'delapouite'),
     ('never-quit', 'muscle-up', 'lorc'),
     ('war-flag', 'flying-flag', 'lorc'),
+    ('first-live', 'sword-clash', 'lorc'),
+    ('live-mates', 'crossed-sabres', 'lorc'),
     ('raid-slayer', 'crowned-skull', 'lorc'),
+    ('raid-wins', 'shaking-hands', 'delapouite'),
+    ('big-team', 'three-friends', 'delapouite'),
+    ('raid-mates', 'meeple-group', 'delapouite'),
     ('dressed', 't-shirt', 'delapouite'),
     ('five-colors', 'palette', 'delapouite'),
     ('all-frames', 'wood-frame', 'delapouite'),
@@ -78,7 +83,7 @@ HEAD = '''/**
  * 來源：game-icons.net，**CC BY 3.0**——允許再散布（所以公開 repo 可以收），
  * 但**一定要署名**：每一張上面都標了作者，完整清單在 CREDITS.md。
  *
- * 為什麼是內嵌的路徑資料不是 .svg 檔：四十六張各一到五 KB，內嵌省掉四十二個
+ * 為什麼是內嵌的路徑資料不是 .svg 檔：五十一張各一到五 KB，內嵌省掉五十一個
  * 檔案請求；而且徽章要跟著文字一起變色（拿到的畫白色、沒拿到畫灰色），
  * 用 <img> 就染不了色，一定要是行內的 <svg>。
  *

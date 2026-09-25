@@ -43,10 +43,10 @@
 
 **game-icons.net 徽記** — [game-icons.net](https://game-icons.net/)
 
-授權為 [Creative Commons BY 3.0](https://creativecommons.org/licenses/by/3.0/)：可自由使用、修改與再散布，**但必須署名**。`src/ui/icons.ts` 內嵌的 46 個成就徽章圖示與 2 個職業圖示（騎士的頭盔 visored-helm、法師的帽子 pointy-hat）出自此站（只取路徑資料，顏色改由畫面控制）。哪一張是誰畫的標在 `src/ui/icons.ts` 每一張上面，也可用 `tools/gen-badge-icons.py` 重新抓取。作者：
+授權為 [Creative Commons BY 3.0](https://creativecommons.org/licenses/by/3.0/)：可自由使用、修改與再散布，**但必須署名**。`src/ui/icons.ts` 內嵌的 51 個成就徽章圖示與 2 個職業圖示（騎士的頭盔 visored-helm、法師的帽子 pointy-hat）出自此站（只取路徑資料，顏色改由畫面控制）。哪一張是誰畫的標在 `src/ui/icons.ts` 每一張上面，也可用 `tools/gen-badge-icons.py` 重新抓取。作者：
 
-- **Lorc** — https://lorcblog.blogspot.com/ （30 張，含魔王剋星的 crowned-skull 與兩個職業圖示）
-- **Delapouite** — https://delapouite.com/ （14 張）
+- **Lorc** — https://lorcblog.blogspot.com/ （32 張，含魔王剋星的 crowned-skull、合作類的 sword-clash 與 crossed-sabres、兩個職業圖示）
+- **Delapouite** — https://delapouite.com/ （17 張，含合作類的 shaking-hands、three-friends、meeple-group）
 - **Skoll** （2 張）
 - **Carl Olsen** — https://twitter.com/unstoppableCarl （1 張）
 - **Caro Asercion** （1 張）

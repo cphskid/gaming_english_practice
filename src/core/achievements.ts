@@ -25,6 +25,10 @@ export interface AchInput {
   itemUses: { itemId: string; sessionId: string | null }[]
   /** 註冊時間，epoch 毫秒 */
   createdAt: number
+  /** 魔王團戰：打倒過的魔王 → 次數（本地版只有練習夥伴，沒有真的同學可以組隊） */
+  raidKills?: Record<string, number>
+  /** 魔王一共有幾隻（魔王剋星的「全部」） */
+  bossCount?: number
   /** 現在時間，測試要可以指定 */
   now?: number
 }
@@ -35,6 +39,10 @@ export interface VersusRecord {
   /** 勝場（戰旗）只認 'student'；打電腦、打分身都不算 */
   opponentKind: 'cpu' | 'ghost' | 'student'
   opponentName: string
+  /** 對手是誰（真人即時對戰、打分身時才有） */
+  opponentStudent?: string
+  /** 真人即時對戰那一場的編號 */
+  liveMatch?: string
   won: boolean
   /** 前線最後推到哪，0＝自己城牆、1＝對方城牆 */
   front: number
@@ -178,6 +186,16 @@ export function evaluateAchievements(input: AchInput): AchEval {
     i >= 2 && !byTime[i - 1].won && !byTime[i - 2].won))
   // 勝場只認同學，贏電腦不算——不然打最弱的電腦就能刷。
   put('war-flag', byTime.filter((m) => m.won && m.opponentKind === 'student').length)
+
+  // ---------------------------------------------------------------- 合作
+  // 團戰的另外兩格（四人以上、不同的人）要真的同學，本地版算不出來，只有伺服器那份。
+  const foes = new Set(byTime.filter((m) => m.opponentKind === 'student' && m.liveMatch)
+    .map((m) => m.opponentStudent ?? m.opponentName))
+  win('first-live', foes.size >= 1)
+  put('live-mates', foes.size)
+  const kills = input.raidKills ?? {}
+  put('raid-slayer', Object.values(kills).filter((n) => n > 0).length, input.bossCount ?? 0)
+  put('raid-wins', Object.values(kills).reduce((a, n) => a + n, 0))
 
   // ---------------------------------------------------------------- 收集
   const has = (id: string) => (c.items[id] ?? 0) > 0
