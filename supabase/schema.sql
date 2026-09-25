@@ -293,12 +293,16 @@ alter table public.shop_items add column if not exists achievement_only boolean 
 create table if not exists public.achievements (
   id           text primary key,
   category     text not null check (category in
-                 ('learn','skill','tower','versus','collect','habit','secret')),
+                 ('learn','skill','tower','versus','coop','collect','habit','secret')),
   ord          smallint not null default 0,
   -- 解開的外框。指到 shop_items，因為「一個欄位只能穿一件」那條規則住在那邊。
   reward_item  text references public.shop_items(id) on delete set null,
   reward_title text not null default ''
 );
+-- 2026-09-25 加「合作」類。舊資料庫的 check 是建表那時寫死的，要拆掉重上。
+alter table public.achievements drop constraint if exists achievements_category_check;
+alter table public.achievements add constraint achievements_category_check
+  check (category in ('learn','skill','tower','versus','coop','collect','habit','secret'));
 
 create table if not exists public.student_achievements (
   student_id     uuid not null references public.students(id) on delete cascade,
@@ -2101,6 +2105,26 @@ end;
 $$;
 
 -- -----------------------------------------------------------------------------
+-- 跟誰組過隊、跟誰對打過（2026-09-25，合作類成就與「新隊友」標記共用）
+--
+-- Chuck 要的是「互動覆蓋率」：大家多跟不同的人玩，不要老是同一群。
+-- 所以房間清單、等待室、對戰頁都把「還沒跟你一起打過的同學」標出來，
+-- 隨機對戰程度差不多時也先配沒打過的人。
+-- -----------------------------------------------------------------------------
+
+-- 一起打完過魔王團戰的同學：我待到最後有回報、對方沒中途離開。輸贏都算。
+-- 跟「廣結善緣」成就同一個定義，畫面上的「新隊友」跟成就才對得起來。
+create or replace function public.raid_mates_of(p_me uuid)
+returns table (student_id uuid) language sql stable security definer set search_path = public, pg_temp as $$
+  select distinct o.student_id
+    from public.raid_seats s
+    join public.raid_seats o on o.room_id = s.room_id and o.student_id <> s.student_id
+   where s.student_id = p_me and s.final is null and s.won is not null
+     and o.final is null;
+$$;
+revoke all on function public.raid_mates_of(uuid) from public, anon, authenticated;
+
+-- -----------------------------------------------------------------------------
 -- 讀狀態
 -- -----------------------------------------------------------------------------
 
@@ -2132,6 +2156,12 @@ begin
              'byTeacher', r.host_student is null,
              'mine',     exists (select 1 from public.room_members m
                                   where m.room_id = r.id and m.student_id = v_student),
+             -- 裡面有幾位還沒跟我一起打完過團戰（老師看是 0）
+             'fresh',    case when v_student is null then 0 else
+                           (select count(*) from public.room_members m
+                             where m.room_id = r.id and m.student_id <> v_student
+                               and m.student_id not in (select x.student_id from public.raid_mates_of(v_student) x))
+                         end,
              'here',     (select count(*) from public.room_members m
                            where m.room_id = r.id
                              and m.seen_at > now() - interval '30 seconds'))
@@ -2207,7 +2237,10 @@ begin
                -- 三十秒沒回報就當作人不在了。輪詢是每幾秒一次，
                -- 抓太短會讓網路頓一下的人一直閃掉。
                'here',      m.seen_at > now() - interval '30 seconds',
-               'me',        m.student_id = v_student)
+               'me',        m.student_id = v_student,
+               -- 新隊友：還沒跟我一起打完過團戰
+               'fresh',     v_student is not null and m.student_id <> v_student
+                              and m.student_id not in (select x.student_id from public.raid_mates_of(v_student) x))
              order by m.joined_at)
         from public.room_members m
         join public.students s on s.id = m.student_id
@@ -2569,10 +2602,35 @@ begin
                       where o.live_match = m.live_match and o.student_id <> m.student_id and o.won);
   v_up := array_append(v_up, public.ach_put(v_student, 'war-flag', v_n));
 
+  -- ---------------------------------------------------------------- 合作
+  -- 真人即時對戰：record_versus_match 只在「真的有那一場、我在裡面」時才記成 'student'，
+  -- 對手也是伺服器從 live_matches 讀的，所以這裡直接數就好。輸贏都算。
+  select count(distinct m.opponent_student) into v_n from public.versus_matches m
+   where m.student_id = v_student and m.opponent_kind = 'student'
+     and m.live_match is not null and m.opponent_student is not null;
+  if v_n >= 1 then v_got := array_append(v_got, 'first-live'); end if;
+  v_up := array_append(v_up, public.ach_put(v_student, 'live-mates', v_n));
+
   -- 魔王團戰：打倒過幾隻不同的魔王。「全部」＝有幾隻魔王（每隻魔王有一個外框品項）
   select count(*) into v_n from public.raid_kills k where k.student_id = v_student and k.kills > 0;
   select count(*) into v_all from public.shop_items i where i.id like 'frame-boss-%';
   v_up := array_append(v_up, public.ach_put(v_student, 'raid-slayer', v_n, v_all));
+
+  -- 團戰「打完」＝待到最後、有回報結果（won 不是 null）而且沒被判斷線（final 是 null）。
+  -- 中途離開的那場一律不算，不然進房一下就走就能刷「不同的人」。
+  -- 贏不贏看房間的 raid_won（多數人確認打倒），不看自己回報的 won。
+  select count(*), count(*) filter (where (select count(*) from public.raid_seats o
+                                             where o.room_id = s.room_id) >= 4)
+    into v_n, v_all
+    from public.raid_seats s join public.rooms r on r.id = s.room_id
+   where s.student_id = v_student and s.final is null and s.won is not null
+     and r.raid_won is true;
+  v_up := array_append(v_up, public.ach_put(v_student, 'raid-wins', v_n));
+  v_up := array_append(v_up, public.ach_put(v_student, 'big-team', v_all));
+
+  -- 跟幾位不同的同學一起打完：我打完、對方也沒中途離開。輸贏都算。
+  select count(*) into v_n from public.raid_mates_of(v_student);
+  v_up := array_append(v_up, public.ach_put(v_student, 'raid-mates', v_n));
 
   -- ---------------------------------------------------------------- 收集
   select c.items, c.jobs_cleared into v_items, v_jobs
@@ -2720,12 +2778,14 @@ begin
     return next v_new;
   end loop;
 
-  -- 全能生：七個大類每一類都至少一個（它自己不算）。要等上面寫完才數得準。
+  -- 全能生：每一個大類都至少一個（它自己不算）。要等上面寫完才數得準。
+  -- 大類幾個照目錄數（2026-09-25 從七類變八類）；已經拿到的不會被收回。
+  select count(distinct a.category) into v_all from public.achievements a;
   select count(distinct a.category) into v_n
     from public.student_achievements sa
     join public.achievements a on a.id = sa.achievement_id
    where sa.student_id = v_student and a.id <> 'all-rounder';
-  if v_n >= 7 then
+  if v_n >= v_all then
     for v_new in
       insert into public.student_achievements (student_id, achievement_id)
       select v_student, 'all-rounder'
@@ -3115,6 +3175,15 @@ alter table public.live_lobby   enable row level security;
 alter table public.live_matches enable row level security;
 
 
+-- 真人即時對戰配過的同學（配到就算，不管打完沒）。只給配對與標記用。
+create or replace function public.live_foes_of(p_me uuid)
+returns table (student_id uuid) language sql stable security definer set search_path = public, pg_temp as $$
+  select distinct case when m.p1 = p_me then m.p2 else m.p1 end
+    from public.live_matches m
+   where p_me in (m.p1, m.p2);
+$$;
+revoke all on function public.live_foes_of(uuid) from public, anon, authenticated;
+
 -- 一場配好的對戰，照「我」的角度寫出來給前端。
 create or replace function public.live_match_json(p_match uuid, p_me uuid)
 returns jsonb language sql stable security definer set search_path = public, pg_temp as $$
@@ -3177,7 +3246,10 @@ begin
       from public.live_lobby l
      where l.class_code = v_code and l.student_id <> v_me and l.seeking
        and l.match_id is null and l.seen_at > now() - interval '6 seconds'
-     order by abs(l.rate - v_rate), random()
+     -- 程度差不多（每分鐘答對差 3 題以內算同一檔）時，先配還沒對打過的同學
+     order by floor(abs(l.rate - v_rate) / 3),
+              (l.student_id in (select x.student_id from public.live_foes_of(v_me) x)),
+              abs(l.rate - v_rate), random()
      limit 1
      for update skip locked;
     if v_other is not null then
@@ -3207,10 +3279,13 @@ begin
     'online', coalesce((
       select jsonb_agg(jsonb_build_object('id', s.id, 'nickname', s.nickname,
                                           'avatar', coalesce(c.avatar, ''),
-                                          'busy', l.match_id is not null) order by s.nickname)
+                                          'busy', l.match_id is not null,
+                                          'fresh', f.student_id is null)
+                       order by (f.student_id is null) desc, s.nickname)
         from public.live_lobby l
         join public.students s on s.id = l.student_id
         left join public.characters c on c.student_id = s.id
+        left join public.live_foes_of(v_me) f on f.student_id = s.id
        where l.class_code = v_code and s.class_code = v_code and l.student_id <> v_me
          and l.seen_at > now() - interval '6 seconds'), '[]'::jsonb));
 end;

@@ -196,6 +196,7 @@ export function Versus({
                 <b>{p.nickname}</b>
                 <small className="muted">
                   {p.busy ? '正在對戰中' : waiting ? `等他回應…${left(invite!.at)}` : busyNo ? '他現在沒空' : '在線上'}
+                  {p.fresh && <span className="fresh">　✨ 還沒跟你對打過</span>}
                 </small>
               </span>
               {busyNo && g

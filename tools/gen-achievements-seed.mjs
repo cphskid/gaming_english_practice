@@ -26,7 +26,7 @@ const rows = block.split(/\n\s*\{ id: /).slice(1).map((t) => "{ id: " + t)
     rewardTier: Number(m[0].match(/rewardTier:\s*(\d+)/)?.[1] ?? 1),
   }))
 
-if (rows.length !== 46) throw new Error('成就數不是 46，是不是改了？' + rows.length)
+if (rows.length !== 51) throw new Error('成就數不是 51，是不是改了？' + rows.length)
 for (const r of rows) {
   if (r.tiers.some((x) => Number.isNaN(x))) throw new Error(r.id + ' 的門檻有看不懂的東西')
   if (r.tiers.length && r.tiers.length !== 5) throw new Error(r.id + ' 不是五階')

@@ -110,7 +110,7 @@ select test_as('b0000000-0000-0000-0000-000000000001', true);
 
 \echo '── 一題都沒答的時候'
 select test_ok((select count(*) from public.refresh_achievements()) = 0, '什麼都還沒有');
-select test_ok((select count(*) from public.my_achievements()) = 46, '牆上四十六格都回得出來');
+select test_ok((select count(*) from public.my_achievements()) = 51, '牆上五十一格都回得出來');
 select test_ok((select count(*) from public.my_achievements() where unlocked_at is not null) = 0,
                '一個都還沒解開');
 
@@ -440,29 +440,39 @@ select test_ok((select class_size from public.class_badge_counts() limit 1) = 2,
                '全班兩個人');
 select test_denied($$ select * from public.class_badge_counts('ZZZ9') $$, '看別班的徽章人數');
 
-\echo '── 全能生：七類都有才給'
+\echo '── 全能生：八類都有才給'
 -- 小就只打過對戰、答過幾題，離七類還遠。
 select test_as('b0000000-0000-0000-0000-000000000002', true);
 select test_ok((select count(distinct a.category)
                   from public.student_achievements sa
                   join public.achievements a on a.id = sa.achievement_id
                  where sa.student_id = 'b1000000-0000-0000-0000-000000000002'
-                   and a.id <> 'all-rounder') < 7,
-               '小就還沒七類都有');
+                   and a.id <> 'all-rounder') < 8,
+               '小就還沒八類都有');
 select test_ok(not test_has('b1000000-0000-0000-0000-000000000002', 'all-rounder'),
-               '沒七類就沒有全能生');
+               '沒八類就沒有全能生');
 
--- 小成一路打下來，七個大類早就各有一個了，全能生就該自己冒出來。
+-- 小成一路打下來，原本七個大類早就各有一個了；2026-09-25 多了合作類，
+-- 他還沒跟同學一起打過，所以先還沒有全能生。
 select test_as('b0000000-0000-0000-0000-000000000001', true);
+select public.refresh_achievements();
+select test_ok(not test_has('b1000000-0000-0000-0000-000000000001', 'all-rounder'),
+               '七類有了、合作類還沒有：沒有全能生');
+-- 合作類塞一個（真的團戰在後面那一段測），下一次重算就該給他。
+select test_force($$
+  insert into public.student_achievements (student_id, achievement_id)
+  values ('b1000000-0000-0000-0000-000000000001', 'first-live') on conflict do nothing
+$$);
+select public.refresh_achievements();
 select test_ok((select count(distinct a.category)
                   from public.student_achievements sa
                   join public.achievements a on a.id = sa.achievement_id
                  where sa.student_id = 'b1000000-0000-0000-0000-000000000001'
-                   and a.id <> 'all-rounder') = 7,
-               '小成七個大類都有了');
+                   and a.id <> 'all-rounder') = 8,
+               '小成八個大類都有了');
 select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'all-rounder'),
-               '七個大類都有一個就拿到全能生');
--- 每一類各塞一個給小就，湊滿七類，下一次重算就該給他。
+               '八個大類都有一個就拿到全能生');
+-- 每一類各塞一個給小就，湊滿八類，下一次重算就該給他。
 select test_force($$
   insert into public.student_achievements (student_id, achievement_id)
   select distinct on (a.category) 'b1000000-0000-0000-0000-000000000002', a.id
@@ -474,7 +484,7 @@ $$);
 select test_as('b0000000-0000-0000-0000-000000000002', true);
 select public.refresh_achievements();
 select test_ok(test_has('b1000000-0000-0000-0000-000000000002', 'all-rounder'),
-               '補到七類之後小就也拿到了');
+               '補到八類之後小就也拿到了');
 
 \echo '── 分身：存答題串、同學看得到、假的答題串不收'
 select test_as('b0000000-0000-0000-0000-000000000001', true);
@@ -609,8 +619,109 @@ select test_ok((select value from public.my_achievements() where id = 'war-flag'
                = current_setting('test.flag0')::int,
                '小成那一場也跟著作廢');
 
+\echo '── 合作：真人對戰交手'
+select test_as('b0000000-0000-0000-0000-000000000001', true);
+select public.refresh_achievements();
+select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'first-live'), '跟小就真人對戰過：初次交手');
+select test_ok((select value from public.my_achievements() where id = 'live-mates') = 1,
+               '交手：一位不同的同學（作廢的那場也算交過手，輸贏不論）');
+
+\echo '── 合作：魔王團戰'
 reset role;
 select test_force($$
+  insert into auth.users (id, email) values
+    ('b0000000-0000-0000-0000-000000000003', null), ('b0000000-0000-0000-0000-000000000004', null),
+    ('b0000000-0000-0000-0000-000000000005', null), ('b0000000-0000-0000-0000-000000000006', null);
+  insert into public.students (id, login_id, pw_hash, nickname, class_code) values
+    ('b1000000-0000-0000-0000-000000000003', 'ach_three', 'x', '小三', 'ACH1'),
+    ('b1000000-0000-0000-0000-000000000004', 'ach_four',  'x', '小四', 'ACH1'),
+    ('b1000000-0000-0000-0000-000000000005', 'ach_five',  'x', '小五', 'ACH1'),
+    ('b1000000-0000-0000-0000-000000000006', 'ach_six',   'x', '小六', 'ACH1');
+  insert into public.characters (student_id, job) select id, 'knight' from public.students
+   where id::text like 'b1000000-0000-0000-0000-00000000000_' and id::text >= 'b1000000-0000-0000-0000-000000000003';
+  insert into public.student_links (user_id, student_id) values
+    ('b0000000-0000-0000-0000-000000000006', 'b1000000-0000-0000-0000-000000000006');
+  -- 四場打完的團戰（直接塞，開房流程在 01_rls_test.sql 測過了）：
+  --   R1 五個人打贏；R2 小成跟小六打贏，但小六中途斷線；
+  --   R3 小成跟小三打輸；R4 小成自己中途離開，其他人打贏了
+  insert into public.rooms (id, class_code, level_id, mode, status, opened_by, boss_id, raid_won)
+  select v.id::uuid, 'ACH1', (select id from public.levels order by id limit 1), 'raid', 'done',
+         'b0000000-0000-0000-0000-000000000009', 'mimic', v.won
+    from (values ('d0000000-0000-0000-0000-000000000001', true),
+                 ('d0000000-0000-0000-0000-000000000002', true),
+                 ('d0000000-0000-0000-0000-000000000003', null::boolean),
+                 ('d0000000-0000-0000-0000-000000000004', true)) v(id, won);
+  insert into public.raid_seats (room_id, seat, student_id, won, final) values
+    ('d0000000-0000-0000-0000-000000000001', 0, 'b1000000-0000-0000-0000-000000000001', true, null),
+    ('d0000000-0000-0000-0000-000000000001', 1, 'b1000000-0000-0000-0000-000000000002', true, null),
+    ('d0000000-0000-0000-0000-000000000001', 2, 'b1000000-0000-0000-0000-000000000003', true, null),
+    ('d0000000-0000-0000-0000-000000000001', 3, 'b1000000-0000-0000-0000-000000000004', true, null),
+    ('d0000000-0000-0000-0000-000000000001', 4, 'b1000000-0000-0000-0000-000000000005', null, null),
+    ('d0000000-0000-0000-0000-000000000002', 0, 'b1000000-0000-0000-0000-000000000001', true, null),
+    ('d0000000-0000-0000-0000-000000000002', 1, 'b1000000-0000-0000-0000-000000000006', null, 40),
+    ('d0000000-0000-0000-0000-000000000003', 0, 'b1000000-0000-0000-0000-000000000001', false, null),
+    ('d0000000-0000-0000-0000-000000000003', 1, 'b1000000-0000-0000-0000-000000000003', false, null),
+    ('d0000000-0000-0000-0000-000000000004', 0, 'b1000000-0000-0000-0000-000000000001', null, 90),
+    ('d0000000-0000-0000-0000-000000000004', 1, 'b1000000-0000-0000-0000-000000000006', true, null),
+    ('d0000000-0000-0000-0000-000000000004', 2, 'b1000000-0000-0000-0000-000000000004', true, null),
+    ('d0000000-0000-0000-0000-000000000004', 3, 'b1000000-0000-0000-0000-000000000005', true, null);
+$$);
+set role authenticated;
+select test_as('b0000000-0000-0000-0000-000000000001', true);
+select public.refresh_achievements();
+select test_ok((select value from public.my_achievements() where id = 'raid-wins') = 2,
+               '並肩作戰：打贏兩場（打輸的、自己中途離開的不算）');
+select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'raid-wins') = 1, '並肩作戰銅階');
+select test_ok((select value from public.my_achievements() where id = 'big-team') = 1,
+               '人多力量大：五個人那場算，兩個人那場不算');
+select test_ok((select value from public.my_achievements() where id = 'raid-mates') = 4,
+               '廣結善緣：小就、小三、小四、小五；中途斷線的小六不算，自己離開那場也不算');
+select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'raid-mates') = 1, '廣結善緣銅階（三位）');
+select test_ok((select category from public.achievements where id = 'raid-slayer') = 'coop',
+               '魔王剋星搬到合作類');
+
+\echo '── 新隊友標記'
+reset role;
+select test_force($$
+  insert into public.rooms (id, class_code, level_id, mode, status, opened_by, boss_id, host_student)
+  values ('d0000000-0000-0000-0000-000000000009', 'ACH1', (select id from public.levels order by id limit 1),
+          'raid', 'lobby', 'b0000000-0000-0000-0000-000000000001', 'mimic',
+          'b1000000-0000-0000-0000-000000000001');
+  insert into public.room_members (room_id, student_id) values
+    ('d0000000-0000-0000-0000-000000000009', 'b1000000-0000-0000-0000-000000000001'),
+    ('d0000000-0000-0000-0000-000000000009', 'b1000000-0000-0000-0000-000000000002'),
+    ('d0000000-0000-0000-0000-000000000009', 'b1000000-0000-0000-0000-000000000006');
+$$);
+set role authenticated;
+select test_as('b0000000-0000-0000-0000-000000000001', true);
+select test_ok((select (r ->> 'fresh')::int from jsonb_array_elements(public.room_list()) r
+                 where r ->> 'id' = 'd0000000-0000-0000-0000-000000000009') = 1,
+               '清單上：這一場有一位新隊友（小六）');
+select test_ok((select bool_and(((m ->> 'fresh')::boolean) = (m ->> 'nickname' = '小六'))
+                  from jsonb_array_elements(public.room_state('d0000000-0000-0000-0000-000000000009') -> 'members') m),
+               '等待室：只有小六標新隊友，自己跟小就不標');
+
+\echo '── 隨機對戰：程度差不多時先配沒打過的'
+reset role;
+select test_force($$
+  delete from public.live_lobby;
+  insert into public.live_lobby (student_id, class_code, seeking, rate, seen_at) values
+    ('b1000000-0000-0000-0000-000000000002', 'ACH1', true, 14, now()),
+    ('b1000000-0000-0000-0000-000000000006', 'ACH1', true, 15, now());
+$$);
+set role authenticated;
+select test_as('b0000000-0000-0000-0000-000000000001', true);
+select test_ok((select bool_and(((p ->> 'fresh')::boolean) = (p ->> 'nickname' = '小六'))
+                  from jsonb_array_elements((public.live_poll(false, 14)) -> 'online') p),
+               '對戰頁名單：小六標「還沒對打過」，小就不標');
+select test_ok((public.live_poll(false, 14)) -> 'online' -> 0 ->> 'nickname' = '小六',
+               '還沒對打過的排前面');
+select test_ok((public.live_poll(true, 14)) -> 'match' ->> 'foe' = 'b1000000-0000-0000-0000-000000000006',
+               '小就程度一模一樣，但跟他打過了：先配小六');
+
+reset role;
+select test_force($$
+  delete from public.live_lobby;
   delete from public.students where login_id like 'ach%';
   delete from public.classes where code = 'ACH1';
   delete from public.teachers where user_id::text like 'b0000000%';

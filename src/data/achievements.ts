@@ -1,5 +1,5 @@
 /**
- * 成就：四十六格徽章，七個大類，其中二十二格分五階（2026-09-24 第二版，2026-09-25 加魔王剋星）。
+ * 成就：五十一格徽章，八個大類，其中二十六格分五階（2026-09-24 第二版，2026-09-25 加魔王剋星與合作類）。
  *
  * **三條原則**（2026-09-21 跟 Chuck 談定）：
  *
@@ -16,7 +16,7 @@
  * 「這一類最容易做壞的地方」。
  */
 
-export type AchCategory = 'learn' | 'skill' | 'tower' | 'versus' | 'collect' | 'habit' | 'secret'
+export type AchCategory = 'learn' | 'skill' | 'tower' | 'versus' | 'coop' | 'collect' | 'habit' | 'secret'
 
 export interface CategoryDef {
   key: AchCategory
@@ -36,6 +36,10 @@ export const CATEGORIES: CategoryDef[] = [
     warn: '大多數只要「做到一次」，不要求次數，不然會變成逼人重刷。' },
   { key: 'versus',  name: '對戰', hue: '#d8a331',
     warn: '綁「自己做了什麼」不綁「贏了誰」，輸的人也拿得到；打電腦不算勝場。' },
+  // 2026-09-25 Chuck 跟女兒要的：讓大家多跟不同的人玩。「全班都組過」拿掉了——
+  // 只要有一個同學從來不玩，其他人就永遠拿不到，「全班」怎麼定義都有人吃虧。
+  { key: 'coop',    name: '合作', hue: '#2f8f9d',
+    warn: '數「不同的人」要門檻低、上限不超過一班人數；中途離開的那場不算，不然進房就走可以刷人數。' },
   { key: 'collect', name: '收集', hue: '#5a6274',
     warn: '綁種類不綁金額，沒有任何一個是「賺到幾千塊」。' },
   { key: 'habit',   name: '習慣', hue: '#47895f',
@@ -174,11 +178,28 @@ export const ACHIEVEMENTS: AchDef[] = [
   { id: 'war-flag', category: 'versus', name: '戰旗',
     tiers: [5, 15, 40, 80, 150],
     desc: '贏過同學 {n} 場。', hint: '贏過同學 {n} 場（打電腦不算）', rewardItem: 'frame-banner' },
+
+  // ---------------------------------------------------------------- 合作
+  // 團戰「打完」＝待到最後有回報結果；中途斷線或按離開的那場一律不算（見 schema.sql）。
+  { id: 'first-live', category: 'coop', name: '初次交手',
+    desc: '第一次跟同學真人對戰，打完一場。', hint: '跟同學真人對戰一場（打分身、打電腦不算）' },
+  { id: 'live-mates', category: 'coop', name: '交手',
+    tiers: [3, 5, 10, 15, 20],
+    desc: '跟 {n} 位不同的同學真人對戰過。', hint: '跟 {n} 位不同的同學真人對戰，輸贏都算' },
   // 魔王團戰（2026-09-25）。數的是「幾隻不同的」不是「幾次」：同一隻打一百次不會升階，
   // 要去找別的主題的魔王——等於鼓勵把每一組主題的字都練到。
-  { id: 'raid-slayer', category: 'versus', name: '魔王剋星',
+  { id: 'raid-slayer', category: 'coop', name: '魔王剋星',
     tiers: [1, 3, 5, 8, ALL],
     desc: '跟同學組隊打倒過 {n} 隻不同的魔王。', hint: '在魔王團戰打倒 {n} 隻不同的魔王' },
+  { id: 'raid-wins', category: 'coop', name: '並肩作戰',
+    tiers: [1, 5, 15, 30, 60],
+    desc: '魔王團戰打贏 {n} 場。', hint: '魔王團戰打贏 {n} 場' },
+  { id: 'big-team', category: 'coop', name: '人多力量大',
+    tiers: [1, 3, 10, 20, 40],
+    desc: '在四個人以上的團打贏 {n} 場魔王。', hint: '揪四個人以上打贏 {n} 場魔王' },
+  { id: 'raid-mates', category: 'coop', name: '廣結善緣',
+    tiers: [3, 5, 10, 15, 20],
+    desc: '跟 {n} 位不同的同學一起打完魔王團戰。', hint: '跟 {n} 位不同的同學一起打完魔王團戰，輸贏都算' },
 
   // ---------------------------------------------------------------- 收集
   { id: 'dressed', category: 'collect', name: '換裝',
@@ -226,7 +247,7 @@ export const ACHIEVEMENTS: AchDef[] = [
   { id: 'combo-20', category: 'secret', name: '連對二十', secret: true,
     desc: '同一場裡連對二十題。' },
   { id: 'all-rounder', category: 'secret', name: '全能生', secret: true,
-    desc: '七個大類每一類都至少拿到一個徽章。', rewardTitle: '全能生' },
+    desc: '八個大類每一類都至少拿到一個徽章。', rewardTitle: '全能生' },
 ]
 
 export const ACH_BY_ID: Map<string, AchDef> = new Map(ACHIEVEMENTS.map((a) => [a.id, a]))

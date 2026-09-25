@@ -723,3 +723,7 @@ input.pin{width:7.5em;font-size:20px;letter-spacing:.3em;text-align:center;paddi
 .raidkills{display:flex;flex-direction:column;gap:8px;padding:12px 14px;width:100%;max-width:640px}
 .raidkills .row{display:flex;flex-wrap:wrap;gap:12px}
 .raidkills .one{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px}
+
+/* 新隊友／還沒對打過（2026-09-25 合作類）：鼓勵跟不同的人玩 */
+.fresh{color:#2f8f9d;font-weight:600}
+.rank .nm small.fresh{display:block;color:#2f8f9d;font-weight:600;line-height:1.3}
