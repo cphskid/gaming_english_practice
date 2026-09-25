@@ -49,16 +49,5 @@ export const JOB_BLURB: Record<Job, string> = {
   mage: '一發打一片，旁邊的怪也會受傷。怪很多的時候好用，單挑比較吃力。',
 }
 
-/** 25 張頭像，來自 Tiny Swords 素材包（免費商用，見 CREDITS.md）。 */
-export const AVATARS: string[] = Array.from(
-  { length: 25 },
-  (_, i) => 'Avatars_' + String(i + 1).padStart(2, '0'),
-)
-
-export function avatarSrc(id: string): string {
-  // 還沒創角的人也不能破圖：舊存檔的 avatar 是空字串
-  return import.meta.env.BASE_URL + 'avatars/' + (AVATARS.includes(id) ? id : DEFAULT_AVATAR) + '.png'
-}
-
-/** 沒選過的人給一張，不要讓畫面破圖。 */
-export const DEFAULT_AVATAR = AVATARS[0]
+/** 頭像搬到 data/avatars.ts 了（2026-09-25 換成職業各四張＋商店賣）。 */
+export { avatarSrc } from './avatars'

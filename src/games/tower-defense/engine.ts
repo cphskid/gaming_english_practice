@@ -5,6 +5,7 @@ import { ART, TERRAIN_KEYS, loadArt, onArt } from './art'
 import { PLATE_RULES, layoutPlates as runPlateLayout, plateY } from './plates'
 import { iconImg, iconUrl } from '@/data/icons'
 import { legionById } from '@/data/legions'
+import { createHero } from '../hero'
 
 const W = 1088
 const H = 576
@@ -202,6 +203,12 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     t: 0,
   }
 
+  /**
+   * 你本人（職業英雄）。站在城堡前面，答對時出手——**只有外觀**，傷害照舊在 volley 裡算完。
+   * 見 games/hero.ts。
+   */
+  const hero = createHero(ctx.job, layout.castle.x - 12, layout.castle.y + 52, 58, -1)
+
   /** 怪現在剩幾成速度。寒霜陷阱生效中就是三成慢。 */
   const slowFactor = () => (S.buffs.some((b) => b.id === 'slow-30') ? 0.7 : 1)
 
@@ -385,6 +392,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     }
 
     ctx.audio.play('volley')
+    hero.strike(e.x, e.y)
     const mult = 1 + FOCUS_STEP * Math.min(FOCUS_MAX, hits.length - 1)
     const total = Math.round(base * mult)
     const job = JOB_EFFECT[ctx.job] ?? JOB_EFFECT.knight
@@ -561,6 +569,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   // ---------------------------------------------------------------- 每幀
   function update(dt: number) {
     S.t += dt
+    hero.update(dt)
     if (S.cooldown > 0) S.cooldown -= dt
 
     if (S.phase === 'battle') {
@@ -761,6 +770,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     const scene: { y: number; f: () => void }[] = []
     for (const d of layout.decor) scene.push({ y: d.y, f: () => drawDecor(d) })
     scene.push({ y: layout.castle.y, f: drawCastle })
+    scene.push({ y: hero.y, f: () => hero.draw(c2d) })
     for (const t of S.towers) { const s = SLOTS[t.slot]; scene.push({ y: s.y, f: () => drawTower(t, s) }) }
     for (const t of S.towers) { const sd = t.soldier; if (sd && sd.hp > 0) scene.push({ y: sd.y, f: () => drawSoldier(sd) }) }
     for (const e of S.enemies) scene.push({ y: e.y, f: () => drawEnemy(e) })
@@ -784,6 +794,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       c2d.beginPath(); c2d.arc(r.x, r.y, r.r + (r.max - r.r) * t, 0, 7); c2d.stroke()
       c2d.globalAlpha = 1
     }
+    hero.drawFx(c2d)
     // 一次性的圖片特效。治療用的是素材包裡修士的 Heal_Effect，11 格。
     for (const f of S.fx) {
       const im = img[f.kind]

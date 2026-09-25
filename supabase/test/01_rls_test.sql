@@ -473,10 +473,25 @@ begin
               and (select equipped from public.characters where student_id = v_id) ? 'frame-gold',
               '顏色跟外框可以同時穿');
 
-  -- 頭像只認素材包裡真的有的那 25 張
-  perform public.set_avatar('Avatars_07');
-  perform test_ok((select avatar from public.characters where student_id = v_id) = 'Avatars_07', '頭像選好了');
-  perform test_denied($q$ select public.set_avatar('Avatars_99') $q$, '選不存在的頭像');
+  -- 頭像（2026-09-25）：職業送的四張直接換、別的職業的不行、商店的要先買
+  perform public.set_job('knight');
+  perform public.set_avatar('av-soldier-f');
+  perform test_ok((select avatar from public.characters where student_id = v_id) = 'av-soldier-f', '頭像選好了');
+  perform test_denied($q$ select public.set_avatar('av-magician-m') $q$, '戴別的職業送的頭像');
+  perform test_denied($q$ select public.set_avatar('av-ninja-f') $q$, '沒買就戴商店的頭像');
+  perform test_denied($q$ select public.set_avatar('Avatars_07') $q$, '舊的 Tiny Swords 頭像');
+  -- 換職業，職業送的頭像跟著換成新職業的第一張
+  perform public.set_job('mage');
+  perform test_ok((select avatar from public.characters where student_id = v_id) = 'av-magician-m', '換法師，頭像跟著換');
+  perform public.set_avatar('av-healer-f');
+  perform test_ok((select avatar from public.characters where student_id = v_id) = 'av-healer-f', '法師可以戴法師送的');
+  -- 商店頭像：買了哪個職業都能戴，換職業也不會被換掉
+  perform test_force(format('update public.characters set coins = coins + 300 where student_id = %L', v_id));
+  perform public.buy_item('av-ninja-f');
+  perform public.set_avatar('av-ninja-f');
+  perform public.set_job('knight');
+  perform test_ok((select avatar from public.characters where student_id = v_id) = 'av-ninja-f', '買來的頭像換職業也留著');
+  perform test_ok((select avatars_seen from public.characters where student_id = v_id) ? 'av-healer-f', '換過的頭像有記下來');
   perform test_denied($q$ select public.set_avatar('<script>') $q$, '頭像欄位塞奇怪的字串');
 
   -- 背包也不能直接改

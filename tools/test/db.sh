@@ -57,5 +57,26 @@ echo "── 成就"
   | grep -E "✓|✗|ERROR|──|全部通過" | sed 's/^psql:[^ ]* NOTICE:  //'
 
 echo
+echo "── 舊頭像搬家（Tiny Swords 的 Avatars_XX → 職業送的第一張）"
+# 做兩個戴舊頭像的角色（騎士、法師各一），再跑一次 schema.sql 就該被搬走
+run -c "insert into public.students (id, login_id, pw_hash, nickname) values
+  ('c1000000-0000-0000-0000-000000000001', 'old_av_one', 'x', '舊頭像騎士'),
+  ('c1000000-0000-0000-0000-000000000002', 'old_av_two', 'x', '舊頭像法師') on conflict do nothing"
+run -c "insert into public.characters (student_id, job, avatar) values
+  ('c1000000-0000-0000-0000-000000000001', 'knight', 'Avatars_12'),
+  ('c1000000-0000-0000-0000-000000000002', 'mage', 'Avatars_03') on conflict (student_id) do update set avatar = excluded.avatar"
+before=$(run -tA -c "select count(*) from public.characters where avatar like 'Avatars\_%'")
+run -f "$ROOT/supabase/schema.sql" >/dev/null 2>&1
+after=$(run -tA -c "select count(*) from public.characters where avatar like 'Avatars\_%'")
+bad=$(run -tA -c "select count(*) from public.characters where avatar <> '' and avatar not like 'av-%'")
+moved=$(run -tA -c "select string_agg(avatar, ',' order by student_id) from public.characters where student_id::text like 'c1000000%'")
+[ "$moved" = "av-warrior-m,av-magician-m" ] || bad="$bad（搬成 $moved）"
+if [ "$before" -gt 0 ] && [ "$after" = 0 ] && [ "$bad" = 0 ]; then
+  echo "  ✓ $before 個舊頭像都搬走了"
+else
+  echo "  ✗ 舊頭像沒搬乾淨（搬之前 $before、之後 $after、其他怪值 $bad）"; exit 1
+fi
+
+echo
 echo "── 金幣算式對帳（前端 economy.ts vs 後端 coin_value）"
 cd "$ROOT" && PGSOCK="$SOCK" PSQL="$PGBIN/psql" node tools/test/economy-parity.mjs

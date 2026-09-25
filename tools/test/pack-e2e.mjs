@@ -39,7 +39,7 @@ try {
   await page.waitForSelector('.jobs .job', { timeout: 10000 })
   ok('註冊完直接被帶到創角')
   await page.locator('.jobs .job').nth(1).click()          // 法師
-  await page.locator('.avatars .av').nth(6).click()
+  await page.locator('.avatars .av').nth(2).click()
   await page.screenshot({ path: SHOT + '/1-create.png', fullPage: true })
   await page.locator('button.btn.big').click()
   await page.waitForSelector('.levels', { timeout: 10000 })

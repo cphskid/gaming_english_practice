@@ -1,6 +1,7 @@
 import type { ItemDef, ItemMode } from '@/core/inventory'
 import { LEGIONS, TIERS, legionNeed } from './legions'
 import { BOSSES } from './bosses'
+import { AVATAR_TIERS, SHOP_AVATARS } from './avatars'
 
 /** 守塔和對戰都吃得下的道具。三個消耗品現在都是。 */
 const BOTH: ItemMode[] = ['tower-defense', 'tug-of-war']
@@ -52,6 +53,14 @@ export const ITEMS: ItemDef[] = [
   ...LEGIONS.filter((l) => l.id).map((l): ItemDef => ({
     id: l.id, name: l.name, icon: '', desc: l.desc, kind: 'cosmetic', slot: 'legion',
     price: TIERS[l.tier].price, unlockLevel: TIERS[l.tier].unlockLevel, needAchievement: legionNeed(l),
+  })),
+
+  // 頭像（2026-09-25）：每個職業送四張，其他的在這裡賣，分普通／稀有／傳說三層。
+  // 買到之後不管哪個職業都能戴（set_avatar 看背包裡有沒有這個 id）。
+  ...SHOP_AVATARS.map((a): ItemDef => ({
+    id: a.id, name: a.name, icon: '', desc: AVATAR_TIERS[a.tier!].name + '頭像，買了哪個職業都能用',
+    kind: 'cosmetic', slot: 'avatar',
+    price: AVATAR_TIERS[a.tier!].price, unlockLevel: AVATAR_TIERS[a.tier!].unlockLevel,
   })),
 
   // 頭像外框：排行榜和上面那一條都看得到

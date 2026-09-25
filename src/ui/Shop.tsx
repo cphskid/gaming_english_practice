@@ -11,6 +11,7 @@ import { LegionThumb } from './LegionThumb'
 import { JOB_NAME } from '@/core/character'
 import { repo } from '@/net'
 import { Avatar } from './Avatar'
+import { AVATAR_BY_ID, AVATAR_TIERS, avatarSrc } from '@/data/avatars'
 import { Icon } from './Icon'
 import type { IconName } from '@/data/icons'
 
@@ -42,6 +43,9 @@ function thumb(i: ItemDef) {
         {f?.badge && <i className="mugbadge" style={{ fontSize: 9 }}>{f.badge}</i>}
       </span>
     )
+  }
+  if (i.slot === 'avatar') {
+    return <span className="mugbox" style={{ width: 34, height: 34 }}><img src={avatarSrc(i.id)} alt="" /></span>
   }
   return <Icon name={i.icon as IconName} size={20} />
 }
@@ -113,6 +117,13 @@ export function Shop({
 
         {[
           { key: 'consumable', title: '道具', hint: '帶進關卡裡用，用掉就沒了' },
+          // 頭像（2026-09-25）：每個職業送四張，其他的分三層在這裡賣
+          ...(['common', 'rare', 'legend'] as const).map((t) => ({
+            key: 'avatar-' + t, title: AVATAR_TIERS[t].name + '頭像',
+            hint: AVATAR_TIERS[t].unlockLevel > 1
+              ? `${AVATAR_TIERS[t].unlockLevel} 級開放，買了哪個職業都能用`
+              : '買了哪個職業都能用',
+          })),
           // 陣營顏色 2026-09-24 起免費送，不上架，在「我的角色」直接換
           { key: 'frame', title: '頭像外框', hint: '套在頭像外面，同學也看得到' },
         ].map((g) => (
@@ -120,7 +131,9 @@ export function Shop({
             <h2 className="sec">{g.title}<small>　{g.hint}</small></h2>
             <div className="items">
               {ITEMS.filter((i) => !i.achievementOnly && !i.free
-                && (g.key === 'consumable' ? i.kind === 'consumable' : i.slot === g.key))
+                && (g.key === 'consumable' ? i.kind === 'consumable'
+                  : g.key.startsWith('avatar-') ? i.slot === 'avatar' && 'avatar-' + AVATAR_BY_ID.get(i.id)?.tier === g.key
+                    : i.slot === g.key))
                 .map((i) => {
                   const locked = level < i.unlockLevel
                   const owned = has(i.id)

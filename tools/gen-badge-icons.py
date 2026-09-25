@@ -63,6 +63,9 @@ ICONS = [
     ('bare-handed', 'open-palm', 'skoll'),
     ('combo-20', 'flame', 'carl-olsen'),
     ('all-rounder', 'rainbow-star', 'lorc'),
+    # 職業圖示（2026-09-25）：不是成就，但同一套、同一種畫法，一起放這裡
+    ('job-knight', 'visored-helm', 'lorc'),
+    ('job-mage', 'pointy-hat', 'lorc'),
 ]
 
 URL = 'https://game-icons.net/icons/ffffff/000000/1x1/{author}/{name}.svg'
