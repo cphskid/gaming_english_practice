@@ -1,0 +1,120 @@
+{
+ "mimic": {
+  "w": 69,
+  "h": 44,
+  "foot": 44,
+  "anims": {
+   "idle": 9,
+   "attack": 14,
+   "hurt": 3,
+   "death": 6
+  },
+  "cx": 30.0
+ },
+ "minotaur": {
+  "w": 204,
+  "h": 122,
+  "foot": 119,
+  "anims": {
+   "idle": 16,
+   "attack": 16
+  },
+  "cx": 62.0
+ },
+ "worm": {
+  "w": 77,
+  "h": 54,
+  "foot": 54,
+  "anims": {
+   "idle": 9,
+   "attack": 16,
+   "hurt": 3,
+   "death": 8
+  },
+  "cx": 29.5
+ },
+ "king": {
+  "w": 144,
+  "h": 82,
+  "foot": 82,
+  "anims": {
+   "idle": 6,
+   "attack": 6,
+   "hurt": 4,
+   "death": 11
+  },
+  "cx": 80.5
+ },
+ "wizard": {
+  "w": 91,
+  "h": 58,
+  "foot": 56,
+  "anims": {
+   "idle": 8,
+   "attack": 8,
+   "hurt": 4,
+   "death": 5
+  },
+  "cx": 24.0
+ },
+ "cthulhu": {
+  "w": 134,
+  "h": 67,
+  "foot": 67,
+  "anims": {
+   "idle": 15,
+   "attack": 7,
+   "hurt": 5,
+   "death": 11
+  },
+  "cx": 40.0
+ },
+ "demon": {
+  "w": 210,
+  "h": 124,
+  "foot": 124,
+  "anims": {
+   "idle": 6,
+   "attack": 15,
+   "hurt": 5,
+   "death": 22
+  },
+  "cx": 84.0
+ },
+ "frost": {
+  "w": 184,
+  "h": 96,
+  "foot": 93,
+  "anims": {
+   "idle": 6,
+   "attack": 14,
+   "hurt": 7,
+   "death": 16
+  },
+  "cx": 91.5
+ },
+ "shadow": {
+  "w": 162,
+  "h": 141,
+  "foot": 141,
+  "anims": {
+   "idle": 8,
+   "attack": 8,
+   "hurt": 3,
+   "death": 7
+  },
+  "cx": 62.5
+ },
+ "lich": {
+  "w": 88,
+  "h": 66,
+  "foot": 66,
+  "anims": {
+   "idle": 10,
+   "attack": 13,
+   "hurt": 3,
+   "death": 18
+  },
+  "cx": 24.5
+ }
+}

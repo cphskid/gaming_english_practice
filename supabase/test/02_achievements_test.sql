@@ -110,7 +110,7 @@ select test_as('b0000000-0000-0000-0000-000000000001', true);
 
 \echo '── 一題都沒答的時候'
 select test_ok((select count(*) from public.refresh_achievements()) = 0, '什麼都還沒有');
-select test_ok((select count(*) from public.my_achievements()) = 45, '牆上四十五格都回得出來');
+select test_ok((select count(*) from public.my_achievements()) = 46, '牆上四十六格都回得出來');
 select test_ok((select count(*) from public.my_achievements() where unlocked_at is not null) = 0,
                '一個都還沒解開');
 

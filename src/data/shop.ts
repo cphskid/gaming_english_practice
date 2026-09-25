@@ -1,5 +1,6 @@
 import type { ItemDef, ItemMode } from '@/core/inventory'
 import { LEGIONS, TIERS, legionNeed } from './legions'
+import { BOSSES } from './bosses'
 
 /** 守塔和對戰都吃得下的道具。三個消耗品現在都是。 */
 const BOTH: ItemMode[] = ['tower-defense', 'tug-of-war']
@@ -68,4 +69,11 @@ export const ITEMS: ItemDef[] = [
   { id: 'frame-banner', name: '戰旗框', icon: '', desc: '贏過同學五場的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
   { id: 'frame-stardust', name: '星塵框', icon: '', desc: '兩個職業都通關過的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
   { id: 'frame-calendar', name: '日曆框', icon: '', desc: '一週來五天的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
+
+  // 魔王團戰的外框：第一次打倒那隻魔王就放進背包（raid_result）。一樣買不到。
+  // 資料庫靠「有沒有 frame-boss-<id> 這個品項」認魔王（open_raid），所以加新魔王一定要有這一行。
+  ...BOSSES.map((b): ItemDef => ({
+    id: b.frame, name: b.name + '框', icon: '', desc: `第一次打倒${b.name}的人才有`,
+    price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true,
+  })),
 ]

@@ -677,3 +677,18 @@ h2.sec small{font-size:12px;font-weight:400;color:var(--muted)}
 .vs-invite{border:2px solid var(--gold);animation:vs-pulse 1.4s ease-in-out infinite}
 .vs-invite .txt{flex:1;min-width:0;font-size:15px}
 .vs-person .vs-mug,.vs-invite .vs-mug{width:40px;height:40px;flex:none}
+
+/* 魔王團戰的外框（2026-09-25）：魔王的主色，右上角掛牠的小頭像。第一次打倒才拿得到。 */
+.mugbox.f-boss{border-color:var(--boss);box-shadow:0 0 0 1px rgba(0,0,0,.5), 0 0 8px var(--boss)}
+.mugbox.f-boss::after{content:"";position:absolute;right:-7px;top:-7px;width:48%;height:48%;
+  border-radius:50%;background:#1d1a17 var(--face) center/100% no-repeat;border:1.5px solid var(--boss);pointer-events:none}
+.mugbox.f-boss-mimic{--boss:#c9894a;--face:url(/raid/mimic/face.png)}
+.mugbox.f-boss-minotaur{--boss:#a0643c;--face:url(/raid/minotaur/face.png)}
+.mugbox.f-boss-worm{--boss:#e0632e;--face:url(/raid/worm/face.png)}
+.mugbox.f-boss-king{--boss:#b0433f;--face:url(/raid/king/face.png)}
+.mugbox.f-boss-wizard{--boss:#d24a3a;--face:url(/raid/wizard/face.png)}
+.mugbox.f-boss-cthulhu{--boss:#3f9a6a;--face:url(/raid/cthulhu/face.png)}
+.mugbox.f-boss-demon{--boss:#d0562a;--face:url(/raid/demon/face.png)}
+.mugbox.f-boss-frost{--boss:#4aa3d8;--face:url(/raid/frost/face.png)}
+.mugbox.f-boss-shadow{--boss:#7a4fb0;--face:url(/raid/shadow/face.png)}
+.mugbox.f-boss-lich{--boss:#8fa0c0;--face:url(/raid/lich/face.png)}

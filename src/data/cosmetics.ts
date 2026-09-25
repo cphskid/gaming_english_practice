@@ -15,6 +15,8 @@
  * **資料庫在管**（shop_items.slot ＋ equip_item），前端這份只負責顯示。
  */
 
+import { BOSSES } from './bosses'
+
 /** legion 是整套軍團（見 data/legions.ts） */
 export type Slot = 'color' | 'frame' | 'legion'
 
@@ -45,6 +47,8 @@ export interface FrameDef {
   badge?: string
   /** 只能靠這個成就解開，商店買不到（見 src/data/achievements.ts） */
   fromAchievement?: string
+  /** 第一次打倒這隻魔王拿到的（魔王團戰），商店也買不到 */
+  fromBoss?: string
 }
 
 export const FRAMES: FrameDef[] = [
@@ -61,6 +65,11 @@ export const FRAMES: FrameDef[] = [
   { id: 'frame-banner', name: '戰旗框', className: 'f-banner', fromAchievement: 'war-flag' },
   { id: 'frame-stardust', name: '星塵框', className: 'f-stardust', fromAchievement: 'dual-job' },
   { id: 'frame-calendar', name: '日曆框', className: 'f-calendar', fromAchievement: 'week-5' },
+
+  // 魔王團戰：每隻魔王第一次打倒給一個（2026-09-25）。框是魔王的主色，角落掛牠的小頭像。
+  ...BOSSES.map((b) => ({
+    id: b.frame, name: b.name + '框', className: 'f-boss f-boss-' + b.id, fromBoss: b.id,
+  })),
 ]
 
 /** 身上那一套裡的顏色。沒穿就是預設藍。 */

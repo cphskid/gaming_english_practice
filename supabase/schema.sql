@@ -1754,6 +1754,73 @@ create table if not exists public.room_members (
 );
 create index if not exists room_members_student on public.room_members(student_id);
 
+-- ---- 魔王團戰（2026-09-25）：房間改成打魔王，舊的「一起打同一關」拿掉 --------------
+-- 見下面「魔王團戰」那一段的說明。欄位放在這裡是因為下面房間的函式就會用到。
+alter table public.rooms alter column level_id drop not null;
+alter table public.rooms drop constraint if exists rooms_mode_check;
+alter table public.rooms add constraint rooms_mode_check
+  check (mode in ('solo', 'versus', 'team', 'raid'));
+-- 打哪一隻魔王（src/data/bosses.ts 的 id）
+alter table public.rooms add column if not exists boss_id text;
+-- 私人房的四位數密碼。null＝公開房。
+-- 為什麼要有：有的小朋友會故意跑進別人的房間搗亂，那一團就一直開不成（Chuck 2026-09-25）。
+alter table public.rooms add column if not exists pass text;
+alter table public.rooms drop constraint if exists rooms_pass_ck;
+alter table public.rooms add constraint rooms_pass_ck check (pass is null or pass ~ '^[0-9]{4}$');
+-- 開打那一刻定的亂數種子。每支手機拿同一個，戰場才會一樣（斷線接手的電腦要用）。
+alter table public.rooms add column if not exists seed int;
+-- 這一場不出聽音題（照班級的 live_listen，開房那一刻定下來）
+alter table public.rooms add column if not exists no_listen boolean not null default true;
+-- 打倒魔王確認了沒（null＝還沒確認，見 raid_result）
+alter table public.rooms add column if not exists raid_won boolean;
+-- 每分鐘大概答對幾題，開打時照這個算魔王的血
+alter table public.room_members add column if not exists rate numeric not null default 14;
+
+-- 被房主請出去的人，這一場不能再進來
+create table if not exists public.room_bans (
+  room_id    uuid not null references public.rooms(id) on delete cascade,
+  student_id uuid not null references public.students(id) on delete cascade,
+  primary key (room_id, student_id)
+);
+alter table public.room_bans enable row level security;
+
+-- 開打時排好的座位。座位號＝戰場上第幾座城，也是 lockstep 套用動作的順序。
+-- 跟 live_matches 一樣，伺服器只是信箱：每個人放自己的動作串、拿別人的。
+create table if not exists public.raid_seats (
+  room_id    uuid not null references public.rooms(id) on delete cascade,
+  seat       int  not null,
+  student_id uuid not null references public.students(id) on delete cascade,
+  rate       numeric not null default 14,
+  -- 動作串：[格,'a',對錯,目標] / [格,'s',線,階] / [格,'u']
+  moves      jsonb not null default '[]'::jsonb,
+  -- 「第幾格以前的動作都送了」
+  mark       int not null default -1,
+  -- 被判斷線（或按了離開）那一刻凍住的 mark。之後大家在第 final+DELAY+1 格讓電腦接手。
+  final      int,
+  seen_at    timestamptz not null default now(),
+  -- 打完回報的結果（raid_result）
+  won        boolean,
+  dealt      int,
+  correct    int,
+  session_id uuid,
+  primary key (room_id, seat),
+  unique (room_id, student_id)
+);
+create index if not exists raid_seats_student on public.raid_seats(student_id);
+alter table public.raid_seats enable row level security;
+
+-- 每個人打倒過哪幾隻魔王、幾次。個人檔案顯示，「屠龍者」成就也從這裡數。
+create table if not exists public.raid_kills (
+  student_id uuid not null references public.students(id) on delete cascade,
+  boss_id    text not null,
+  kills      int  not null default 0,
+  first_at   timestamptz not null default now(),
+  -- 第一次打倒的那一場（結算畫面靠它判斷「這一場是不是第一次」）
+  first_room uuid,
+  primary key (student_id, boss_id)
+);
+alter table public.raid_kills enable row level security;
+
 alter table public.rooms        enable row level security;
 alter table public.room_members enable row level security;
 grant select on public.rooms, public.room_members to authenticated;
@@ -1775,6 +1842,7 @@ create policy room_members_read on public.room_members for select to authenticat
 -- 的時候尤其明顯），所以一定要先砍掉。
 drop function if exists public.room_state(text);
 drop function if exists public.join_room();
+drop function if exists public.join_room(uuid);
 
 -- -----------------------------------------------------------------------------
 -- 小幫手
@@ -1800,6 +1868,10 @@ returns void language sql volatile security definer set search_path = public, pg
    where r.class_code = p_code and r.status <> 'done' and r.host_student is not null
      and coalesce((select max(m.seen_at) from public.room_members m where m.room_id = r.id),
                   r.created_at) < now() - interval '5 minutes';
+  -- 魔王團戰一場三分鐘，開打十分鐘還沒收（大家都關掉分頁沒回報）就收掉，老師開的也一樣
+  update public.rooms r set status = 'done', ended_at = now()
+   where r.class_code = p_code and r.status = 'playing' and r.mode = 'raid'
+     and r.started_at < now() - interval '10 minutes';
 $$;
 
 -- -----------------------------------------------------------------------------
@@ -1869,8 +1941,37 @@ $$;
 
 create or replace function public.start_room(p_room uuid)
 returns void language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_room public.rooms;
+        v_n    int;
 begin
   if not public.room_is_mine(p_room) then raise exception '這一場不是你開的'; end if;
+  select * into v_room from public.rooms where id = p_room for update;
+  if v_room.status <> 'lobby' then return; end if;
+
+  if v_room.mode = 'raid' then
+    -- 座位＝現在人在的（三十秒內有回報），照進來的順序，最多六個。
+    -- 不在的人留在名單上但沒有座位，他回來會看到「已經開打了」。
+    insert into public.raid_seats (room_id, seat, student_id, rate, seen_at)
+    select p_room, (row_number() over (order by m.joined_at, m.student_id))::int - 1,
+           m.student_id, m.rate,
+           -- 開打後手機要載圖、演魔王登場，多給十秒才開始算「沒消息」
+           now() + interval '10 seconds'
+      from public.room_members m
+     where m.room_id = p_room and m.seen_at > now() - interval '30 seconds'
+     order by m.joined_at, m.student_id
+     limit 6;
+    get diagnostics v_n = row_count;
+    if v_n < 2 then
+      delete from public.raid_seats where room_id = p_room;
+      raise exception '至少要兩個人才能開打';
+    end if;
+    update public.rooms
+       set status = 'playing', started_at = now(),
+           seed = 1 + floor(random() * 2000000000)::int
+     where id = p_room;
+    return;
+  end if;
+
   update public.rooms set status = 'playing', started_at = now()
    where id = p_room and status = 'lobby';
 end;
@@ -1888,38 +1989,63 @@ $$;
 -- 學生：加入、離開、回報
 -- -----------------------------------------------------------------------------
 
--- 加入班上的某一場。已經開始的也進得去——遲到的人照樣要能玩，
--- 一節課只有四十分鐘，卡在門外沒有任何好處。
--- 不指定哪一場就進老師那場（沒有的話進最新的一場），選關畫面那顆按鈕就是這樣用的。
-create or replace function public.join_room(p_room uuid default null)
+-- 加入班上的某一場。
+-- 不指定哪一場就進老師那場（沒有的話進最新的一場）。
+--
+-- 魔王團戰（2026-09-25）多了幾道門，**已經在名單上的人不受影響**（網路斷了重進）：
+--   - 開打之後不能進（戰場已經照開打那一刻的人數算好了）
+--   - 被房主請出去的，這一場不能再進
+--   - 私人房要對密碼（四位數字）
+--   - 最多六個人
+-- p_rate 是他每分鐘大概答對幾題（前端從自己的作答速度算的），開打時拿來算魔王的血。
+-- 報假的只會讓自己那一隊的魔王變硬或變軟，拿不到任何東西，所以信前端沒關係。
+create or replace function public.join_room(
+  p_room uuid default null, p_pass text default null, p_rate numeric default 14)
 returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_student uuid := public.current_student_id();
         v_code    text := public.current_class_code();
-        v_room    uuid;
+        v_room    public.rooms;
+        v_rate    numeric := least(greatest(coalesce(p_rate, 14), 6), 32);
 begin
   if v_student is null then raise exception '請先登入'; end if;
   if v_code is null then raise exception '還沒加入班級'; end if;
 
   if p_room is not null then
-    select r.id into v_room from public.rooms r
-     where r.id = p_room and r.class_code = v_code and r.status <> 'done';
+    select * into v_room from public.rooms r
+     where r.id = p_room and r.class_code = v_code and r.status <> 'done'
+     for update;
   else
-    select r.id into v_room from public.rooms r
+    select * into v_room from public.rooms r
      where r.class_code = v_code and r.status <> 'done'
-     order by (r.host_student is null) desc, r.created_at desc limit 1;
+     order by (r.host_student is null) desc, r.created_at desc limit 1
+     for update;
   end if;
-  if v_room is null then raise exception '這一場已經結束了'; end if;
+  if v_room.id is null then raise exception '這一場已經結束了'; end if;
+
+  if v_room.mode = 'raid' and not exists (
+       select 1 from public.room_members m where m.room_id = v_room.id and m.student_id = v_student) then
+    if v_room.status <> 'lobby' then raise exception '這一場已經開打了，等下一場'; end if;
+    if exists (select 1 from public.room_bans b where b.room_id = v_room.id and b.student_id = v_student) then
+      raise exception '房主請你離開了這一場，換一場吧';
+    end if;
+    if v_room.pass is not null and coalesce(btrim(p_pass), '') <> v_room.pass then
+      raise exception '密碼不對';
+    end if;
+    if (select count(*) from public.room_members m where m.room_id = v_room.id) >= 6 then
+      raise exception '這一場滿了（最多六個人）';
+    end if;
+  end if;
 
   -- 同時只在一場裡。不退掉舊的話，他會同時出現在兩份名單上，
   -- 開場的人會一直等一個其實在別場的人。
   delete from public.room_members m
-   where m.student_id = v_student and m.room_id <> v_room
-     and exists (select 1 from public.rooms r where r.id = m.room_id and r.status <> 'done');
+   where m.student_id = v_student and m.room_id <> v_room.id
+     and exists (select 1 from public.rooms r where r.id = m.room_id and r.status = 'lobby');
 
-  insert into public.room_members as m (room_id, student_id)
-       values (v_room, v_student)
-    on conflict (room_id, student_id) do update set seen_at = now();
-  return v_room;
+  insert into public.room_members as m (room_id, student_id, rate)
+       values (v_room.id, v_student, v_rate)
+    on conflict (room_id, student_id) do update set seen_at = now(), rate = excluded.rate;
+  return v_room.id;
 end;
 $$;
 
@@ -1986,6 +2112,10 @@ begin
     select jsonb_agg(jsonb_build_object(
              'id',       r.id,
              'levelId',  r.level_id,
+             'bossId',   r.boss_id,
+             -- 私人房。密碼本身只有房主和老師看得到（見 room_state）
+             'locked',   r.pass is not null,
+             'members',  (select count(*) from public.room_members m where m.room_id = r.id),
              'mode',     r.mode,
              'status',   r.status,
              'hostName', coalesce(hs.nickname, ''),
@@ -1999,7 +2129,8 @@ begin
            order by (r.host_student is null) desc, r.created_at desc)
       from public.rooms r
       left join public.students hs on hs.id = r.host_student
-     where r.class_code = v_code and r.status <> 'done'), '[]'::jsonb);
+     -- 2026-09-25 起房間只剩魔王團戰（舊的「一起打同一關」拿掉了）
+     where r.class_code = v_code and r.status <> 'done' and r.mode = 'raid'), '[]'::jsonb);
 end;
 $$;
 
@@ -2027,8 +2158,29 @@ begin
     'id',        v_room.id,
     'classCode', v_room.class_code,
     'levelId',   v_room.level_id,
+    'bossId',    v_room.boss_id,
+    'locked',    v_room.pass is not null,
+    -- 密碼只給房主和老師，讓他告訴要找的人
+    'pass',      case when public.room_is_mine(v_room.id) then v_room.pass end,
+    'seed',      v_room.seed,
+    'noListen',  v_room.no_listen,
     'mode',      v_room.mode,
     'status',    v_room.status,
+    -- 開打之後的座位（魔王團戰）。第幾號座位就是戰場上第幾座城。
+    'seats', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'seat',      rs.seat,
+               'studentId', rs.student_id,
+               'nickname',  s.nickname,
+               'rate',      rs.rate,
+               'avatar',    coalesce(c.avatar, ''),
+               'equipped',  coalesce(c.equipped, '[]'::jsonb),
+               'me',        rs.student_id = v_student)
+             order by rs.seat)
+        from public.raid_seats rs
+        join public.students s on s.id = rs.student_id
+        left join public.characters c on c.student_id = rs.student_id
+       where rs.room_id = v_room.id), '[]'::jsonb),
     'startedAt', v_room.started_at,
     'byTeacher', v_room.host_student is null,
     'mine',      public.room_is_mine(v_room.id),
@@ -2041,6 +2193,7 @@ begin
                'equipped',  coalesce(c.equipped, '[]'::jsonb),
                'host',      m.student_id = v_room.host_student,
                'finished',  m.finished_at is not null,
+               'rate',      m.rate,
                -- 三十秒沒回報就當作人不在了。輪詢是每幾秒一次，
                -- 抓太短會讓網路頓一下的人一直閃掉。
                'here',      m.seen_at > now() - interval '30 seconds',
@@ -2101,7 +2254,7 @@ grant execute on function
   public.current_student_id(),
   public.current_class_code(),
   public.rebuild_word_stats(uuid),
-  public.join_room(uuid),
+  public.join_room(uuid, text, numeric),
   public.leave_room(uuid),
   public.room_playing(uuid, uuid),
   public.room_finished(uuid),
@@ -2405,6 +2558,11 @@ begin
      and not exists (select 1 from public.versus_matches o
                       where o.live_match = m.live_match and o.student_id <> m.student_id and o.won);
   v_up := array_append(v_up, public.ach_put(v_student, 'war-flag', v_n));
+
+  -- 魔王團戰：打倒過幾隻不同的魔王。「全部」＝有幾隻魔王（每隻魔王有一個外框品項）
+  select count(*) into v_n from public.raid_kills k where k.student_id = v_student and k.kills > 0;
+  select count(*) into v_all from public.shop_items i where i.id like 'frame-boss-%';
+  v_up := array_append(v_up, public.ach_put(v_student, 'raid-slayer', v_n, v_all));
 
   -- ---------------------------------------------------------------- 收集
   select c.items, c.jobs_cleared into v_items, v_jobs
@@ -3185,4 +3343,262 @@ grant execute on function
   public.live_accept(uuid),
   public.live_sync(uuid, int, jsonb, int, int, boolean),
   public.class_set_live_listen(text, boolean)
+to authenticated;
+
+
+-- =============================================================================
+-- 魔王團戰（2026-09-25）
+--
+-- 房間原本是「大家同時打同一關守塔」，Chuck 說感覺不出一起玩。改成：
+-- 二到六個人共用一個戰場，魔王在左邊，大家各守一座城、各自出兵往左推。
+-- 三分鐘內把魔王的血打光就贏；時間到或全部的城同時倒下就輸。
+--
+-- 入口沿用房間（選關畫面的橫幅、老師的面板），改成選魔王不選關卡：
+--   - 公開房或私人房（四位數密碼，清單上掛鎖頭）
+--   - 房主可以請人離開，被請出的人這一場不能再進；老師看得到、關得掉每一場，不用密碼
+--   - 至少兩個人，房主按開始；開打之後不能再進
+-- 打的時候每支手機各跑一份一樣的戰場，只交換動作（src/games/boss-raid/lockstep.ts）。
+--
+-- 獎勵：答題照常算（事件是唯一真相）；打贏**不多給金幣**。
+-- 每隻魔王第一次打倒給一個商店買不到的外框，個人檔案記打倒次數。
+-- =============================================================================
+
+-- 開一場魔王團戰。
+--   老師：p_class_code 填他的班，開出來的房間排最前面、沒有房主（老師自己管）。
+--   學生：p_class_code 留空，開在自己班上，開完直接算他進來了。
+-- p_pass：null 或空字串＝公開房；四位數字＝私人房。
+create or replace function public.open_raid(
+  p_boss text, p_pass text default null, p_class_code text default null, p_rate numeric default 14)
+returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_student uuid := public.current_student_id();
+        v_code    text;
+        v_pass    text := nullif(btrim(coalesce(p_pass, '')), '');
+        v_teacher boolean := false;
+        v_id      uuid;
+begin
+  -- 魔王的 id 是前端的，資料庫不另外存一份目錄：有它的外框才算有這隻魔王
+  if p_boss is null or p_boss !~ '^[a-z]+$'
+     or not exists (select 1 from public.shop_items i where i.id = 'frame-boss-' || p_boss) then
+    raise exception '沒有這隻魔王';
+  end if;
+  if v_pass is not null and v_pass !~ '^[0-9]{4}$' then raise exception '密碼要四位數字'; end if;
+
+  if p_class_code is not null then
+    v_code := upper(btrim(p_class_code));
+    if not public.is_teacher_of(v_code) then raise exception '這不是你的班'; end if;
+    v_teacher := true;
+  else
+    v_code := public.current_class_code();
+    if v_student is null then raise exception '請先登入'; end if;
+    if v_code is null then raise exception '還沒加入班級，沒辦法揪人'; end if;
+    perform public.room_sweep(v_code);
+    -- 一個人同時只能開一場（連按十次就是十個空房間）
+    update public.rooms set status = 'done', ended_at = now()
+     where host_student = v_student and status = 'lobby';
+    if (select count(*) from public.rooms r
+         where r.class_code = v_code and r.status <> 'done') >= 12 then
+      raise exception '班上開著的場次太多了，等別人打完再開';
+    end if;
+  end if;
+
+  insert into public.rooms (class_code, level_id, boss_id, mode, opened_by, host_student, pass, no_listen)
+  values (v_code, null, p_boss, 'raid', auth.uid(), case when v_teacher then null else v_student end,
+          v_pass, not coalesce((select k.live_listen from public.classes k where k.code = v_code), false))
+  returning id into v_id;
+
+  if not v_teacher then
+    delete from public.room_members m
+     where m.student_id = v_student and m.room_id <> v_id
+       and exists (select 1 from public.rooms r where r.id = m.room_id and r.status = 'lobby');
+    insert into public.room_members (room_id, student_id, rate)
+    values (v_id, v_student, least(greatest(coalesce(p_rate, 14), 6), 32));
+  end if;
+  return v_id;
+end;
+$$;
+
+-- 房主請某個人離開。只在還沒開打的時候；被請出的人這一場不能再進來。
+create or replace function public.room_kick(p_room uuid, p_student uuid)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if not public.room_is_mine(p_room) then raise exception '這一場不是你開的'; end if;
+  if p_student = public.current_student_id() then raise exception '不能請自己離開'; end if;
+  if not exists (select 1 from public.rooms r where r.id = p_room and r.status = 'lobby') then
+    raise exception '已經開打了';
+  end if;
+  delete from public.room_members where room_id = p_room and student_id = p_student;
+  insert into public.room_bans (room_id, student_id) values (p_room, p_student)
+    on conflict do nothing;
+end;
+$$;
+
+-- 打的時候每 0.4 秒叫一次：放上我的新動作、拿回大家的。
+--   p_base   p_moves 的第一筆是我的第幾筆（從 0 算）。網路重送時靠它不重複收。
+--   p_mark   我第幾格以前的動作都送了。打完了送 1000000000（DONE_MARK）。
+--   p_from   每個座位的動作我已經有幾筆（照座位號排的陣列）
+--   p_left   我按了離開
+-- 回傳 { mine, gone, seats: [{ moves（從 p_from 開始）, mark, final }] }
+--
+-- 斷線**由這裡判**：某個座位 12 秒沒消息（RAID_GONE_S），就把他的 mark 凍住當作 final。
+-- 每支手機拿到的是同一個 final，就在同一格讓電腦接手——不能讓各支手機自己判，
+-- 網路快慢不一，各判各的一定會判在不同格。
+-- 打完的人（mark 是 DONE_MARK）不判：他只是不用再送了。
+create or replace function public.raid_sync(
+  p_room uuid, p_base int, p_moves jsonb, p_mark int, p_from jsonb, p_left boolean default false)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_me   uuid := public.current_student_id();
+  v_room public.rooms;
+  v_seat public.raid_seats;
+  v_n    int;
+  v_add  jsonb;
+begin
+  if v_me is null then raise exception '請先登入'; end if;
+  select * into v_room from public.rooms where id = p_room;
+  if v_room.id is null or v_room.mode <> 'raid' then raise exception '沒有這一場'; end if;
+  -- 一場三分鐘，十分鐘前開打的不再收
+  if v_room.started_at is null or v_room.started_at < now() - interval '10 minutes' then
+    raise exception '這場已經結束了';
+  end if;
+  -- 鎖整場的座位（照座位號），判斷線跟收動作才不會搶在一起
+  perform 1 from public.raid_seats where room_id = p_room order by seat for update;
+  select * into v_seat from public.raid_seats where room_id = p_room and student_id = v_me;
+  if v_seat.room_id is null then raise exception '你不在這一場'; end if;
+
+  if v_seat.final is null then
+    v_n := jsonb_array_length(v_seat.moves);
+    -- 接得上才收（跟 live_sync 一樣）；接不上前端看回傳的 mine 從那裡重送
+    if p_base is not null and p_base <= v_n and jsonb_typeof(p_moves) = 'array' then
+      select coalesce(jsonb_agg(e order by i), '[]'::jsonb) into v_add
+        from jsonb_array_elements(p_moves) with ordinality as x(e, i)
+       where i > v_n - p_base;
+      if v_n + jsonb_array_length(v_add) <= 3000 then
+        update public.raid_seats
+           set moves = moves || v_add, mark = greatest(mark, coalesce(p_mark, -1))
+         where room_id = p_room and seat = v_seat.seat;
+      end if;
+    end if;
+    update public.raid_seats
+       set seen_at = greatest(seen_at, now()),
+           final = case when coalesce(p_left, false) then mark else final end
+     where room_id = p_room and seat = v_seat.seat;
+  end if;
+
+  update public.raid_seats
+     set final = mark
+   where room_id = p_room and final is null and mark < 1000000000
+     and seen_at < now() - interval '12 seconds';
+
+  return jsonb_build_object(
+    'mine', (select jsonb_array_length(moves) from public.raid_seats
+              where room_id = p_room and seat = v_seat.seat),
+    'gone', (select final is not null from public.raid_seats
+              where room_id = p_room and seat = v_seat.seat)
+            -- 自己按離開的不算「被判出局」
+            and not coalesce(p_left, false),
+    'seats', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'moves', coalesce((select jsonb_agg(e order by i)
+                                    from jsonb_array_elements(rs.moves) with ordinality as x(e, i)
+                                   where i > greatest(coalesce((p_from ->> rs.seat)::int, 0), 0)),
+                                 '[]'::jsonb),
+               'mark', coalesce(rs.final, rs.mark),
+               'final', rs.final)
+             order by rs.seat)
+        from public.raid_seats rs where rs.room_id = p_room), '[]'::jsonb));
+end;
+$$;
+
+-- 打完回報。回傳 { confirmed, won, kills, first }：
+--   confirmed  這一場「打倒魔王」伺服器認了沒
+--   kills      我打倒這隻魔王幾次了
+--   first      這一場是不是我第一次打倒它（拿到外框的那一場）
+--
+-- **打倒要兩個人都說贏才算**（還在場上的只剩一個人就一個）。每支手機算的是同一場，
+-- 輸贏一定講得一樣；只有一個人說贏、其他人說輸，就是有人改了前端。
+-- 認了之後，座位上的每個人都記一次（斷線由電腦接手的也算，他有打），
+-- 第一次打倒的人外框直接放進背包。還沒認的話前端隔兩秒再問一次（同一支，重複叫沒關係）。
+create or replace function public.raid_result(
+  p_room uuid, p_won boolean, p_dealt int default 0, p_correct int default 0, p_session uuid default null)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_me    uuid := public.current_student_id();
+  v_room  public.rooms;
+  v_yes   int;
+  v_no    int;
+  v_need  int;
+  v_frame text;
+  v_k     public.raid_kills;
+begin
+  if v_me is null then raise exception '請先登入'; end if;
+  select * into v_room from public.rooms where id = p_room for update;
+  if v_room.id is null or v_room.mode <> 'raid' then raise exception '沒有這一場'; end if;
+
+  update public.raid_seats
+     set won = coalesce(p_won, false),
+         dealt = least(greatest(coalesce(p_dealt, 0), 0), 100000),
+         correct = least(greatest(coalesce(p_correct, 0), 0), 1000),
+         session_id = coalesce(p_session, session_id),
+         mark = greatest(mark, 1000000000)
+   where room_id = p_room and student_id = v_me and final is null;
+
+  if v_room.raid_won is null then
+    select count(*) filter (where won), count(*) filter (where not won),
+           least(2, count(*) filter (where final is null))
+      into v_yes, v_no, v_need
+      from public.raid_seats where room_id = p_room;
+    if v_yes >= greatest(v_need, 1) and v_yes > v_no then
+      update public.rooms set raid_won = true where id = p_room;
+      v_room.raid_won := true;
+      v_frame := 'frame-boss-' || v_room.boss_id;
+      insert into public.raid_kills as k (student_id, boss_id, kills, first_room)
+      select rs.student_id, v_room.boss_id, 1, p_room
+        from public.raid_seats rs where rs.room_id = p_room
+      on conflict (student_id, boss_id) do update set kills = k.kills + 1;
+      update public.characters c
+         set items = c.items || jsonb_build_object(v_frame, 1), updated_at = now()
+       where c.student_id in (select rs.student_id from public.raid_seats rs where rs.room_id = p_room)
+         and not (c.items ? v_frame)
+         and exists (select 1 from public.shop_items i where i.id = v_frame);
+    end if;
+  end if;
+
+  -- 大家都回報了（或斷線了），這一場就收掉，房間清單上不再掛著
+  if not exists (select 1 from public.raid_seats
+                  where room_id = p_room and won is null and final is null) then
+    update public.rooms set status = 'done', ended_at = now()
+     where id = p_room and status <> 'done';
+  end if;
+
+  select * into v_k from public.raid_kills where student_id = v_me and boss_id = v_room.boss_id;
+  return jsonb_build_object(
+    'confirmed', coalesce(v_room.raid_won, false),
+    'kills', coalesce(v_k.kills, 0),
+    'first', v_room.raid_won is true and v_k.first_room = p_room);
+end;
+$$;
+
+-- 誰打倒過哪幾隻魔王。不給 id 就是自己；同班同學、老師看得到（個人檔案用）。
+create or replace function public.raid_kill_list(p_student uuid default null)
+returns jsonb language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare v_id uuid := coalesce(p_student, public.current_student_id());
+        v_code text;
+begin
+  select s.class_code into v_code from public.students s where s.id = v_id;
+  if v_id is null or not (v_id = public.current_student_id()
+                          or v_code = public.current_class_code()
+                          or public.is_teacher_of(v_code)) then
+    return '{}'::jsonb;
+  end if;
+  return coalesce((select jsonb_object_agg(k.boss_id, k.kills)
+                     from public.raid_kills k where k.student_id = v_id and k.kills > 0), '{}'::jsonb);
+end;
+$$;
+
+grant execute on function
+  public.open_raid(text, text, text, numeric),
+  public.room_kick(uuid, uuid),
+  public.raid_sync(uuid, int, jsonb, int, jsonb, boolean),
+  public.raid_result(uuid, boolean, int, int, uuid),
+  public.raid_kill_list(uuid)
 to authenticated;

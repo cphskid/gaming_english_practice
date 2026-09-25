@@ -335,7 +335,17 @@ insert into public.shop_items (id, price, kind, slot, unlock_level, achievement_
   ('frame-flame', 1, 'cosmetic', 'frame', 1, true, false, null),
   ('frame-banner', 1, 'cosmetic', 'frame', 1, true, false, null),
   ('frame-stardust', 1, 'cosmetic', 'frame', 1, true, false, null),
-  ('frame-calendar', 1, 'cosmetic', 'frame', 1, true, false, null)
+  ('frame-calendar', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-boss-mimic', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-boss-minotaur', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-boss-worm', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-boss-king', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-boss-wizard', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-boss-cthulhu', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-boss-demon', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-boss-frost', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-boss-shadow', 1, 'cosmetic', 'frame', 1, true, false, null),
+  ('frame-boss-lich', 1, 'cosmetic', 'frame', 1, true, false, null)
 on conflict (id) do update
   set price = excluded.price, kind = excluded.kind, slot = excluded.slot,
       unlock_level = excluded.unlock_level, achievement_only = excluded.achievement_only,
@@ -343,7 +353,7 @@ on conflict (id) do update
 
 -- 商店只認這份清單。舊品項留在資料庫裡會變成「買得到但畫面上沒有」的鬼品項，
 -- 所以不在清單裡的一律刪掉。
-delete from public.shop_items where id not in ('slow-30', 'heal-5', 'crystal-40', 'color-red', 'color-yellow', 'color-purple', 'color-black', 'legion-goblin', 'legion-pig', 'legion-pirate-bomb', 'legion-treasure', 'legion-monsters', 'legion-elementals', 'frame-gold', 'frame-ribbon', 'frame-crown', 'frame-rainbow', 'frame-laurel', 'frame-wave', 'frame-flame', 'frame-banner', 'frame-stardust', 'frame-calendar');
+delete from public.shop_items where id not in ('slow-30', 'heal-5', 'crystal-40', 'color-red', 'color-yellow', 'color-purple', 'color-black', 'legion-goblin', 'legion-pig', 'legion-pirate-bomb', 'legion-treasure', 'legion-monsters', 'legion-elementals', 'frame-gold', 'frame-ribbon', 'frame-crown', 'frame-rainbow', 'frame-laurel', 'frame-wave', 'frame-flame', 'frame-banner', 'frame-stardust', 'frame-calendar', 'frame-boss-mimic', 'frame-boss-minotaur', 'frame-boss-worm', 'frame-boss-king', 'frame-boss-wizard', 'frame-boss-cthulhu', 'frame-boss-demon', 'frame-boss-frost', 'frame-boss-shadow', 'frame-boss-lich');
 
 
 -- 成就目錄。**這一段是 tools/gen-achievements-seed.mjs 從 src/data/achievements.ts
@@ -375,25 +385,26 @@ insert into public.achievements (id, category, ord, reward_item, reward_title, t
   ('comeback', 'versus', 23, null, '', '{1,3,10,20,40}', 1),
   ('never-quit', 'versus', 24, null, '再來一局', '{}', 1),
   ('war-flag', 'versus', 25, 'frame-banner', '', '{5,15,40,80,150}', 1),
-  ('dressed', 'collect', 26, null, '', '{}', 1),
-  ('five-colors', 'collect', 27, null, '', '{}', 1),
-  ('all-frames', 'collect', 28, null, '', '{}', 1),
-  ('avatar-10', 'collect', 29, null, '', '{}', 1),
-  ('dual-job', 'collect', 30, 'frame-stardust', '', '{}', 1),
-  ('item-taster', 'collect', 31, null, '', '{}', 1),
-  ('week-3', 'habit', 32, null, '', '{}', 1),
-  ('days', 'habit', 33, null, '', '{7,20,40,70,100}', 1),
-  ('weekend', 'habit', 34, null, '', '{1,5,15,30,50}', 1),
-  ('replay', 'habit', 35, null, '', '{}', 1),
-  ('month-12', 'habit', 36, null, '', '{}', 1),
-  ('old-friend', 'habit', 37, null, '', '{}', 1),
-  ('week-5', 'habit', 38, 'frame-calendar', '', '{}', 1),
-  ('persistent', 'secret', 39, null, '', '{}', 1),
-  ('quick-hand', 'secret', 40, null, '', '{}', 1),
-  ('so-close', 'secret', 41, null, '', '{}', 1),
-  ('bare-handed', 'secret', 42, null, '', '{}', 1),
-  ('combo-20', 'secret', 43, null, '', '{}', 1),
-  ('all-rounder', 'secret', 44, null, '全能生', '{}', 1)
+  ('raid-slayer', 'versus', 26, null, '', '{1,3,5,8,-1}', 1),
+  ('dressed', 'collect', 27, null, '', '{}', 1),
+  ('five-colors', 'collect', 28, null, '', '{}', 1),
+  ('all-frames', 'collect', 29, null, '', '{}', 1),
+  ('avatar-10', 'collect', 30, null, '', '{}', 1),
+  ('dual-job', 'collect', 31, 'frame-stardust', '', '{}', 1),
+  ('item-taster', 'collect', 32, null, '', '{}', 1),
+  ('week-3', 'habit', 33, null, '', '{}', 1),
+  ('days', 'habit', 34, null, '', '{7,20,40,70,100}', 1),
+  ('weekend', 'habit', 35, null, '', '{1,5,15,30,50}', 1),
+  ('replay', 'habit', 36, null, '', '{}', 1),
+  ('month-12', 'habit', 37, null, '', '{}', 1),
+  ('old-friend', 'habit', 38, null, '', '{}', 1),
+  ('week-5', 'habit', 39, 'frame-calendar', '', '{}', 1),
+  ('persistent', 'secret', 40, null, '', '{}', 1),
+  ('quick-hand', 'secret', 41, null, '', '{}', 1),
+  ('so-close', 'secret', 42, null, '', '{}', 1),
+  ('bare-handed', 'secret', 43, null, '', '{}', 1),
+  ('combo-20', 'secret', 44, null, '', '{}', 1),
+  ('all-rounder', 'secret', 45, null, '全能生', '{}', 1)
 on conflict (id) do update
   set category = excluded.category, ord = excluded.ord,
       reward_item = excluded.reward_item, reward_title = excluded.reward_title,
@@ -401,7 +412,7 @@ on conflict (id) do update
 
 -- 目錄以這份清單為準。刪掉的成就要跟著消失，不然畫面上沒有、資料庫裡卻還在，
 -- 別人的徽章牆上會冒出一個誰都看不懂的東西。
-delete from public.achievements where id not in ('first-answer', 'hundred', 'nemesis', 'theme-king', 'mastered-50', 'literate', 'read-100', 'listen-100', 'spell-100', 'triple-day', 'long-words', 'balanced', 'combo', 'first-clear', 'three-star', 'no-damage', 'boss-slayer', 'stars-30', 'all-clear', 'first-match', 'veteran', 'all-lines', 'top-tier', 'comeback', 'never-quit', 'war-flag', 'dressed', 'five-colors', 'all-frames', 'avatar-10', 'dual-job', 'item-taster', 'week-3', 'days', 'weekend', 'replay', 'month-12', 'old-friend', 'week-5', 'persistent', 'quick-hand', 'so-close', 'bare-handed', 'combo-20', 'all-rounder');
+delete from public.achievements where id not in ('first-answer', 'hundred', 'nemesis', 'theme-king', 'mastered-50', 'literate', 'read-100', 'listen-100', 'spell-100', 'triple-day', 'long-words', 'balanced', 'combo', 'first-clear', 'three-star', 'no-damage', 'boss-slayer', 'stars-30', 'all-clear', 'first-match', 'veteran', 'all-lines', 'top-tier', 'comeback', 'never-quit', 'war-flag', 'raid-slayer', 'dressed', 'five-colors', 'all-frames', 'avatar-10', 'dual-job', 'item-taster', 'week-3', 'days', 'weekend', 'replay', 'month-12', 'old-friend', 'week-5', 'persistent', 'quick-hand', 'so-close', 'bare-handed', 'combo-20', 'all-rounder');
 
 
 -- 關卡。**這一段是 tools/gen-levels-seed.mjs 從 src/data/levels.ts 產生的，不要手改。**

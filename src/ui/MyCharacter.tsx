@@ -128,7 +128,7 @@ export function MyCharacter({
         <div className="picks">
           <button className={'pick' + (wornFrame ? '' : ' on')} disabled={busy || !wornFrame}
             onClick={() => void (wornFrame && wear(wornFrame.id, false, wornFrame.name))}>不戴</button>
-          {FRAMES.map((f) => {
+          {FRAMES.filter((f) => !f.fromBoss || has(f.id)).map((f) => {
             const owned = has(f.id)
             const on = wornFrame?.id === f.id
             const item = ITEMS.find((i) => i.id === f.id)

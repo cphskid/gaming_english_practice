@@ -72,7 +72,8 @@ insert into auth.users (id, email) values
   ('a0000000-0000-0000-0000-000000000012', null),   -- 小華的平板
   ('a0000000-0000-0000-0000-000000000013', null),   -- 小明改用電腦
   ('a0000000-0000-0000-0000-000000000014', null),   -- 朋友的小孩，沒有班級
-  ('a0000000-0000-0000-0000-000000000015', null);   -- 別班的人，測房間用
+  ('a0000000-0000-0000-0000-000000000015', null),   -- 別班的人，測房間用
+  ('a0000000-0000-0000-0000-000000000016', null);   -- 小美，測魔王團戰請人出房用
 
 set role authenticated;
 
@@ -622,44 +623,43 @@ begin
   perform test_ok(true, '管理員重設得了沒有班級的學生的密碼');
 end $$;
 
-\echo '── 房間：老師開一場，全班進來'
+\echo '── 魔王團戰：老師開一場，全班進來'
 do $blk$
-declare v_room uuid; v_room2 uuid; v_state jsonb; v_list jsonb;
+declare v_room uuid; v_state jsonb; v_list jsonb; v_r jsonb;
 begin
-  -- 開「全班的那一場」是老師的事。學生自己開得了的話，那就不是老師開的課了。
+  -- 老師那種場（排最前面、沒有房主）只有老師開得了
   perform test_as('a0000000-0000-0000-0000-000000000011', true);
-  perform test_denied($$ select public.open_room('RLS1', 'td-01') $$, '學生開老師那種場');
+  perform test_denied($$ select public.open_raid('mimic', null, 'RLS1') $$, '學生開老師那種場');
   perform test_denied($$ select public.join_room() $$, '沒有房間卻想加入');
 
   perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
-  select public.open_room('RLS1', 'td-03') into v_room;
-  perform test_denied($$ select public.open_room('RLS1', 'td-99') $$, '開一個不存在的關卡');
-  perform test_denied($$ select public.open_room('RLS1', 'td-03', 'chaos') $$, '開一個不存在的模式');
+  select public.open_raid('mimic', null, 'RLS1') into v_room;
+  perform test_denied($$ select public.open_raid('dragonzzz', null, 'RLS1') $$, '開一隻不存在的魔王');
+  perform test_denied($$ select public.open_raid('mimic', '12a', 'RLS1') $$, '密碼不是四位數字');
 
   select public.room_state(v_room) into v_state;
   perform test_ok(v_state ->> 'status' = 'lobby', '老師開了一場，在等人');
-  perform test_ok(v_state ->> 'levelId' = 'td-03', '開的是指定的那一關');
+  perform test_ok(v_state ->> 'bossId' = 'mimic', '打的是指定的那隻魔王');
   perform test_ok((v_state ->> 'byTeacher')::boolean, '標示得出來這是老師開的');
-  perform test_ok(jsonb_array_length(v_state -> 'members') = 0, '還沒有人進來');
+  perform test_ok(not (v_state ->> 'locked')::boolean, '沒給密碼就是公開房');
 
-  -- 學生不用輸代碼：他的班就決定了他看得到哪幾場。
   perform test_as('a0000000-0000-0000-0000-000000000011', true);
   select public.room_list() into v_list;
   perform test_ok(jsonb_array_length(v_list) = 1, '小明看得到班上開著一場');
-  perform test_ok((v_list -> 0 ->> 'byTeacher')::boolean, '而且看得出來是老師開的');
-  perform test_ok(public.join_room() = v_room, '不指定哪一場就進老師那場');
-  perform test_ok(public.join_room() = v_room, '按兩次也只算一個人');
+  perform test_ok(v_list -> 0 ->> 'bossId' = 'mimic', '清單上看得到是哪隻魔王');
+  perform test_ok(public.join_room(null, null, 10) = v_room, '不指定哪一場就進老師那場');
+  perform test_ok(public.join_room(v_room, null, 10) = v_room, '按兩次也只算一個人');
+  -- 只有一個人不能開打（魔王團戰至少兩個人）
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  perform test_denied(format('select public.start_room(%L)', v_room), '一個人就開打');
   perform test_as('a0000000-0000-0000-0000-000000000012', true);
-  perform public.join_room(v_room);
-
+  perform public.join_room(v_room, null, 99);
   select public.room_state(v_room) into v_state;
   perform test_ok(jsonb_array_length(v_state -> 'members') = 2, '名單上兩個人');
-  perform test_ok((select count(*) from jsonb_array_elements(v_state -> 'members') m
-                    where (m ->> 'me')::boolean) = 1, '自己那一列標出來了');
-  perform test_ok((select count(*) from jsonb_array_elements(v_state -> 'members') m
-                    where (m ->> 'here')::boolean) = 2, '兩個人都在線上');
+  perform test_ok((select max((m ->> 'rate')::numeric) from jsonb_array_elements(v_state -> 'members') m) = 32,
+                  '報太快的速度被夾到 32');
 
-  -- 別班看不到這一場。房間是掛在班級上的。
+  -- 別班看不到這一場
   perform test_as('a0000000-0000-0000-0000-000000000015', true);
   perform public.register_student('rlsroom', 'melon12', '別班的人', 'RLS2');
   perform test_ok(public.room_list() = '[]'::jsonb, '別班的學生看不到這一場');
@@ -668,97 +668,124 @@ begin
   perform test_denied(format('select public.join_room(%L)', v_room), '別班的學生加入');
   perform test_as('a0000000-0000-0000-0000-000000000001', false, 'teacher1@rlstest.local');
   perform test_denied(format('select public.start_room(%L)', v_room), '別班老師按開始');
+  perform test_denied(format('select public.close_room(%L)', v_room), '別班老師收場');
 
-  -- 老師按開始，學生那邊輪詢就會看到狀態變了，自己開打。
+  -- 開打：座位照進來的順序，種子定下來
   perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
   perform public.start_room(v_room);
   perform test_as('a0000000-0000-0000-0000-000000000011', true);
-  perform test_ok(public.room_state(v_room) ->> 'status' = 'playing', '開始了');
-
-  -- 打完了。誰打完誰還在打，老師看得出來。
-  perform public.room_playing(v_room, gen_random_uuid());
-  perform public.room_finished(v_room);
-  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
   select public.room_state(v_room) into v_state;
-  perform test_ok((select count(*) from jsonb_array_elements(v_state -> 'members') m
-                    where (m ->> 'finished')::boolean) = 1, '一個人打完了，另一個還在打');
+  perform test_ok(v_state ->> 'status' = 'playing', '開始了');
+  perform test_ok(jsonb_array_length(v_state -> 'seats') = 2, '兩個座位');
+  perform test_ok((v_state -> 'seats' -> 0 ->> 'me')::boolean, '先進來的是 0 號座位');
+  perform test_ok((v_state ->> 'seed') is not null, '種子定下來了');
 
-  -- 老師再開一場＝換一關重開，老師自己的舊場自己收掉。
-  select public.open_room('RLS1', 'td-05') into v_room2;
-  perform test_ok(v_room2 <> v_room, '再開一場是新的一場');
-  perform test_ok((select count(*) from public.rooms r
-                    where r.class_code = 'RLS1' and r.status <> 'done'
-                      and r.host_student is null) = 1, '老師的場同時只有一個');
-  perform test_ok(jsonb_array_length(public.room_state(v_room2) -> 'members') = 0,
-                  '新的一場沒有人在裡面');
-  perform public.close_room(v_room2);
-  perform test_ok(public.room_state(v_room2) = 'null'::jsonb, '收掉之後就讀不到了');
+  -- 開打之後不能再進
+  perform test_as('a0000000-0000-0000-0000-000000000016', true);
+  perform public.register_student('rlsmei', 'grape12', '小美', 'RLS1');
+  perform test_denied(format('select public.join_room(%L)', v_room), '開打之後才想進來');
+
+  -- 同步：動作放上去，別人拿得到
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  select public.raid_sync(v_room, 0, '[[1,"a",1,-1],[1,"s","recognize",1]]'::jsonb, 10, '[0,0]'::jsonb) into v_r;
+  perform test_ok((v_r ->> 'mine')::int = 2, '伺服器收到兩筆');
+  select public.raid_sync(v_room, 0, '[[1,"a",1,-1],[1,"s","recognize",1]]'::jsonb, 10, '[0,0]'::jsonb) into v_r;
+  perform test_ok((v_r ->> 'mine')::int = 2, '重送不會重複收');
+  perform test_as('a0000000-0000-0000-0000-000000000012', true);
+  select public.raid_sync(v_room, 0, '[]'::jsonb, 5, '[0,0]'::jsonb) into v_r;
+  perform test_ok(jsonb_array_length(v_r -> 'seats' -> 0 -> 'moves') = 2, '小華拿到小明的兩筆');
+  perform test_ok((v_r -> 'seats' -> 0 ->> 'mark')::int = 10, '也拿到小明送到第幾格');
+  select public.raid_sync(v_room, 0, '[]'::jsonb, 5, '[2,0]'::jsonb) into v_r;
+  perform test_ok(jsonb_array_length(v_r -> 'seats' -> 0 -> 'moves') = 0, '已經有的不再給一次');
+
+  -- 斷線由伺服器判：小明 12 秒沒消息，mark 凍住
+  perform test_force(format(
+    'update public.raid_seats set seen_at = now() - interval ''20 seconds'' where room_id = %L and seat = 0', v_room));
+  select public.raid_sync(v_room, 0, '[]'::jsonb, 6, '[2,0]'::jsonb) into v_r;
+  perform test_ok((v_r -> 'seats' -> 0 ->> 'final')::int = 10, '小明被判斷線，停在第 10 格');
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  select public.raid_sync(v_room, 2, '[[20,"u"]]'::jsonb, 30, '[0,0]'::jsonb) into v_r;
+  perform test_ok((v_r ->> 'gone')::boolean, '小明連回來，看得到自己被判出局');
+  perform test_ok((v_r ->> 'mine')::int = 2, '出局之後的動作伺服器不收');
+
+  -- 結算：還在場上的只剩小華，他一個人說贏就算
+  perform test_as('a0000000-0000-0000-0000-000000000012', true);
+  select public.raid_result(v_room, true, 500, 30) into v_r;
+  perform test_ok((v_r ->> 'confirmed')::boolean, '打倒魔王確認了');
+  perform test_ok((v_r ->> 'first')::boolean and (v_r ->> 'kills')::int = 1, '第一次打倒');
+  perform test_ok(public.raid_kill_list() = '{"mimic": 1}'::jsonb, '小華的檔案記一次寶箱怪');
+  perform test_ok((select c.items ? 'frame-boss-mimic' from public.characters c
+                    where c.student_id = public.current_student_id()), '寶箱怪外框放進背包了');
+  perform test_ok(exists (select 1 from public.refresh_achievements() x where x = 'raid-slayer:1'),
+                  '魔王剋星第一階');
+  select public.raid_result(v_room, true, 500, 30) into v_r;
+  perform test_ok((v_r ->> 'kills')::int = 1, '重複回報不會多算一次');
+  perform test_denied($$ select public.buy_item('frame-boss-lich') $$, '魔王外框商店買不到');
+  -- 斷線的小明也有打，一起記
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  perform test_ok(public.raid_kill_list() = '{"mimic": 1}'::jsonb, '斷線被電腦接手的人也記一次');
+  perform test_ok(public.room_state(v_room) = 'null'::jsonb, '大家都回報了，這一場收掉');
 end $blk$;
 
-\echo '── 房間：學生自己揪人'
+\echo '── 魔王團戰：學生自己開、私人房、請人離開'
 do $blk$
-declare v_a uuid; v_b uuid; v_t uuid; v_list jsonb; v_state jsonb;
+declare v_a uuid; v_b uuid; v_t uuid; v_list jsonb; v_state jsonb; v_r jsonb; v_mei uuid;
 begin
-  -- 下課和回家是誰想打誰開，機制跟老師那場同一套。
   perform test_as('a0000000-0000-0000-0000-000000000011', true);
-  select public.student_open_room('td-02') into v_a;
-  perform test_ok(v_a is not null, '小明自己開了一場');
+  select public.open_raid('king', '0427') into v_a;
   select public.room_state(v_a) into v_state;
   perform test_ok(not (v_state ->> 'byTeacher')::boolean, '這場不是老師開的');
-  perform test_ok(jsonb_array_length(v_state -> 'members') = 1, '開的人直接就在裡面了');
-  perform test_ok((v_state -> 'members' -> 0 ->> 'host')::boolean, '而且標示得出他是開場的人');
-  perform test_denied($$ select public.student_open_room('td-99') $$, '開一個不存在的關卡');
+  perform test_ok((v_state ->> 'locked')::boolean, '給了密碼就是私人房');
+  perform test_ok(v_state ->> 'pass' = '0427', '房主看得到自己的密碼');
+  perform test_ok((v_state -> 'members' -> 0 ->> 'host')::boolean, '開的人直接就在裡面，而且是房主');
 
-  -- 一個人同時只能開一場，不然連按十次就掛十個空房間。
-  select public.student_open_room('td-03') into v_b;
-  perform test_ok((select count(*) from public.rooms r
-                    where r.host_student = public.current_student_id()
-                      and r.status <> 'done') = 1, '一個人同時只有一場');
+  -- 一個人同時只能開一場
+  select public.open_raid('king', '0427') into v_b;
   perform test_ok(public.room_state(v_a) = 'null'::jsonb, '他上一場自己收掉了');
 
-  -- 老師那場要排在清單最前面，不然小朋友會跑去跟同學那場。
-  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
-  select public.open_room('RLS1', 'td-01') into v_t;
   perform test_as('a0000000-0000-0000-0000-000000000012', true);
   select public.room_list() into v_list;
-  perform test_ok(jsonb_array_length(v_list) = 2, '小華看得到兩場');
-  perform test_ok((v_list -> 0 ->> 'byTeacher')::boolean, '老師那場排在最前面');
-  perform test_ok(not (v_list -> 1 ->> 'mine')::boolean, '同學開的那場他還沒進去');
+  perform test_ok((v_list -> 0 ->> 'locked')::boolean, '清單上掛鎖頭');
+  perform test_ok(public.room_state(v_b) ->> 'pass' is null, '別人看不到密碼');
+  perform test_denied(format('select public.join_room(%L)', v_b), '沒有密碼就想進私人房');
+  perform test_denied(format('select public.join_room(%L, %L)', v_b, '1111'), '密碼打錯');
+  perform test_ok(public.join_room(v_b, '0427') = v_b, '密碼對就進得去');
+  perform test_ok(public.join_room(v_b) = v_b, '已經在裡面的人重進不用再打密碼');
 
-  -- 同時只能在一場裡，不然開場的人會一直等一個其實在別場的人。
-  perform public.join_room(v_b);
-  perform public.join_room(v_t);
-  perform test_ok(jsonb_array_length(public.room_state(v_b) -> 'members') = 1,
-                  '換一場之後就不在舊的那場名單上了');
-
-  -- 開場的學生自己按得了開始，別人不行。
-  perform test_denied(format('select public.start_room(%L)', v_b), '不是開場的人按開始');
+  -- 房主請人離開，被請出的人這一場不能再進
+  perform test_as('a0000000-0000-0000-0000-000000000016', true);
+  select public.current_student_id() into v_mei;
+  perform public.join_room(v_b, '0427');
+  perform test_denied(format('select public.room_kick(%L, %L)', v_b, public.current_student_id()), '不是房主請人離開');
   perform test_as('a0000000-0000-0000-0000-000000000011', true);
-  perform public.start_room(v_b);
-  perform test_ok(public.room_state(v_b) ->> 'status' = 'playing', '開場的學生按得了開始');
+  perform public.room_kick(v_b, v_mei);
+  perform test_ok(jsonb_array_length(public.room_state(v_b) -> 'members') = 2, '小美不在名單上了');
+  perform test_as('a0000000-0000-0000-0000-000000000016', true);
+  perform test_denied(format('select public.join_room(%L, %L)', v_b, '0427'), '被請出去又想進來');
 
-  -- 開場的人走了，主人交給還在裡面的人。整場收掉會把留下來的人一起踢出去，
-  -- 而開場的人中途離開（打完了、被叫去吃飯）是很常見的事。
+  -- 老師不用密碼也看得到、關得掉
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  perform test_ok(public.room_state(v_b) ->> 'pass' = '0427', '老師看得到密碼');
+  perform public.close_room(v_b);
+  perform test_ok(public.room_state(v_b) = 'null'::jsonb, '老師關掉學生開的場');
+
+  -- 兩個人都在，一個說贏一個說輸：不算
   perform test_as('a0000000-0000-0000-0000-000000000011', true);
-  select public.student_open_room('td-02') into v_a;
+  select public.open_raid('worm') into v_a;
   perform test_as('a0000000-0000-0000-0000-000000000012', true);
   perform public.join_room(v_a);
   perform test_as('a0000000-0000-0000-0000-000000000011', true);
-  perform public.leave_room(v_a);
+  perform public.start_room(v_a);
+  select public.raid_result(v_a, true) into v_r;
+  perform test_ok(not (v_r ->> 'confirmed')::boolean, '只有一個人說贏，另一個還沒回報：還不算');
   perform test_as('a0000000-0000-0000-0000-000000000012', true);
-  select public.room_state(v_a) into v_state;
-  perform test_ok(v_state <> 'null'::jsonb, '開場的人走了，還有人的場不收');
-  perform test_ok(jsonb_array_length(v_state -> 'members') = 1, '走掉的人不在名單上了');
-  perform test_ok((v_state -> 'members' -> 0 ->> 'host')::boolean, '主人換成留下來的那個');
-  perform test_ok(public.room_is_mine(v_a), '接手的人按得了開始');
+  select public.raid_result(v_a, false) into v_r;
+  perform test_ok(not (v_r ->> 'confirmed')::boolean, '一個說贏一個說輸：不算');
+  perform test_ok(public.raid_kill_list() = '{"mimic": 1}'::jsonb, '火焰巨蟲沒有記上去');
 
-  -- 最後一個人也走了才收掉。
-  perform public.leave_room(v_a);
-  perform test_ok(public.room_state(v_a) = 'null'::jsonb, '一個人都不剩才把場收掉');
-
-  -- 沒人在的場自己收掉：把心跳往回撥，模擬大家都把分頁關掉。
+  -- 沒人在的場自己收掉
   perform test_as('a0000000-0000-0000-0000-000000000011', true);
-  select public.student_open_room('td-02') into v_a;
+  select public.open_raid('lich') into v_a;
   perform test_force(format(
     'update public.room_members set seen_at = now() - interval ''10 minutes'' where room_id = %L', v_a));
   perform test_force(format(
@@ -767,7 +794,11 @@ begin
   perform public.room_list();
   perform test_ok(public.room_state(v_a) = 'null'::jsonb, '沒人在的場自己收掉了');
   perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
-  perform test_ok(public.room_state(v_t) is not null, '老師開的場不會被自動收掉');
+  select public.open_raid('lich', null, 'RLS1') into v_t;
+  perform test_force(format(
+    'update public.rooms set created_at = now() - interval ''10 minutes'' where id = %L', v_t));
+  perform public.room_list('RLS1');
+  perform test_ok(public.room_state(v_t) <> 'null'::jsonb, '老師開的場不會被自動收掉');
   perform public.close_room(v_t);
 end $blk$;
 
