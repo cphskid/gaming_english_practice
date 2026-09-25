@@ -172,7 +172,7 @@ export interface Move {
    * 只記對錯的話重播出來的是電腦，不是他。
    */
   act?: 'answer' | 'summon' | 'up'
-  /** act 是 summon 時，派的是哪條線 */
+  /** act 是 summon 時派的是哪條線；answer 時是答哪條線的題（舊紀錄沒有） */
   line?: Skill
 }
 

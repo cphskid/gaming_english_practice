@@ -51,12 +51,15 @@ async function playFor(secs) {
     const ids0 = new Set(g.S.battle.units.map((u) => u.id))
     const t0 = Date.now()
     let n = 0
+    let bought = false
     while (Date.now() - t0 < secs * 1000) {
       if (g.S.target && g.ids().length) { g.tapId(g.S.target); n++ }
       if (n === 6) g.setLine('listen')
-      if (n === 12) g.buyTier()
+      // 只按一次：n 停在 12 的那幾輪會一直按，聽音的水晶變多（照線別給）之後會連升兩階
+      if (n === 12 && !bought) { bought = true; g.buyTier() }
       for (const u of g.S.battle.units) if (u.side === 'foe' && !ids0.has(u.id)) { ids0.add(u.id); seen.foeUnits++; seen.foeMax = Math.max(seen.foeMax, u.rank) }
-      seen.foeTier = g.S.battle.tier.foe
+      // 只看分身重播那一段（錄了 20 秒）；之後是電腦照他的速度接手，會自己有錢就升
+      if (g.S.battle.t < 19) seen.foeTier = g.S.battle.tier.foe
       await sleep(350)
     }
     seen.foeLabel = document.querySelector('.tw-foe')?.textContent ?? ''

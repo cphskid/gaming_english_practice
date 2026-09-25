@@ -23,7 +23,7 @@
 
 import type { LiveMove } from '@/core/types'
 import {
-  MAX_TIER, OTHER, RULES, newBattle, step, strike, summon, upgrade,
+  MAX_TIER, OTHER, RULES, newBattle, step, answered, summon, upgrade,
   type BattleRules, type BattleState, type Hit, type Line, type Side, type Unit,
 } from './battle'
 
@@ -95,11 +95,10 @@ export class Lockstep {
     if (s.over) return
     if (m.act === 'answer') {
       if (!m.correct) return
-      s.crystal[side] += this.r.answerCrystal
       this.credit[side]++
       const target: Unit | null =
         s.units.find((u) => u.id === m.target && u.side === OTHER[side] && u.hp > 0) ?? null
-      strike(s, side, target, this.r)
+      answered(s, side, (m.line as Line) ?? 'recognize', target, this.r)
     } else if (m.act === 'summon' && m.line) {
       const rank = Math.min(MAX_TIER, s.tier[side], this.credit[side], Math.max(1, m.rank ?? 1))
       if (rank < 1) return
