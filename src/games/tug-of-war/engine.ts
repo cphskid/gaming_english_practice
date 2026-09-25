@@ -50,13 +50,13 @@ const SHELL = `
   <span class="td-stat td-clock">${iconImg('clock', 15)} 3:00</span>
   <span class="td-stat tw-mine">${iconImg('castle', 15)} 100</span>
   <span class="td-stat tw-theirs">🏯 100</span>
+  <span class="tw-foe"></span>
   <div class="td-quiz">
     <span class="td-qemoji">⚔️</span>
     <span class="td-qzh">準備開打</span>
     <span class="td-qhint"></span>
   </div>
   <span class="td-buffs"></span>
-  <span class="tw-foe"></span>
   <button class="td-say" disabled aria-label="再念一次">🔊</button>
 </div>
 <div class="td-stage">
