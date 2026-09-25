@@ -34,7 +34,7 @@ async function signUp(nick) {
   await page.locator('form button[type=submit]').click()
   await page.waitForSelector('.jobs .job', { timeout: 30000 })
   await page.locator('.jobs .job').first().click()
-  await page.locator('.avatars .av').nth(nick === '小甲' ? 3 : 7).click()
+  await page.locator('.avatars .av').nth(nick === '小甲' ? 1 : 3).click()
   await page.locator('button.btn.big').click()
   await page.waitForSelector('.levels', { timeout: 30000 })
 }

@@ -103,7 +103,7 @@ async function dismissStamps(page) {
 
 try {
   await signUp(A, '小甲', 3)
-  await signUp(B, '小乙', 7)
+  await signUp(B, '小乙', 3)
   const who = await Promise.all([A, B].map((p) => p.evaluate(() => sessionStorage.getItem('gep.v1.session'))))
   who[0] && who[1] && who[0] !== who[1] ? ok('兩個分頁各自登入不同的學生') : fail('兩個分頁是同一個人：' + who)
 

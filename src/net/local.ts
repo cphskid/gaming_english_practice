@@ -6,6 +6,7 @@ import type { LevelData } from '@/core/types'
 import { ITEMS } from '@/data/shop'
 import { colorOf } from '@/data/cosmetics'
 import { legionOf } from '@/data/legions'
+import { AVATAR_BY_ID, avatarAfterJob } from '@/data/avatars'
 import { WordStat } from '@/core/wordStat'
 import type {
   AdminClassRow, AnswerEvent, Character, ClassRoom, LevelProgress, Staff, Student,
@@ -223,7 +224,13 @@ export class LocalRepository implements Repository {
   }
 
   async saveCharacter(c: Character): Promise<void> {
-    write(k.character(c.studentId), c)
+    // 頭像跟著職業走：跟資料庫 set_job 做同一件事
+    const prev = read<Character | null>(k.character(c.studentId), null)
+    const avatar = c.avatar ? avatarAfterJob(c.avatar, c.job) : c.avatar
+    const seen = c.avatarsSeen ?? prev?.avatarsSeen ?? []
+    write(k.character(c.studentId), {
+      ...c, avatar, avatarsSeen: !avatar || seen.includes(avatar) ? seen : [...seen, avatar],
+    })
   }
 
   /**
@@ -241,6 +248,10 @@ export class LocalRepository implements Repository {
 
   async setAvatar(avatar: string): Promise<void> {
     const c = this.current()
+    const def = AVATAR_BY_ID.get(avatar)
+    if (!def) throw new Error('沒有這張頭像')
+    if (def.job && def.job !== c.job) throw new Error('這張是別的職業的頭像，換職業才能用')
+    if (!def.job && count(c, avatar) <= 0) throw new Error('這張頭像要先去商店買')
     // 換過哪些頭像要留著：avatar 只存現在這一個，成就數的是種類
     const seen = c.avatarsSeen ?? []
     write(k.character(c.studentId), {

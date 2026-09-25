@@ -43,13 +43,23 @@
 
 **game-icons.net 徽記** — [game-icons.net](https://game-icons.net/)
 
-授權為 [Creative Commons BY 3.0](https://creativecommons.org/licenses/by/3.0/)：可自由使用、修改與再散布，**但必須署名**。`src/ui/icons.ts` 內嵌的 51 個成就徽章圖示出自此站（只取路徑資料，顏色改由畫面控制）。哪一張是誰畫的標在 `src/ui/icons.ts` 每一張上面，也可用 `tools/gen-badge-icons.py` 重新抓取。作者：
+授權為 [Creative Commons BY 3.0](https://creativecommons.org/licenses/by/3.0/)：可自由使用、修改與再散布，**但必須署名**。`src/ui/icons.ts` 內嵌的 51 個成就徽章圖示與 2 個職業圖示（騎士的頭盔 visored-helm、法師的帽子 pointy-hat）出自此站（只取路徑資料，顏色改由畫面控制）。哪一張是誰畫的標在 `src/ui/icons.ts` 每一張上面，也可用 `tools/gen-badge-icons.py` 重新抓取。作者：
 
-- **Lorc** — https://lorcblog.blogspot.com/ （30 張，含魔王剋星的 crowned-skull、合作類的 sword-clash 與 crossed-sabres）
+- **Lorc** — https://lorcblog.blogspot.com/ （32 張，含魔王剋星的 crowned-skull、合作類的 sword-clash 與 crossed-sabres、兩個職業圖示）
 - **Delapouite** — https://delapouite.com/ （17 張，含合作類的 shaking-hands、three-friends、meeple-group）
 - **Skoll** （2 張）
 - **Carl Olsen** — https://twitter.com/unstoppableCarl （1 張）
 - **Caro Asercion** （1 張）
+
+**48x48 Faces（角色頭像）** — Charles Gabriel，[OpenGameArt 1st](https://opengameart.org/content/48x48-faces-1st-sheet)、[2nd](https://opengameart.org/content/48x48-faces-2nd-sheet)、[3rd](https://opengameart.org/content/48x48-faces-3rd-sheet)、[4th sheet](https://opengameart.org/content/48x48-faces-4th-sheet)
+
+授權為 [Creative Commons BY 3.0](https://creativecommons.org/licenses/by/3.0/)，**須標註作者 Charles Gabriel**。`assets/cg-faces/` 收錄四張原圖，
+遊戲裡的 36 張頭像（職業送的八張與商店的二十八張）由 `tools/build-avatars.py` 切到 `public/avatars/`。
+
+**Hero Knight、Wizard Pack（職業英雄）** — [LuizMelo](https://luizmelo.itch.io/)
+
+`assets/heroes/` 的騎士與法師出自 [Hero Knight](https://luizmelo.itch.io/hero-knight) 與 [Wizard Pack](https://luizmelo.itch.io/wizard-pack)，
+由 `tools/build-hero-art.py` 切到 `public/heroes/`。授權為 Creative Commons Zero (CC0)，不強制標註；此處仍列出以示感謝。
 
 ## 單字題庫
 

@@ -2030,6 +2030,34 @@ insert into public.shop_items (id, price, kind, slot, unlock_level, achievement_
   ('legion-treasure', 300, 'cosmetic', 'legion', 3, false, false, null),
   ('legion-monsters', 300, 'cosmetic', 'legion', 3, false, false, null),
   ('legion-elementals', 1000, 'cosmetic', 'legion', 10, false, false, null),
+  ('av-monk-m', 300, 'cosmetic', 'avatar', 1, false, false, null),
+  ('av-monk-f', 300, 'cosmetic', 'avatar', 1, false, false, null),
+  ('av-ranger-m', 300, 'cosmetic', 'avatar', 1, false, false, null),
+  ('av-ranger-f', 300, 'cosmetic', 'avatar', 1, false, false, null),
+  ('av-ninja-m', 300, 'cosmetic', 'avatar', 1, false, false, null),
+  ('av-ninja-f', 300, 'cosmetic', 'avatar', 1, false, false, null),
+  ('av-berserk-m', 300, 'cosmetic', 'avatar', 1, false, false, null),
+  ('av-berserk-f', 300, 'cosmetic', 'avatar', 1, false, false, null),
+  ('av-pirate', 300, 'cosmetic', 'avatar', 1, false, false, null),
+  ('av-merchant', 300, 'cosmetic', 'avatar', 1, false, false, null),
+  ('av-bard', 300, 'cosmetic', 'avatar', 1, false, false, null),
+  ('av-samurai-m', 800, 'cosmetic', 'avatar', 4, false, false, null),
+  ('av-samurai-f', 800, 'cosmetic', 'avatar', 4, false, false, null),
+  ('av-dknight-m', 800, 'cosmetic', 'avatar', 4, false, false, null),
+  ('av-dknight-f', 800, 'cosmetic', 'avatar', 4, false, false, null),
+  ('av-paladin', 800, 'cosmetic', 'avatar', 4, false, false, null),
+  ('av-dancer', 800, 'cosmetic', 'avatar', 4, false, false, null),
+  ('av-captain', 800, 'cosmetic', 'avatar', 4, false, false, null),
+  ('av-vampire', 800, 'cosmetic', 'avatar', 4, false, false, null),
+  ('av-el-fire', 1500, 'cosmetic', 'avatar', 8, false, false, null),
+  ('av-el-water', 1500, 'cosmetic', 'avatar', 8, false, false, null),
+  ('av-el-wind', 1500, 'cosmetic', 'avatar', 8, false, false, null),
+  ('av-el-earth', 1500, 'cosmetic', 'avatar', 8, false, false, null),
+  ('av-el-light', 1500, 'cosmetic', 'avatar', 8, false, false, null),
+  ('av-el-dark', 1500, 'cosmetic', 'avatar', 8, false, false, null),
+  ('av-angel', 1500, 'cosmetic', 'avatar', 8, false, false, null),
+  ('av-king', 1500, 'cosmetic', 'avatar', 8, false, false, null),
+  ('av-queen', 1500, 'cosmetic', 'avatar', 8, false, false, null),
   ('frame-gold', 120, 'cosmetic', 'frame', 1, false, false, null),
   ('frame-ribbon', 180, 'cosmetic', 'frame', 3, false, false, null),
   ('frame-crown', 260, 'cosmetic', 'frame', 5, false, false, null),
@@ -2059,7 +2087,7 @@ on conflict (id) do update
 
 -- 商店只認這份清單。舊品項留在資料庫裡會變成「買得到但畫面上沒有」的鬼品項，
 -- 所以不在清單裡的一律刪掉。
-delete from public.shop_items where id not in ('slow-30', 'heal-5', 'crystal-40', 'color-red', 'color-yellow', 'color-purple', 'color-black', 'legion-goblin', 'legion-pig', 'legion-pirate-bomb', 'legion-treasure', 'legion-monsters', 'legion-elementals', 'frame-gold', 'frame-ribbon', 'frame-crown', 'frame-rainbow', 'frame-laurel', 'frame-wave', 'frame-flame', 'frame-frost', 'frame-legend', 'frame-banner', 'frame-stardust', 'frame-calendar', 'frame-boss-mimic', 'frame-boss-minotaur', 'frame-boss-worm', 'frame-boss-king', 'frame-boss-wizard', 'frame-boss-cthulhu', 'frame-boss-demon', 'frame-boss-frost', 'frame-boss-shadow', 'frame-boss-lich');
+delete from public.shop_items where id not in ('slow-30', 'heal-5', 'crystal-40', 'color-red', 'color-yellow', 'color-purple', 'color-black', 'legion-goblin', 'legion-pig', 'legion-pirate-bomb', 'legion-treasure', 'legion-monsters', 'legion-elementals', 'av-monk-m', 'av-monk-f', 'av-ranger-m', 'av-ranger-f', 'av-ninja-m', 'av-ninja-f', 'av-berserk-m', 'av-berserk-f', 'av-pirate', 'av-merchant', 'av-bard', 'av-samurai-m', 'av-samurai-f', 'av-dknight-m', 'av-dknight-f', 'av-paladin', 'av-dancer', 'av-captain', 'av-vampire', 'av-el-fire', 'av-el-water', 'av-el-wind', 'av-el-earth', 'av-el-light', 'av-el-dark', 'av-angel', 'av-king', 'av-queen', 'frame-gold', 'frame-ribbon', 'frame-crown', 'frame-rainbow', 'frame-laurel', 'frame-wave', 'frame-flame', 'frame-frost', 'frame-legend', 'frame-banner', 'frame-stardust', 'frame-calendar', 'frame-boss-mimic', 'frame-boss-minotaur', 'frame-boss-worm', 'frame-boss-king', 'frame-boss-wizard', 'frame-boss-cthulhu', 'frame-boss-demon', 'frame-boss-frost', 'frame-boss-shadow', 'frame-boss-lich');
 
 
 -- 成就目錄。**這一段是 tools/gen-achievements-seed.mjs 從 src/data/achievements.ts

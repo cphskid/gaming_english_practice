@@ -228,8 +228,10 @@ for (const lv of LEVELS) {
   console.log(`  ${String(lv.no).padStart(2)} ${lv.name.padEnd(8)} ${layoutName.padEnd(14)} ${String(11 + lv.no).padStart(12)} ${String(w.hp).padStart(9)} ${String(w.speed).padStart(5)}  ${lv.isBoss ? '是' : ''}`)
 }
 
-const used = new Set(LEVELS.map((lv) => Object.entries(LAYOUTS).find(([, L]) => L === lv.layout)?.[0]))
-if (used.size !== LEVELS.length) {
+// 第一章一關一張；後兩章用第一章的圖加上下翻轉版本輪著用（見 levels.ts）
+const CH1 = LEVELS.filter((lv) => lv.chapter === 1)
+const used = new Set(CH1.map((lv) => Object.entries(LAYOUTS).find(([, L]) => L === lv.layout)?.[0]))
+if (used.size !== CH1.length) {
   console.error(`\n  ✗ 十四關只用到 ${used.size} 張佈局，目標是一關一張`)
   bad++
 }

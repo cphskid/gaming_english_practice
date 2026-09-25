@@ -710,11 +710,10 @@ export function App() {
         />
       )}
 
-      {screen === 'settings' && student && character && (
+      {screen === 'settings' && student && (
         <Settings
-          student={student} character={character}
+          student={student}
           onChanged={(s) => { setStudent(s); void enter(s) }}
-          onCharacter={setCharacter}
           onBack={() => setScreen('select')}
           onLogout={() => void logout()}
         />

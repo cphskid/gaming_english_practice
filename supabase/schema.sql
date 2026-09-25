@@ -174,7 +174,7 @@ alter table public.shop_items add column if not exists slot text;
 -- 約束要先拆再建，不然舊資料庫會一直停在只認 color／frame 的那一版。
 alter table public.shop_items drop constraint if exists shop_items_slot_ck;
 alter table public.shop_items add constraint shop_items_slot_ck
-  check (slot is null or slot in ('color','frame','legion'));
+  check (slot is null or slot in ('color','frame','legion','avatar'));
 
 -- 軍團包（2026-09-24）：
 --   free              送的，不用買就能穿。陣營五色從這天起免費，equip_item 看這一欄。
@@ -1098,7 +1098,18 @@ declare v_student uuid := public.current_student_id();
 begin
   if v_student is null then raise exception '還沒加入班級'; end if;
   if p_job not in ('knight','mage') then raise exception '沒有這個職業'; end if;
-  update public.characters set job = p_job, updated_at = now() where student_id = v_student;
+  -- 頭像跟著職業走（2026-09-25）：戴的是別的職業送的那四張，就換成新職業的第一張；
+  -- 商店買的照舊。跟 src/data/avatars.ts 的 avatarAfterJob 同一件事，改一邊要改另一邊。
+  update public.characters c
+     set job = p_job,
+         avatar = case when public.avatar_ok(c.avatar, p_job, c.items) then c.avatar
+                       else public.job_default_avatar(p_job) end,
+         avatars_seen = case when public.avatar_ok(c.avatar, p_job, c.items)
+                               or c.avatars_seen @> to_jsonb(public.job_default_avatar(p_job))
+                             then c.avatars_seen
+                             else c.avatars_seen || to_jsonb(public.job_default_avatar(p_job)) end,
+         updated_at = now()
+   where c.student_id = v_student;
 end;
 $$;
 
@@ -1107,13 +1118,43 @@ $$;
 create or replace function public.level_of(p_exp int)
 returns int language sql immutable as $$ select (p_exp / 120) + 1 $$;
 
+/*
+  頭像（2026-09-25 換成職業各四張＋商店賣，見 src/data/avatars.ts）。
+  **職業送的四張寫死在這裡**，跟 avatars.ts 的 job 欄位是同一份清單，改一邊要改另一邊。
+  商店賣的就看背包裡有沒有這個 id（shop_items.slot = 'avatar'）。
+*/
+create or replace function public.job_avatars(p_job text)
+returns text[] language sql immutable as $$
+  select case p_job
+    when 'knight' then array['av-warrior-m','av-warrior-f','av-soldier-m','av-soldier-f']
+    when 'mage'   then array['av-magician-m','av-magician-f','av-healer-m','av-healer-f']
+    else array[]::text[] end
+$$;
+
+create or replace function public.job_default_avatar(p_job text)
+returns text language sql immutable as $$ select (public.job_avatars(p_job))[1] $$;
+
+-- 這個職業、這個背包能不能戴這張
+create or replace function public.avatar_ok(p_avatar text, p_job text, p_items jsonb)
+returns boolean language sql stable set search_path = public, pg_temp as $$
+  select p_avatar = any(public.job_avatars(p_job))
+      or (exists (select 1 from public.shop_items i where i.id = p_avatar and i.slot = 'avatar')
+          and coalesce((p_items ->> p_avatar)::int, 0) > 0)
+$$;
+
 create or replace function public.set_avatar(p_avatar text)
 returns void language plpgsql security definer set search_path = public, pg_temp as $$
-declare v_student uuid := public.current_student_id();
+declare v_student uuid := public.current_student_id(); v_job text; v_items jsonb;
 begin
   if v_student is null then raise exception '還沒加入班級'; end if;
-  -- 只認 Avatars_01 ~ Avatars_25，不然什麼字串都塞得進來
-  if p_avatar !~ '^Avatars_(0[1-9]|1[0-9]|2[0-5])$' then
+  select c.job, c.items into v_job, v_items from public.characters c where c.student_id = v_student;
+  if not public.avatar_ok(p_avatar, v_job, v_items) then
+    if exists (select 1 from public.shop_items i where i.id = p_avatar and i.slot = 'avatar') then
+      raise exception '這張頭像要先去商店買';
+    end if;
+    if p_avatar = any(public.job_avatars('knight') || public.job_avatars('mage')) then
+      raise exception '這張是別的職業的頭像，換職業才能用';
+    end if;
     raise exception '沒有這張頭像';
   end if;
   -- 換過哪些頭像要留著。avatar 欄位只存「現在這一個」，
@@ -1127,6 +1168,15 @@ begin
    where c.student_id = v_student;
 end;
 $$;
+
+-- 舊頭像搬家（2026-09-25）：原本的 Avatars_01~25 是 Tiny Swords 的，換成職業送的第一張。
+-- 冪等：搬過的人不會再是 Avatars_ 開頭。avatars_seen 裡的舊 id 留著，成就數的種類不會倒退。
+update public.characters c
+   set avatar = public.job_default_avatar(c.job),
+       avatars_seen = case when c.avatars_seen @> to_jsonb(public.job_default_avatar(c.job))
+                           then c.avatars_seen
+                           else c.avatars_seen || to_jsonb(public.job_default_avatar(c.job)) end
+ where c.avatar like 'Avatars\_%';
 
 /*
   買東西。**價格、等級門檻、餘額全部在這裡查**，客戶端只送品項 id。

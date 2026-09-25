@@ -7,6 +7,7 @@ import {
   LINES, LINE_COST, LINE_IDS, MAX_TIER, RULES, nextCost, newBattle, pushed, statsOf, step,
   answered, summon, upgrade, OTHER, type BattleState, type Hit, type Line, type Side, type Unit,
 } from './battle'
+import { createHero } from '../hero'
 import { DELAY, Lockstep, SEAT_SIDE, TICK, mirror, mirrorHit } from './lockstep'
 
 const W = 1088
@@ -150,6 +151,11 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   let raf = 0
   let paused = false
   let last = performance.now()
+  /**
+   * 你本人（職業英雄），站在自己城堡和箭塔中間，答對時出手。
+   * **只有外觀**：兵推的傷害與平衡一點都沒動（Chuck 2026-09-25：對戰先只做外觀）。
+   */
+  const hero = createHero(ctx.job, R.homeMe + 52, ROAD_Y + 24, 58, 1)
 
   const S = {
     battle: newBattle(R),
@@ -819,6 +825,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       // **出不出兵要看累積夠了沒**——兵階上限是幾，就要連對幾題。
       if (!liveOn) answered(S.battle, 'me', S.line, target, R)
       S.flashes.push({ x: at.x, life: 0.22 })
+      hero.strike(at.x, at.y > ROAD_Y - 40 ? at.y : ROAD_Y)
       // 聽音答對不再唸一次：馬上就要出下一題的聲音，連著兩個字會分不清哪個是題目
       if (S.line !== 'listen') speak(word.word)
       S.pending++
@@ -906,6 +913,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   // ------------------------------------------------------------------ 迴圈
   function update(dt: number) {
     if (S.cooldown > 0) S.cooldown -= dt
+    hero.update(dt)
     if (!S.rushed && R.seconds - S.battle.t <= RUSH_AT) {
       S.rushed = true
       ctx.audio.setMusicRate(1.12)
@@ -1478,9 +1486,11 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     drawCastle('foe')
     drawTower('me')
     drawTower('foe')
+    hero.draw(c2d)
     for (const u of [...S.battle.units].sort((a, b) => laneY(a) - laneY(b))) drawUnit(u)
     drawFrost()
     drawArrows()
+    hero.drawFx(c2d)
     drawFront()
 
     // 木牌固定在上面、旗子在兵身上，兩者靠顏色配對。不用排版演算法了：

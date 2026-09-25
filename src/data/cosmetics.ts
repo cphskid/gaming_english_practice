@@ -17,8 +17,12 @@
 
 import { BOSSES } from './bosses'
 
-/** legion 是整套軍團（見 data/legions.ts） */
-export type Slot = 'color' | 'frame' | 'legion'
+/**
+ * legion 是整套軍團（見 data/legions.ts）；avatar 是商店賣的頭像（見 data/avatars.ts）。
+ * 頭像不走 equip_item，戴哪一張存在 characters.avatar，由 set_avatar 換——
+ * 這個欄位只是讓商店分得出哪幾個品項是頭像。
+ */
+export type Slot = 'color' | 'frame' | 'legion' | 'avatar'
 
 export interface ColorDef {
   /** 商店品項 id。空字串代表預設的藍色，不用買。 */

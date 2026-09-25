@@ -8,7 +8,9 @@ import { LEGIONS, TIERS, legionOf } from '@/data/legions'
 import { LegionThumb } from './LegionThumb'
 import { JOB_NAME } from '@/core/character'
 import { repo } from '@/net'
-import { avatarSrc } from '@/data/jobs'
+import { AVATAR_TIERS, SHOP_AVATARS, avatarAfterJob, avatarSrc, jobAvatars } from '@/data/avatars'
+import type { Job } from '@/core/types'
+import { JobIcon, JobPicker } from './JobPicker'
 import { Avatar } from './Avatar'
 import { Icon } from './Icon'
 import type { IconName } from '@/data/icons'
@@ -18,6 +20,9 @@ import type { IconName } from '@/data/icons'
  *
  * 本來是商店的第二個分頁，2026-09-24 Chuck 說藏在商店裡不直覺，
  * 搬到選關畫面上方自己一顆鈕。換裝不是買東西，不該要先進賣場才找得到。
+ *
+ * 2026-09-25 職業和頭像也搬進來（本來在「我的設定」，小朋友找不到）。
+ * 職業不用錢、隨時換；頭像每個職業送四張，其他的去商店買，買到的哪個職業都能戴。
  *
  * 這一頁是**收集感的主場**：買到的排在前面、沒買到的畫成灰色剪影
  * 並標上價錢。看得到自己還缺什麼，才會想再打一關。
@@ -52,6 +57,24 @@ export function MyCharacter({
     setBusy(false)
   }
 
+  /** 換職業。頭像是舊職業送的就跟著換成新職業的第一張（資料庫 set_job 也這樣做）。 */
+  const changeJob = (job: Job) => run(async () => {
+    await repo.saveCharacter({ ...character, job })
+    const avatar = avatarAfterJob(character.avatar, job)
+    const seen = character.avatarsSeen ?? []
+    onChanged({ ...character, job, avatar, avatarsSeen: seen.includes(avatar) ? seen : [...seen, avatar] })
+    return avatar === character.avatar
+      ? `換成${JOB_NAME[job]}了，下一關就會用新的`
+      : `換成${JOB_NAME[job]}了，頭像也換成${JOB_NAME[job]}的`
+  })
+
+  const pickAvatar = (id: string) => run(async () => {
+    await repo.setAvatar(id)
+    const seen = character.avatarsSeen ?? []
+    onChanged({ ...character, avatar: id, avatarsSeen: seen.includes(id) ? seen : [...seen, id] })
+    return '頭像換好了'
+  })
+
   /** 穿上或脫下。同一個欄位只能穿一件，換掉哪一件是資料庫決定的。 */
   const wear = (id: string, on: boolean, name: string) => run(async () => {
     const equipped = await repo.equipItem(id, on)
@@ -80,11 +103,47 @@ export function MyCharacter({
         <div className="hero">
           <Avatar character={character} size={96} />
           <div className="hero-txt">
-            <b>{JOB_NAME[character.job]}　Lv.{level}</b>
+            <b><JobIcon job={character.job} size={20} /> {JOB_NAME[character.job]}　Lv.{level}</b>
             <span>{wornLegion.usesColor ? `${wornLegion.name}．${wornColor.name}` : wornLegion.name}　{wornFrame ? wornFrame.name : '沒戴外框'}</span>
             <span className="i-tag">收集進度 {ownedCosmetics} / {cosmetics.length}</span>
           </div>
         </div>
+
+        <h2 className="sec">職業<small>　不用錢，想換就換，進度和金幣都不會動</small></h2>
+        <JobPicker job={character.job} disabled={busy} onPick={(j) => { if (j !== character.job) void changeJob(j) }} />
+
+        <h2 className="sec">頭像<small>　{JOB_NAME[character.job]}送四張，其他的在商店</small></h2>
+        <div className="avatars">
+          {jobAvatars(character.job).map((a) => (
+            <button key={a.id} type="button" className={'av' + (character.avatar === a.id ? ' on' : '')}
+              disabled={busy} onClick={() => { if (character.avatar !== a.id) void pickAvatar(a.id) }} aria-label={a.name}>
+              <img src={avatarSrc(a.id)} alt="" />
+            </button>
+          ))}
+        </div>
+        {(['common', 'rare', 'legend'] as const).map((tier) => {
+          const t = AVATAR_TIERS[tier]
+          const list = SHOP_AVATARS.filter((a) => a.tier === tier)
+          const mine = list.filter((a) => has(a.id)).length
+          return (
+            <div className="av-shelf" key={tier}>
+              <h3><b style={{ background: t.tint }}>{t.name}</b><small>買到 {mine} / {list.length}</small></h3>
+              <div className="avatars">
+                {list.map((a) => {
+                  const owned = has(a.id)
+                  return (
+                    <button key={a.id} type="button" aria-label={a.name}
+                      className={'av' + (character.avatar === a.id ? ' on' : '') + (owned ? '' : ' locked')}
+                      disabled={busy} onClick={() => owned ? (character.avatar !== a.id && void pickAvatar(a.id)) : onShop()}>
+                      <img src={avatarSrc(a.id)} alt="" />
+                      {!owned && <span className="av-tag">{t.price}</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
 
         <h2 className="sec">軍團<small>　兵推整套換；守塔換士兵和箭塔</small></h2>
         <div className="picks">

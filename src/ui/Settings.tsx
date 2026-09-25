@@ -1,26 +1,20 @@
 import { useState } from 'react'
-import type { Character, Job, Student } from '@/core/types'
+import type { Student } from '@/core/types'
 import { repo } from '@/net'
-import { JOB_NAME } from '@/core/character'
-import { AVATARS, JOB_BLURB, avatarSrc } from '@/data/jobs'
 import { audio } from '@/audio'
 
 /**
- * 學生自己的設定：改密碼、改暱稱、換班。
+ * 學生自己的設定：聲音、改密碼、改暱稱、換班。
+ * （職業和頭像 2026-09-25 搬去「我的角色」了——放在這裡 Chuck 的女兒根本沒發現。）
  *
  * 改密碼要先打對舊的，免得別人拿到一台沒鎖的平板就把密碼換掉。
  * 暱稱一週只能改一次，不然一定有人整節課都在改名字玩。
- *
- * 職業和頭像**隨時都能改，也不用錢**：職業不是買來的，十歲小孩選錯不該
- * 被綁一整個學期；而且兩個職業的通關門檻是量過的，改來改去也不會變強。
  */
 export function Settings({
-  student, character, onChanged, onCharacter, onBack, onLogout,
+  student, onChanged, onBack, onLogout,
 }: {
   student: Student
-  character: Character
   onChanged: (s: Student) => void
-  onCharacter: (c: Character) => void
   onBack: () => void
   onLogout: () => void
 }) {
@@ -28,8 +22,6 @@ export function Settings({
   const [newPw, setNewPw] = useState('')
   const [nickname, setNickname] = useState(student.nickname)
   const [code, setCode] = useState('')
-  const [job, setJob] = useState<Job>(character.job)
-  const [avatar, setAvatar] = useState(character.avatar || AVATARS[0])
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -69,38 +61,6 @@ export function Settings({
         <p className="hint">
           只有兵推對戰那三分鐘會有音樂，關卡裡不會。在教室裡覺得吵就關掉，答對答錯的音效不受影響。
         </p>
-      </div>
-
-      <div className="form panel">
-        <h2>換職業、換長相</h2>
-        <div className="jobs">
-          {(['knight', 'mage'] as Job[]).map((j) => (
-            <button key={j} type="button" className={'job' + (job === j ? ' on' : '')}
-              onClick={() => setJob(j)}>
-              <span className="job-name">{JOB_NAME[j]}</span>
-              <span className="job-blurb">{JOB_BLURB[j]}</span>
-            </button>
-          ))}
-        </div>
-        <div className="avatars">
-          {AVATARS.map((a) => (
-            <button key={a} type="button" className={'av' + (avatar === a ? ' on' : '')}
-              onClick={() => setAvatar(a)} aria-label={a}>
-              <img src={avatarSrc(a)} alt="" />
-            </button>
-          ))}
-        </div>
-        <p className="lede left small">職業想改就改，不用錢，進度和金幣都不會動。</p>
-        <button className="btn" type="button"
-          disabled={busy || (job === character.job && avatar === character.avatar)}
-          onClick={() => void run(async () => {
-            if (job !== character.job) await repo.saveCharacter({ ...character, job })
-            if (avatar !== character.avatar) await repo.setAvatar(avatar)
-            onCharacter({ ...character, job, avatar })
-            return '改好了，下一關就會用新的'
-          })}>
-          存起來
-        </button>
       </div>
 
       <form className="form panel" onSubmit={(e) => {
