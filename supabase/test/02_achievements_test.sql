@@ -533,6 +533,82 @@ select public.refresh_achievements();
 select test_ok((select value from public.my_achievements() where id = 'war-flag') = 0,
                '贏分身、自稱贏真人，都不算戰旗勝場');
 
+\echo '── 真人即時對戰：排隊湊對、邀請、交換動作、戰旗'
+select test_as('b0000000-0000-0000-0000-000000000001', true);
+select test_ok((public.live_poll(true, 14))->'match' = 'null'::jsonb, '一個人排隊：還配不到');
+select test_as('b0000000-0000-0000-0000-000000000002', true);
+select test_ok((public.live_poll(true, 15))->'match'->>'seat' = '2', '第二個人排進來就配到了，他是第二位');
+select test_ok((public.live_poll(false, 15))->'match'->>'foe' = 'b1000000-0000-0000-0000-000000000001',
+               '對手是小成');
+select test_as('b0000000-0000-0000-0000-000000000001', true);
+select test_ok((public.live_poll(true, 14))->'match'->>'seat' = '1', '小成下一次報到也拿到同一場，他是第一位');
+select test_ok((public.live_poll(true, 14))->'match'->>'no_listen' = 'true', '班上真人對戰預設不出聽音題');
+select set_config('test.live', (public.live_poll(true, 14))->'match'->>'id', false);
+
+select test_ok((public.live_sync(current_setting('test.live')::uuid, 0,
+                  '[[1,"a",1,-1],[1,"s","recognize",1]]'::jsonb, 5, 0))->>'mine' = '2',
+               '送兩筆動作，伺服器收到兩筆');
+select test_ok((public.live_sync(current_setting('test.live')::uuid, 0,
+                  '[[1,"a",1,-1],[1,"s","recognize",1]]'::jsonb, 5, 0))->>'mine' = '2',
+               '網路重送同樣兩筆：不會變四筆');
+select test_ok((public.live_sync(current_setting('test.live')::uuid, 5,
+                  '[[9,"u"]]'::jsonb, 99, 0))->>'mine' = '2',
+               '中間漏了幾筆（第 5 筆接不上）：不收，要前端從第 2 筆重送');
+select test_as('b0000000-0000-0000-0000-000000000002', true);
+select test_ok((select jsonb_array_length(r->'theirs') = 2 and (r->>'their_mark')::int = 5
+                  from (select public.live_sync(current_setting('test.live')::uuid, 0, '[]'::jsonb, 3, 0) r) x),
+               '對方拿到兩筆，「送到第幾格」是 5 不是接不上那次說的 99');
+select test_ok((select jsonb_array_length(r->'theirs') = 1
+                  from (select public.live_sync(current_setting('test.live')::uuid, 0, '[]'::jsonb, 3, 1) r) x),
+               '已經有一筆了就只拿後面那一筆');
+select test_ok((public.live_poll(false, 15))->'match' = 'null'::jsonb,
+               '開打之後（叫過 live_sync）回到對戰頁，不會又被拉回同一場');
+select test_denied($$ select public.live_sync(gen_random_uuid(), 0, '[]'::jsonb, 0, 0) $$, '碰不是自己的對戰');
+select test_denied($$ select * from public.live_matches $$, '直接讀對戰表（只能走 live_sync）');
+select test_denied($$ select * from public.live_lobby $$, '直接讀排隊表（只能走 live_poll）');
+
+\echo '── 邀同學'
+select test_force($$ update public.live_lobby set match_id = null $$);
+select test_as('b0000000-0000-0000-0000-000000000001', true);
+select test_ok(public.live_invite('b1000000-0000-0000-0000-000000000002'), '邀小就');
+select test_ok((public.live_poll(false, 14))->>'inviting' = 'b1000000-0000-0000-0000-000000000002', '看得到自己正在邀誰');
+select test_as('b0000000-0000-0000-0000-000000000002', true);
+select test_ok((public.live_poll(false, 15))->'invites'->0->>'nickname' is not null, '小就看到有人邀他');
+select test_ok((public.live_accept('b1000000-0000-0000-0000-000000000001'))->>'how' = 'invite', '按接受就開一場');
+select test_ok(public.live_accept('b1000000-0000-0000-0000-000000000001') is null, '同一個邀請接第二次：開不出第二場');
+select test_denied($$ select public.class_set_live_listen('ACH1', true) $$, '學生不能改聽音題開關');
+
+\echo '── 真人對戰的戰旗'
+select test_as('b0000000-0000-0000-0000-000000000001', true);
+-- 前面的測試直接塞過幾場舊的「贏真人」，所以這裡比的是多了幾場
+select public.refresh_achievements();
+select set_config('test.flag0', (select value::text from public.my_achievements() where id = 'war-flag'), false);
+select public.record_versus_match('c0000000-0000-0000-0000-0000000000c1'::uuid, 'student', true,
+  p_live => current_setting('test.live')::uuid);
+select test_ok((select opponent_kind = 'student' and opponent_student = 'b1000000-0000-0000-0000-000000000002'
+                  from public.versus_matches where session_id = 'c0000000-0000-0000-0000-0000000000c1'),
+               '真的有這一場：記成真人，對手是伺服器從那一場讀的');
+select public.refresh_achievements();
+select test_ok((select value from public.my_achievements() where id = 'war-flag')
+               = current_setting('test.flag0')::int + 1,
+               '贏了真人，對方還沒回報（輸了直接關掉）也算一場戰旗');
+select public.record_versus_match('c0000000-0000-0000-0000-0000000000c2'::uuid, 'student', true,
+  p_live => gen_random_uuid());
+select test_ok((select opponent_kind from public.versus_matches
+                 where session_id = 'c0000000-0000-0000-0000-0000000000c2') = 'cpu',
+               '編一場不存在的真人對戰：當成打電腦');
+select test_as('b0000000-0000-0000-0000-000000000002', true);
+select public.record_versus_match('c0000000-0000-0000-0000-0000000000c3'::uuid, 'student', true,
+  p_live => current_setting('test.live')::uuid);
+select public.refresh_achievements();
+select test_ok((select value from public.my_achievements() where id = 'war-flag') = 0,
+               '兩個人都說自己贏了同一場：一定有人改了前端，兩邊都不算');
+select test_as('b0000000-0000-0000-0000-000000000001', true);
+select public.refresh_achievements();
+select test_ok((select value from public.my_achievements() where id = 'war-flag')
+               = current_setting('test.flag0')::int,
+               '小成那一場也跟著作廢');
+
 reset role;
 select test_force($$
   delete from public.students where login_id like 'ach%';

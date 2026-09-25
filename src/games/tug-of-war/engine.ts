@@ -1,12 +1,13 @@
-import type { GameContext, GameHandle, Move, Opponent, Word } from '@/core/types'
+import type { GameContext, GameHandle, LiveMove, Move, Opponent, Word } from '@/core/types'
 import { makeFeeder } from '@/core/opponent'
 import { iconImg, iconUrl } from '@/data/icons'
 import { ART, TERRAIN_KEYS, loadArt, onArt } from '../tower-defense/art'
 import { legionById, legionUnitArt } from '@/data/legions'
 import {
   LINES, LINE_COST, LINE_IDS, MAX_TIER, RULES, nextCost, newBattle, pushed, statsOf, step,
-  strike, summon, upgrade, type Line, type Unit,
+  strike, summon, upgrade, OTHER, type BattleState, type Hit, type Line, type Side, type Unit,
 } from './battle'
+import { DELAY, Lockstep, SEAT_SIDE, TICK, mirror, mirrorHit } from './lockstep'
 
 const W = 1088
 const H = 576
@@ -211,6 +212,43 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     buffs: [] as { id: string; icon: string; name: string; left: number; dur: number }[],
     flashes: [] as { x: number; life: number }[],
     done: false,
+    /** 真人對戰：按了升階、還在等它生效（晚 1.5 秒）的時候是按下去那時的階，不然 0 */
+    upWait: 0,
+  }
+
+  /**
+   * 真人即時對戰（2026-09-25）。兩支手機跑同一份戰場，只交換動作，
+   * 做法與規矩見 lockstep.ts。這時候 S.battle 是**拿來畫的那一份**：
+   * 第一位就是那份戰場本身，第二位是左右翻過來的複本——引擎裡所有「me」
+   * 都還是「看這支手機的人」，畫面那一大段完全不用改。
+   *
+   * **真人對戰時引擎不准直接改 S.battle**。答對、出兵、升階都變成送一個動作出去，
+   * 1.5 秒後兩邊一起生效。
+   */
+  const live = foe.live ?? null
+  const ls = live ? new Lockstep(R) : null
+  const mySide: Side = live ? SEAT_SIDE[live.seat] : 'me'
+  const flip = live?.seat === 2
+  let flipped: BattleState | null = null
+  const viewOf = (): BattleState => (flip ? (flipped = mirror(ls!.truth, flipped, R)) : ls!.truth)
+  /** 還在跟本人打。對方斷線、改打分身之後是 false。 */
+  let liveOn = !!live
+  /** 我送出去的動作（累計），lockstep 自己那一邊也吃這一串 */
+  const myLive: LiveMove[] = []
+  let liveAcc = 0
+  const truthLog = new Map<number, string>()
+  let lastUpK = 0
+  /** 從什麼時候開始在等對方（performance.now），沒在等是 0 */
+  let stallSince = 0
+  function sendLive(m: Omit<LiveMove, 'k'>) {
+    const full = { ...m, k: ls!.tick + 1 }
+    myLive.push(full)
+    live!.send(full)
+  }
+  if (ls) S.battle = viewOf()
+  if (foe.noListen) {
+    const b = elLines.find((x) => x.dataset.line === 'listen')
+    if (b) b.style.display = 'none'
   }
 
   /**
@@ -276,7 +314,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
    * 它就比人多一份火力——實測會變成三十秒把人的城堡打到剩 16 血，
    * 而平衡量測（那邊兩邊都有算落空）說不該發生。引擎跟平衡量測要跑同一套規則。
    */
-  const feed = makeFeeder(foe, (correct, move) => {
+  function onFoeMove(correct: boolean, move: Move) {
     // 同學的分身：照他當時做的事重播，不替他決定（見 ghostMove）。
     if (move.act) { ghostMove(move); return }
     // **電腦跟人跑同一套規則**：一樣要累積、一樣有水晶、一樣被上限拖慢出兵速度，
@@ -306,7 +344,29 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     upgrade(S.battle, 'foe')
     const mine = tappable('me')
     strike(S.battle, 'foe', mine[(Math.random() * TAPPABLE) | 0] ?? null, R)
-  })
+  }
+  let feed = makeFeeder(foe, onFoeMove)
+
+  /**
+   * 對方斷線（15 秒沒消息）或按了離開：剩下的時間改打他的分身。
+   * 已經送出來的動作先全部套用完，然後這份戰場就變成這支手機自己的，照一般兵推往下打。
+   * **這一場不算戰旗**（liveToEnd = false），不然拔網路線就能讓對方的勝場作廢。
+   */
+  function takeOver() {
+    if (!ls || !liveOn) return
+    liveOn = false
+    ls.flush()
+    S.battle = viewOf()
+    const t0 = S.battle.t
+    const fb = live!.fallback
+    feed = makeFeeder({ ...fb, movesUntil: (t) => fb.movesUntil(t).filter((m) => m.t > t0) }, onFoeMove)
+    S.upWait = 0
+    stallSince = 0
+    // 跟對方說這邊不等了：他那邊也馬上改打分身，不用再乾等 15 秒
+    live!.close(true)
+    toast(fb.isGhost ? `${foe.name}斷線了，剩下的改打他的分身（這場不算戰旗）`
+      : `${foe.name}斷線了，剩下的改打電腦（這場不算戰旗）`)
+  }
 
   /**
    * 分身的一步。**他當時做了什麼就做什麼**：答對一樣開一槍、拿水晶（槍一樣會落空，
@@ -534,8 +594,12 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     elMine.innerHTML = `${iconImg('castle', 15)} ${Math.max(0, Math.ceil(S.battle.castleHp.me))}`
     elTheirs.textContent = `🏯 ${Math.max(0, Math.ceil(S.battle.castleHp.foe))}`
     // 電腦對手一定要寫出來。被騙到才會真的不爽。
-    elFoe.textContent = foe.isBot ? `🤖 電腦對手．${foe.name}`
-      : foe.isGhost ? `👤 ${foe.name}的分身` : `🧒 ${foe.name}`
+    elFoe.textContent = live && !liveOn
+      ? (live.fallback.isGhost ? `👤 ${foe.name}的分身（斷線接手）` : `🤖 電腦（${foe.name}斷線接手）`)
+      : foe.isBot ? `🤖 電腦對手．${foe.name}`
+      : foe.isGhost ? `👤 ${foe.name}的分身`
+      : stallSince && performance.now() - stallSince > 1200 ? `🧒 ${foe.name}・等他連線…`
+      : `🧒 ${foe.name}・真人`
   }
 
   function toast(text: string) {
@@ -555,18 +619,21 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     const rank = Math.min(S.pending, S.battle.tier.me)
     S.topTier = Math.max(S.topTier, rank)
     S.linesUsed.add(S.line)
-    const u = summon(S.battle, 'me', S.line, rank, R)
+    if (liveOn) sendLive({ act: 'summon', line: LINES[S.line].skill, rank })
+    else summon(S.battle, 'me', S.line, rank, R)
     S.rec.push({ t: S.battle.t, act: 'summon', correct: true, line: LINES[S.line].skill, rank })
     S.pending = 0
     S.pops.push({
       x: R.homeMe + 40, y: ROAD_Y - 80,
-      text: statsOf(u.line, u.rank).name, color: '#a8e07a', life: 1.0,
+      text: liveOn ? `${statsOf(S.line, rank).name}出發` : statsOf(S.line, rank).name,
+      color: '#a8e07a', life: 1.0,
     })
   }
 
   /** 換一條兵種線。累積到一半的先結算出去，不然換線等於白答。 */
   function switchLine(line: Line) {
     if (S.done || paused || line === S.line) return
+    if (line === 'listen' && foe.noListen) return
     S.linesUsed.add(line)
     cashOut()
     S.line = line
@@ -583,6 +650,20 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   /** 按升階。水晶不夠就沒反應（鈕本來就是暗的）。 */
   function buyTier() {
     if (S.done || paused) return
+    if (liveOn) {
+      // 真人對戰：水晶夠不夠先照畫面上的看，真的扣是 1.5 秒後兩邊一起扣。
+      // 等它生效之前不准再按，不然連按兩下會送出兩次、第二次一定失敗，看起來像壞掉。
+      const cost = nextCost(S.battle, 'me')
+      if (S.upWait || cost === null || S.battle.crystal.me < cost) return
+      S.upWait = S.battle.tier.me
+      lastUpK = ls!.tick + 1
+      sendLive({ act: 'up' })
+      S.rec.push({ t: S.battle.t, act: 'up', correct: true, rank: null })
+      ctx.audio.play('tower-build')
+      toast(`升到 ${S.upWait + 1} 階，馬上生效`)
+      syncBar()
+      return
+    }
     if (!upgrade(S.battle, 'me')) return
     S.rec.push({ t: S.battle.t, act: 'up', correct: true, rank: null })
     ctx.audio.play('tower-build')
@@ -596,7 +677,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     for (const b of elLines) b.classList.toggle('on', b.dataset.line === S.line)
     const cost = nextCost(S.battle, 'me')
     const can = cost !== null && S.battle.crystal.me >= cost
-    elUp.disabled = !can
+    elUp.disabled = !can || S.upWait > 0
     elUpCost.innerHTML = cost === null ? `已滿 ${MAX_TIER} 階` : `${iconImg('crystal', 13)} ${cost}`
     elCrystal.innerHTML = `${iconImg('crystal', 15)} ${Math.floor(S.battle.crystal.me)}　${S.battle.tier.me} 階`
   }
@@ -615,6 +696,8 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
    */
   function useItem(id: string): boolean {
     if (S.done || S.battle.over) return false
+    // 真人對戰不用道具：道具是金幣買的，拿來打同學就變成花錢買贏。
+    if (live) { toast('跟同學真人對戰不能用道具'); return false }
     switch (id) {
       case 'slow-30': {
         if (S.buffs.some((b) => b.id === id)) { toast('對面還凍著，等退了再用'); return false }
@@ -692,14 +775,17 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       ms: Math.round(performance.now() - S.askedAt), combo: S.combo,
     })
     S.rec.push({ t: S.battle.t, act: 'answer', correct, rank: null })
+    if (liveOn) sendLive({ act: 'answer', correct, target: correct && target ? target.id : -1 })
     if (correct) {
       S.correct++; S.combo++
       buzz(14)
       ctx.audio.play('answer-correct')
       // 答對一定做的事：開一槍（打不到城堡，見 battle.ts 的 strike）、拿水晶。
       // **出不出兵要看累積夠了沒**——兵階上限是幾，就要連對幾題。
-      strike(S.battle, 'me', target, R)
-      S.battle.crystal.me += R.answerCrystal
+      if (!liveOn) {
+        strike(S.battle, 'me', target, R)
+        S.battle.crystal.me += R.answerCrystal
+      }
       S.flashes.push({ x: at.x, life: 0.22 })
       S.pending++
       if (S.pending >= S.battle.tier.me) cashOut()
@@ -791,8 +877,8 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       S.rushed = true
       ctx.audio.setMusicRate(1.12)
     }
-    feed(S.battle.t)
-    for (const h of step(S.battle, dt, R)) {
+    const hits = liveOn ? liveStep(dt) : (feed(S.battle.t), step(S.battle, dt, R))
+    for (const h of hits) {
       if (!h.tower || h.from === undefined) continue
       const from = h.side === 'me' ? towerX('foe') : towerX('me')
       S.arrows.push({ x0: from, y0: ROAD_Y - 92, x1: h.x, y1: ROAD_Y - 28, life: ARROW_LIFE })
@@ -827,8 +913,44 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     if (S.battle.over && !S.done) finish()
   }
 
+  /**
+   * 真人對戰的一格畫面：能往前算幾格就算幾格（每格固定 1/30 秒），
+   * 對方的消息還沒到就停下來等。等太久（15 秒）或對方離開了就改打分身。
+   */
+  function liveStep(dt: number) {
+    const lk = live!
+    const l = ls!
+    liveAcc = Math.min(liveAcc + dt, 0.5)
+    l.feed(mySide, myLive)
+    l.feed(OTHER[mySide], lk.theirMoves())
+    const out: Hit[] = []
+    let stalled = false
+    while (liveAcc >= TICK) {
+      if (!l.canStep(lk.theirMark())) { stalled = true; break }
+      liveAcc -= TICK
+      for (const h of l.step()) out.push(flip ? mirrorHit(h, R) : h)
+      // 開發版：每一秒記一筆戰場的樣子，測試拿兩支手機同一格的來比（正式版整段消失）
+      if (import.meta.env.DEV && l.tick % 30 === 0) {
+        truthLog.set(l.tick, JSON.stringify([l.truth.castleHp, l.truth.units.map((u) => [u.id, u.side, u.x, u.hp])]))
+      }
+    }
+    lk.mark(l.tick)
+    S.battle = viewOf()
+    if (S.upWait && S.battle.tier.me > S.upWait) S.upWait = 0
+    // 升階送出去 DELAY 格還沒生效，就是水晶其實不夠（被別的東西先花掉了），放掉讓他能再按
+    if (S.upWait && l.tick > lastUpK + DELAY + 2) S.upWait = 0
+    const now = performance.now()
+    if (stalled) {
+      if (!stallSince) stallSince = now
+      if (now - stallSince > 15000) takeOver()
+    } else stallSince = 0
+    if (lk.theirGone()) takeOver()
+    return out
+  }
+
   function finish() {
     S.done = true
+    live?.close(false)
     const b = S.battle
     const win = b.winner === 'me'
     ctx.audio.playMusic(null)          // 先把 BGM 收掉，勝負那一聲才聽得清楚
@@ -849,6 +971,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
         linesUsed: [...S.linesUsed].map((l) => LINES[l].skill),
         topTier: S.topTier,
         moves: S.rec,
+        ...(live ? { liveToEnd: liveOn } : {}),
       },
     })
   }
@@ -857,7 +980,8 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     const now = performance.now()
     const dt = Math.min(0.05, (now - last) / 1000)
     last = now
-    if (!S.done && !paused) update(dt)
+    // 真人對戰不能暫停——對方那邊還在打。按了「離開」在問確定嗎的時候戰場照跑。
+    if (!S.done && (!paused || liveOn)) update(dt)
     // 戰場的圖還沒到就每三秒再敲一次，在戰場裡也救得回來，不用退出去重進。
     if (!img[fieldKey] && now - artKick > 3000) { artKick = now; void loadArt() }
     draw()
@@ -1413,6 +1537,12 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       /** 點某一個目標；測試用它模擬小朋友的正確率 */
       tapId: (id: string) => { const t = S.targets.get(id); if (t) tap(t) },
       ids: () => [...S.targets.keys()],
+      /** 真人對戰：兩支手機的戰場要一模一樣，測試拿這個比 */
+      truth: () => ls && { tick: ls.tick, t: ls.truth.t, castle: ls.truth.castleHp, front: ls.truth.front,
+        units: ls.truth.units.map((u) => [u.id, u.side, Math.round(u.x * 1000), Math.round(u.hp * 1000)]),
+        over: ls.truth.over, winner: ls.truth.winner },
+      liveOn: () => liveOn,
+      truthLog: () => Object.fromEntries(truthLog),
     }
   }
 
@@ -1420,7 +1550,8 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   pickQuestion()
   syncUI()
   toast(foe.isBot ? `對手是電腦：${foe.name}`
-    : foe.isGhost ? `對手是${foe.name}的分身（重播最近一場）` : `對手：${foe.name}`)
+    : foe.isGhost ? `對手是${foe.name}的分身（重播最近一場）`
+    : live ? `真人對戰：${foe.name}！答對的兵 1 秒多後出發` : `對手：${foe.name}`)
   // 開戰的儀式感：號角先響，熱血 BGM 跟上。
   // 進到這個畫面之前一定點過「開打」，所以 iOS 的解鎖已經拿到了。
   ctx.audio.unlock()

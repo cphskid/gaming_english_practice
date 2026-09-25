@@ -16,7 +16,7 @@
  * 型別（Move、Opponent）放在 core/types.ts，因為遊戲那一層只准往 core 看。
  */
 
-import type { Move, Opponent, Skill } from './types'
+import type { LiveMove, Move, Opponent, Skill } from './types'
 
 /** 小小的亂數，給同一個種子就跑出同一場——量測與重播都要靠它。 */
 export function seeded(seed: number): () => number {
@@ -136,4 +136,30 @@ export function makeFeeder(o: Opponent, onMove: (correct: boolean, m: Move) => v
     for (let i = done; i < all.length; i++) onMove(all[i].correct, all[i])
     done = all.length
   }
+}
+
+// ---------------------------------------------------------------- 真人即時對戰
+
+/** 網路上傳的樣子：[格, 'a', 對錯, 目標] / [格, 's', 線, 階] / [格, 'u'] */
+export type PackedLive = [number, 'a', 0 | 1, number] | [number, 's', Skill, number] | [number, 'u']
+
+export function packLive(m: LiveMove): PackedLive {
+  if (m.act === 'answer') return [m.k, 'a', m.correct ? 1 : 0, m.target ?? -1]
+  if (m.act === 'summon') return [m.k, 's', m.line ?? 'recognize', m.rank ?? 1]
+  return [m.k, 'u']
+}
+
+/**
+ * 從伺服器讀回來。**看不懂的那一筆不能丟掉**——兩支手機要看到同一串，
+ * 丟了這邊少一筆那邊沒少，就算歪了。所以看不懂的變成一筆「答錯」（什麼都不做）。
+ */
+export function unpackLive(raw: unknown): LiveMove {
+  const r = Array.isArray(raw) ? raw : []
+  const k = typeof r[0] === 'number' && r[0] >= 0 ? Math.floor(r[0]) : 0
+  if (r[1] === 'a') return { k, act: 'answer', correct: r[2] === 1, target: typeof r[3] === 'number' ? r[3] : -1 }
+  if (r[1] === 's' && SKILLS.includes(r[2]) && typeof r[3] === 'number') {
+    return { k, act: 'summon', line: r[2], rank: Math.round(r[3]) }
+  }
+  if (r[1] === 'u') return { k, act: 'up' }
+  return { k, act: 'answer', correct: false, target: -1 }
 }

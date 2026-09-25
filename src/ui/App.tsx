@@ -14,7 +14,8 @@ import { WORDS, WORDS_BY_ID, wordsOfThemes } from '@/data/words'
 import { towerDefense, tugOfWar } from '@/games'
 import { loadArt } from '@/games/tower-defense/art'
 import { repo } from '@/net'
-import type { SavedResult } from '@/net/repository'
+import type { LiveMatchInfo, SavedResult } from '@/net/repository'
+import { liveLink } from '@/net/live'
 import { audio } from '@/audio'
 import { Login } from './Login'
 import { StaffAuth } from './StaffAuth'
@@ -56,6 +57,8 @@ interface Playing {
   opponent: Opponent | null
   /** 打的是哪個同學的分身。打電腦是 undefined */
   ghostOf?: string
+  /** 真人即時對戰那一場。斷線接手時要知道接手的是分身還是電腦，所以整包留著。 */
+  live?: LiveMatchInfo
 }
 
 export function App() {
@@ -284,6 +287,40 @@ export function App() {
     return null
   }, [student, stat])
 
+  /**
+   * 真人即時對戰：配到人了（隨機或接受邀請）。
+   *
+   * 先把對方的分身抓好當備胎——他斷線或按了離開，剩下的時間改打分身；
+   * 他還沒有分身（從來沒打完過一場）就是照他速度的電腦。
+   */
+  const startLive = useCallback(async (info: LiveMatchInfo) => {
+    if (!student) return
+    audio.unlock()
+    const g = await repo.loadGhost(info.foe).catch(() => null)
+    const fallback = g
+      ? ghostOpponent(g.nickname, g.moves, g.legion)
+      : botOpponent({ name: info.foeName, rate: info.foeRate, accuracy: 0.85, seed: Date.now() & 0xffff })
+    const session = new Session({
+      mode: 'versus',
+      gameId: tugOfWar.id,
+      level: null,
+      participants: [{ studentId: student.id, nickname: student.nickname }],
+      wordsById: WORDS_BY_ID,
+      stat,
+      alreadyCleared: false,
+    })
+    setPlaying({
+      level: null, game: tugOfWar, session, quizzes: new Map(), quizOpts: { words: WORDS, stat },
+      opponent: {
+        name: info.foeName, isBot: false, legion: info.foeLegion, noListen: info.noListen,
+        movesUntil: () => [],
+        live: liveLink(repo, info, fallback),
+      },
+      live: info,
+    })
+    setScreen('play')
+  }, [student, stat])
+
   /** 這一場被收掉了（開場的人離開、老師按結束）。等待室沒東西好等，回選關畫面。 */
   useEffect(() => {
     if (screen === 'lobby' && roomId && roomLoaded && !room) {
@@ -345,11 +382,17 @@ export function App() {
       // 兵推：把這一場的輸贏記下來。答題事件看不出「三線通吃」「逆轉勝」
       // 這些事，所以戰報要另外存一筆；同一場重送不會變成兩筆。
       if (!lv && outcome.versus && playing.opponent) {
+        // **打電腦、打分身都不算勝場**（戰旗），只有跟真人打到最後的那一場送 'student'。
+        // 真人對戰中途對方斷線、改打分身的，照接手的是誰記。
+        const live = playing.live
+        const kind = live
+          ? (outcome.versus.liveToEnd ? 'student' : playing.opponent.live?.fallback.isGhost ? 'ghost' : 'cpu')
+          : playing.ghostOf ? 'ghost' : 'cpu'
         await repo.recordVersusMatch({
           sessionId: playing.session.id,
-          // **打電腦、打分身都不算勝場**（戰旗）。即時對戰上線時那邊送 'student'。
-          opponentKind: playing.ghostOf ? 'ghost' : 'cpu',
-          opponentStudent: playing.ghostOf,
+          opponentKind: kind,
+          opponentStudent: live ? live.foe : playing.ghostOf,
+          liveMatch: live?.id,
           opponentName: playing.opponent.name,
           // 這一場自己的答題串。存下來，同學挑戰你的時候打的就是它。
           moves: outcome.versus.moves,
@@ -391,6 +434,9 @@ export function App() {
    */
   const leave = useCallback(async () => {
     if (!playing || !student || !character) return
+    // 真人對戰中途離開：跟對方說一聲，他那邊剩下的時間改打你的分身。
+    // 不放在遊戲的 destroy 裡——開發版 React 會把畫面掛兩次，第一次拆掉時就會誤送「我離開了」。
+    playing.opponent?.live?.close(true)
     const r = playing.session.finish({ win: false, survival: 0, detail: '中途離開' })
     const me = r.scores[0]
 
@@ -604,6 +650,7 @@ export function App() {
           myRate={myRate()}
           onStart={startVersus}
           onGhost={startGhost}
+          onLive={(m) => void startLive(m)}
           onBack={() => setScreen('select')}
         />
       )}
@@ -623,7 +670,9 @@ export function App() {
           game={playing.game} level={playing.level} session={playing.session}
           studentId={student.id} job={character.job}
           color={legionOf(character.equipped).usesColor ? colorOf(character.equipped).suffix : ''}
-          legion={legionOf(character.equipped).id} items={character.items}
+          legion={legionOf(character.equipped).id}
+          // 真人對戰不用道具：道具是金幣買的，拿來打同學就變成花錢買贏
+          items={playing.live ? {} : character.items}
           opponent={playing.opponent}
           nextQuestion={nextQuestion}
           onFinish={(o) => void finish(o)}

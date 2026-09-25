@@ -247,6 +247,12 @@ export interface BattleState {
    * （tug-balance.mjs 量出來的數字才不會因為加了這個欄位就變掉）。
    */
   chill: Record<Side, number>
+  /**
+   * 下一隻兵的編號。**每一場自己數**，不能用整個程式共用的計數器：
+   * 真人對戰兩支手機各跑一份同樣的戰場，答對那一槍靠編號指定打哪一隻，
+   * 兩邊的編號要一模一樣（見 lockstep.ts）。
+   */
+  seq: number
 }
 
 export interface Hit {
@@ -259,8 +265,6 @@ export interface Hit {
   from?: number
 }
 
-let nextId = 1
-
 export function newBattle(r: BattleRules = RULES): BattleState {
   const s: BattleState = {
     t: 0, towerCd: { me: r.towerEvery, foe: r.towerEvery },
@@ -268,6 +272,7 @@ export function newBattle(r: BattleRules = RULES): BattleState {
     front: (r.homeMe + r.homeFoe) / 2, over: false, winner: null, reason: null,
     crystal: { me: 0, foe: 0 }, tier: { me: 1, foe: 1 },
     chill: { me: 0, foe: 0 },
+    seq: 1,
   }
   for (let i = 0; i < r.openingUnits; i++) {
     summon(s, 'me', 'recognize', 1, r)
@@ -304,7 +309,7 @@ export function summon(
 ): Unit {
   const spec = statsOf(line, rank)
   const u: Unit = {
-    id: nextId++, side, line, rank: Math.max(1, Math.min(MAX_TIER, rank)),
+    id: s.seq++, side, line, rank: Math.max(1, Math.min(MAX_TIER, rank)),
     x: side === 'me' ? r.homeMe : r.homeFoe,
     hp: spec.hp, maxHp: spec.hp, fighting: false, hurt: 0,
   }
@@ -347,6 +352,16 @@ export function step(s: BattleState, dt: number, r: BattleRules = RULES): Hit[] 
   }
 
   // --- 打架：打得到的就停下來打，打不到就往前走
+  //
+  // **這一格所有人是「同時」出手的**：先看完整個戰場決定每隻兵要打誰、要不要走，
+  // 再一起扣血、一起走。以前是一隻一隻輪流算，排在陣列前面的先打、先走，
+  // 後面的看到的是已經被改過的戰場——兩邊餵一模一樣的答題，左邊那一方
+  // 30 場贏 11、右邊贏 19。打電腦時沒人發現，真人對戰誰坐左邊就不能有差（2026-09-25）。
+  const x0 = new Map<number, number>()
+  for (const u of s.units) x0.set(u.id, u.x)
+  const X = (u: Unit) => x0.get(u.id) ?? u.x
+  const fights: { u: Unit; spec: UnitStats; target: Unit | null }[] = []
+  const walkers: { u: Unit; spec: UnitStats }[] = []
   for (const u of s.units) {
     if (u.hurt > 0) u.hurt -= dt
     const spec = statsOf(u.line, u.rank)
@@ -356,50 +371,61 @@ export function step(s: BattleState, dt: number, r: BattleRules = RULES): Hit[] 
     // 長槍兵和盾劍士要走到 30 以內。遠程的便宜就在這段免費輸出。
     let target: Unit | null = null
     for (const o of s.units) {
-      if (o.side === u.side || o.hp <= 0) continue
-      const gap = (o.x - u.x) * dir(u.side)
-      if (gap >= -spec.reach && gap <= spec.reach && (!target || gap < (target.x - u.x) * dir(u.side))) target = o
+      if (o.side === u.side) continue
+      const gap = (X(o) - X(u)) * dir(u.side)
+      if (gap >= -spec.reach && gap <= spec.reach && (!target || gap < (X(target) - X(u)) * dir(u.side))) target = o
     }
-
     if (target) {
       u.fighting = true
-      target.hp -= spec.dps * dt
-      target.hurt = 0.12
-      hits.push({ x: target.x, side: target.side, killed: target.hp <= 0 })
-      // 濺射：只有弓手線有。濺到的吃三成、最多三隻，跟守塔的法師同一套數字，
-      // 所以「一發打一片」這件事小朋友在兩個遊戲裡學一次就好。
-      // 三成是刻意壓低的——拼字線那隻大的不能被一發濺射掃掉，
-      // 不然花八秒拼出來的兵三秒就沒了，沒有人會想拼。
-      if (spec.splash > 0) {
-        let splashed = 0
-        for (const o of s.units) {
-          if (splashed >= 3) break
-          if (o === target || o.side === u.side || o.hp <= 0) continue
-          if (Math.abs(o.x - target.x) > spec.splash) continue
-          o.hp -= spec.dps * dt * 0.3
-          o.hurt = 0.12
-          splashed++
-          hits.push({ x: o.x, side: o.side, killed: o.hp <= 0 })
-        }
-      }
+      fights.push({ u, spec, target })
       continue
     }
 
     // 打得到對方城堡就打城堡
     const home = homeOf(foeSide, r)
-    if ((home - u.x) * dir(u.side) <= spec.reach) {
+    if ((home - X(u)) * dir(u.side) <= spec.reach) {
       u.fighting = true
-      s.castleHp[foeSide] -= spec.dps * dt
-      hits.push({ x: home, side: foeSide, killed: false })
+      fights.push({ u, spec, target: null })
       continue
     }
-
-    // 前面有自己人就跟著停，沒有就往前走
     u.fighting = false
+    walkers.push({ u, spec })
+  }
+
+  for (const { u, spec, target } of fights) {
+    if (!target) {
+      const foeSide = OTHER[u.side]
+      s.castleHp[foeSide] -= spec.dps * dt
+      hits.push({ x: homeOf(foeSide, r), side: foeSide, killed: false })
+      continue
+    }
+    target.hp -= spec.dps * dt
+    target.hurt = 0.12
+    hits.push({ x: target.x, side: target.side, killed: target.hp <= 0 })
+    // 濺射：只有弓手線有。濺到的吃三成、最多三隻，跟守塔的法師同一套數字，
+    // 所以「一發打一片」這件事小朋友在兩個遊戲裡學一次就好。
+    // 三成是刻意壓低的——拼字線那隻大的不能被一發濺射掃掉，
+    // 不然花八秒拼出來的兵三秒就沒了，沒有人會想拼。
+    if (spec.splash > 0) {
+      let splashed = 0
+      for (const o of s.units) {
+        if (splashed >= 3) break
+        if (o === target || o.side === u.side) continue
+        if (Math.abs(X(o) - X(target)) > spec.splash) continue
+        o.hp -= spec.dps * dt * 0.3
+        o.hurt = 0.12
+        splashed++
+        hits.push({ x: o.x, side: o.side, killed: o.hp <= 0 })
+      }
+    }
+  }
+
+  // 前面有自己人在打就跟著停，沒有就往前走
+  for (const { u, spec } of walkers) {
     const block = ahead.get(u.id)
     if (block && block.fighting) continue
-    // 被凍住就停在原地。放在這裡而不是把 speed 乘 0，是因為上面幾段
-    // 「打兵」「打城堡」都已經 continue 掉了：凍住的兵還是會還手。
+    // 被凍住就停在原地。放在這裡而不是把 speed 乘 0，是因為上面
+    // 「打兵」「打城堡」都不會走到這裡：凍住的兵還是會還手。
     if (s.chill[u.side] > 0) continue
     u.x += spec.speed * dir(u.side) * dt
   }

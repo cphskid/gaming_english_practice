@@ -374,6 +374,10 @@ alter table public.versus_matches drop constraint if exists versus_matches_oppon
 alter table public.versus_matches add constraint versus_matches_opponent_kind_check
   check (opponent_kind in ('cpu','ghost','student'));
 
+-- 真人即時對戰（2026-09-25）：記是哪一場（live_matches.id），兩個人的戰報才對得起來。
+-- 表在檔案最後面，所以這裡不掛外鍵。
+alter table public.versus_matches add column if not exists live_match uuid;
+
 -- 道具用在哪一場。
 -- 「空手過關」要知道通關那一場有沒有用道具，「道具三味」要知道用過幾種，
 -- 而 characters.items 是消耗品的「剩幾個」，用完歸零，什麼都看不出來。
@@ -2394,8 +2398,12 @@ begin
   end if;
 
   -- 只算贏同學的場次。打電腦不記戰績，這是一開始就講好的。
+  -- 真人對戰兩支手機算的是同一場，輸贏一定講得一樣；**兩個人都說自己贏**的那一場
+  -- 就是有人改了前端，兩邊都不算。對方輸了直接關掉不回報也照算，不然輸的人一關就能讓人白贏。
   select count(*) into v_n from public.versus_matches m
-   where m.student_id = v_student and m.won and m.opponent_kind = 'student';
+   where m.student_id = v_student and m.won and m.opponent_kind = 'student'
+     and not exists (select 1 from public.versus_matches o
+                      where o.live_match = m.live_match and o.student_id <> m.student_id and o.won);
   v_up := array_append(v_up, public.ach_put(v_student, 'war-flag', v_n));
 
   -- ---------------------------------------------------------------- 收集
@@ -2588,7 +2596,7 @@ $$;
 -- won 照實存，要不要算成勝場是 refresh_achievements 在判斷的事。
 -- 前端送來的數字都夾住：前線 0~1、兵階 1~3、兵種線只認那三個。
 --
--- 對手種類前端說了不全算：'student'（真人即時對戰）還沒上線，送來一律當電腦，
+-- 對手種類前端說了不全算：'student'（真人即時對戰）要帶 p_live 而且真的有那一場，不然當電腦，
 -- 不然直接呼叫這支就能刷戰旗；'ghost' 要真的是同班同學才認。
 --
 -- p_moves 是這一場的答題串（分身）。**答對的筆數不能比這一場真的答對的多**
@@ -2596,6 +2604,7 @@ $$;
 -- 同學永遠打不贏的分身。這一場照樣記，只是沒有分身。
 -- -----------------------------------------------------------------------------
 drop function if exists public.record_versus_match(uuid, text, boolean, numeric, numeric, text[], int, text, uuid);
+drop function if exists public.record_versus_match(uuid, text, boolean, numeric, numeric, text[], int, text, uuid, jsonb);
 create or replace function public.record_versus_match(
   p_session       uuid,
   p_opponent_kind text,
@@ -2606,7 +2615,8 @@ create or replace function public.record_versus_match(
   p_top_tier      int default 1,
   p_opponent_name text default '',
   p_opponent      uuid default null,
-  p_moves         jsonb default null
+  p_moves         jsonb default null,
+  p_live          uuid default null
 )
 returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
 declare
@@ -2617,8 +2627,19 @@ declare
   v_claimed int;
   v_real    int;
   v_legion  text;
+  v_foe     uuid := null;
+  v_live    uuid := null;
 begin
   if v_student is null then raise exception '還沒加入班級'; end if;
+
+  -- 真人即時對戰（2026-09-25）：要真的有這一場、而且我是其中一位，才認 'student'，
+  -- 對手也從那一場讀，前端說誰都不算。
+  if p_opponent_kind = 'student' and p_live is not null then
+    select case when m.p1 = v_student then m.p2 else m.p1 end into v_foe
+      from public.live_matches m
+     where m.id = p_live and v_student in (m.p1, m.p2);
+    if v_foe is not null then v_kind := 'student'; v_live := p_live; end if;
+  end if;
 
   if p_opponent_kind = 'ghost' and p_opponent is not null and p_opponent <> v_student
      and exists (select 1 from public.students a join public.students b on a.class_code = b.class_code
@@ -2650,10 +2671,10 @@ begin
 
   insert into public.versus_matches
     (student_id, session_id, opponent_kind, opponent_student, opponent_name,
-     won, front, lowest_front, lines_used, top_tier, moves, legion)
+     won, front, lowest_front, lines_used, top_tier, moves, legion, live_match)
   values
     (v_student, p_session, v_kind,
-     case when v_kind = 'ghost' then p_opponent end,
+     case when v_kind = 'ghost' then p_opponent when v_kind = 'student' then v_foe end,
      left(coalesce(p_opponent_name, ''), 16),
      coalesce(p_won, false),
      least(greatest(coalesce(p_front, 0.5), 0), 1),
@@ -2661,7 +2682,7 @@ begin
      coalesce((select array_agg(x) from unnest(coalesce(p_lines, '{}')) x
                 where x in ('recognize','spell','listen')), '{}'),
      least(greatest(coalesce(p_top_tier, 1), 1), 3),
-     v_moves, coalesce(v_legion, ''))
+     v_moves, coalesce(v_legion, ''), v_live)
   returning id into v_id;
   perform public.note_color_played(v_student);
   return v_id;
@@ -2854,7 +2875,314 @@ grant execute on function
   public.set_pinned(text[]),
   public.set_title(text),
   public.set_public_profile(boolean),
-  public.record_versus_match(uuid, text, boolean, numeric, numeric, text[], int, text, uuid, jsonb),
+  public.record_versus_match(uuid, text, boolean, numeric, numeric, text[], int, text, uuid, jsonb, uuid),
   public.class_ghosts(),
   public.ghost_of(uuid)
+to authenticated;
+
+-- =============================================================================
+-- 真人即時對戰（2026-09-25）
+--
+-- 兩條路找對手，**都不用代碼**：
+--   隨機對戰  按下去就排進班上的隊伍，伺服器湊兩個程度接近的人。沒有「拒絕」這一步，
+--             人緣差、不認識人的小朋友也一定配得到（Chuck 最在意的就是這個）。
+--   邀同學    對戰頁列出班上**現在也在對戰頁**的同學，點頭像邀請。對方沒接，
+--             邀請的人只看到「他現在沒空」，不會看到「被拒絕」。
+-- 20 秒沒配到／沒人接，前端自己改打分身。
+--
+-- 打的時候兩支手機各跑一份同樣的戰場，只交換「誰在第幾格做了什麼」
+-- （見 src/games/tug-of-war/lockstep.ts）。伺服器只是一個信箱：
+-- 每人每半秒叫一次 live_sync，把自己的新動作放上來、把對方的拿回去。
+-- 用輪詢不用 Realtime，理由跟房間一樣：教室 wifi 斷一下，輪詢自己會接回來。
+-- =============================================================================
+
+-- 聽音題在教室裡會被旁邊同學的手機念出答案。班上對戰預設關，老師可以打開。
+alter table public.classes add column if not exists live_listen boolean not null default false;
+
+-- 誰現在在對戰頁。對戰頁每一秒半叫一次 live_poll 就會更新 seen_at，
+-- 六秒沒消息就當作不在了（關掉頁面不會通知，只能靠這個）。
+create table if not exists public.live_lobby (
+  student_id  uuid primary key references public.students(id) on delete cascade,
+  class_code  text not null,
+  -- 按了「隨機對戰」、正在排隊
+  seeking     boolean not null default false,
+  -- 每分鐘大概答對幾題（前端從自己的作答速度算的）。只拿來湊程度接近的人，
+  -- 報假的頂多配到不相當的對手，拿不到任何東西，所以信前端沒關係。
+  rate        numeric not null default 14,
+  -- 我正在邀誰、什麼時候邀的。20 秒沒接就過期。
+  invite_to   uuid references public.students(id) on delete set null,
+  invite_at   timestamptz,
+  -- 配好的那一場。回到對戰頁的時候如果已經是 20 秒前的舊場次，就清掉。
+  match_id    uuid,
+  seen_at     timestamptz not null default now()
+);
+create index if not exists live_lobby_class on public.live_lobby(class_code, seen_at desc);
+
+create table if not exists public.live_matches (
+  id          uuid primary key default gen_random_uuid(),
+  class_code  text not null,
+  -- 第一位永遠是「戰場左邊」那一方（兩支手機算的是同一份戰場，見 lockstep.ts）
+  p1          uuid not null references public.students(id) on delete cascade,
+  p2          uuid not null references public.students(id) on delete cascade,
+  how         text not null check (how in ('random', 'invite')),
+  created_at  timestamptz not null default now(),
+  -- 兩人各自的動作串：[格,'a',對錯,目標] / [格,'s',線,階] / [格,'u']
+  moves1      jsonb not null default '[]'::jsonb,
+  moves2      jsonb not null default '[]'::jsonb,
+  -- 「第幾格以前的動作都送了」。對方靠它知道自己可以放心算到哪一格。
+  mark1       int not null default -1,
+  mark2       int not null default -1,
+  seen1       timestamptz,
+  seen2       timestamptz,
+  -- 中途按了離開。對方那邊會改打分身。
+  left1       boolean not null default false,
+  left2       boolean not null default false
+);
+create index if not exists live_matches_p1 on public.live_matches(p1, created_at desc);
+create index if not exists live_matches_p2 on public.live_matches(p2, created_at desc);
+
+-- 兩張表都只准透過下面幾支函式碰（上面 revoke all on all tables 已經收掉了，
+-- 這裡只是講清楚：不開 grant、不寫 policy）。
+alter table public.live_lobby   enable row level security;
+alter table public.live_matches enable row level security;
+
+
+-- 一場配好的對戰，照「我」的角度寫出來給前端。
+create or replace function public.live_match_json(p_match uuid, p_me uuid)
+returns jsonb language sql stable security definer set search_path = public, pg_temp as $$
+  select jsonb_build_object(
+    'id', m.id,
+    'seat', case when m.p1 = p_me then 1 else 2 end,
+    'foe', f.id,
+    'foe_name', f.nickname,
+    'foe_avatar', coalesce(c.avatar, ''),
+    'foe_legion', coalesce((select e from jsonb_array_elements_text(c.equipped) e
+                              join public.shop_items i on i.id = e and i.slot = 'legion' limit 1), ''),
+    'foe_rate', coalesce(l.rate, 14),
+    'no_listen', not coalesce(k.live_listen, false),
+    'how', m.how)
+    from public.live_matches m
+    join public.students f on f.id = case when m.p1 = p_me then m.p2 else m.p1 end
+    left join public.characters c on c.student_id = f.id
+    left join public.live_lobby l on l.student_id = f.id
+    left join public.classes k on k.code = m.class_code
+   where m.id = p_match and p_me in (m.p1, m.p2);
+$$;
+revoke all on function public.live_match_json(uuid, uuid) from public, anon, authenticated;
+
+-- 對戰頁每一秒半叫一次：報到、排隊、湊對、看誰在邀我、看班上誰在。
+--   p_seeking  我現在有沒有按「隨機對戰」
+--   p_rate     我每分鐘大概答對幾題
+-- 回傳 { match, invites, online, inviting }
+create or replace function public.live_poll(p_seeking boolean default false, p_rate numeric default 14)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_me     uuid := public.current_student_id();
+  v_code   text := public.current_class_code();
+  v_row    public.live_lobby;
+  v_other  uuid;
+  v_match  uuid;
+  v_rate   numeric := least(greatest(coalesce(p_rate, 14), 1), 60);
+begin
+  if v_me is null or v_code is null then raise exception '還沒加入班級'; end if;
+
+  insert into public.live_lobby as l (student_id, class_code, seeking, rate, seen_at)
+  values (v_me, v_code, coalesce(p_seeking, false), v_rate, now())
+  on conflict (student_id) do update
+     set class_code = excluded.class_code, seeking = excluded.seeking,
+         rate = excluded.rate, seen_at = now();
+
+  select * into v_row from public.live_lobby where student_id = v_me for update;
+
+  -- 舊的那一場（打完回來了）清掉。剛配好的那一場前端一秒半內就會拿到，20 秒綽綽有餘。
+  if v_row.match_id is not null and not exists (
+       select 1 from public.live_matches m
+        where m.id = v_row.match_id and m.created_at > now() - interval '20 seconds') then
+    update public.live_lobby set match_id = null where student_id = v_me;
+    v_row.match_id := null;
+  end if;
+
+  -- 排隊中又還沒配到：找一個也在排隊、程度最接近的同學。
+  -- 對方那一列鎖不到（他也正在湊對）就跳過，下一輪再說，免得兩個人互等卡死。
+  if v_row.match_id is null and coalesce(p_seeking, false) then
+    select l.student_id into v_other
+      from public.live_lobby l
+     where l.class_code = v_code and l.student_id <> v_me and l.seeking
+       and l.match_id is null and l.seen_at > now() - interval '6 seconds'
+     order by abs(l.rate - v_rate), random()
+     limit 1
+     for update skip locked;
+    if v_other is not null then
+      insert into public.live_matches (class_code, p1, p2, how)
+      values (v_code, v_other, v_me, 'random') returning id into v_match;
+      update public.live_lobby
+         set match_id = v_match, seeking = false, invite_to = null, invite_at = null
+       where student_id in (v_me, v_other);
+      v_row.match_id := v_match;
+    end if;
+  end if;
+
+  return jsonb_build_object(
+    'match', case when v_row.match_id is null then null
+                  else public.live_match_json(v_row.match_id, v_me) end,
+    'inviting', (select l.invite_to from public.live_lobby l
+                  where l.student_id = v_me and l.invite_at > now() - interval '20 seconds'),
+    'invites', coalesce((
+      select jsonb_agg(jsonb_build_object('id', s.id, 'nickname', s.nickname,
+                                          'avatar', coalesce(c.avatar, '')) order by l.invite_at)
+        from public.live_lobby l
+        join public.students s on s.id = l.student_id
+        left join public.characters c on c.student_id = s.id
+       where l.invite_to = v_me and l.invite_at > now() - interval '20 seconds'
+         and l.seen_at > now() - interval '6 seconds' and l.match_id is null
+         and s.class_code = v_code), '[]'::jsonb),
+    'online', coalesce((
+      select jsonb_agg(jsonb_build_object('id', s.id, 'nickname', s.nickname,
+                                          'avatar', coalesce(c.avatar, ''),
+                                          'busy', l.match_id is not null) order by s.nickname)
+        from public.live_lobby l
+        join public.students s on s.id = l.student_id
+        left join public.characters c on c.student_id = s.id
+       where l.class_code = v_code and s.class_code = v_code and l.student_id <> v_me
+         and l.seen_at > now() - interval '6 seconds'), '[]'::jsonb));
+end;
+$$;
+
+-- 邀一個同學。null＝收回邀請（並退出隊伍）。只邀得到同班、現在在對戰頁的人。
+create or replace function public.live_invite(p_to uuid)
+returns boolean language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_me uuid := public.current_student_id(); v_code text := public.current_class_code();
+begin
+  if v_me is null or v_code is null then raise exception '還沒加入班級'; end if;
+  if p_to is null then
+    -- 離開對戰頁也叫這支：順便退出隊伍，免得在他走掉的那幾秒被配給別人
+    update public.live_lobby set invite_to = null, invite_at = null, seeking = false where student_id = v_me;
+    return false;
+  end if;
+  if p_to = v_me or not exists (
+       select 1 from public.live_lobby l join public.students s on s.id = l.student_id
+        where l.student_id = p_to and s.class_code = v_code
+          and l.seen_at > now() - interval '6 seconds') then
+    return false;
+  end if;
+  update public.live_lobby set invite_to = p_to, invite_at = now(), seeking = false
+   where student_id = v_me;
+  return found;
+end;
+$$;
+
+-- 接受邀請。邀的人還在、邀請還沒過期、兩個人都還沒配到別人，才開得成。
+-- 開不成回 null，前端說「邀請過期了」。
+create or replace function public.live_accept(p_from uuid)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_me    uuid := public.current_student_id();
+  v_code  text := public.current_class_code();
+  v_match uuid;
+  v_n     int;
+begin
+  if v_me is null or v_code is null then raise exception '還沒加入班級'; end if;
+  -- 兩列照編號順序一起鎖，兩個人同時互相接受也不會卡死
+  perform 1 from public.live_lobby where student_id in (v_me, p_from)
+   order by student_id for update;
+  select count(*) into v_n from public.live_lobby l
+    join public.students s on s.id = l.student_id
+   where s.class_code = v_code
+     and ((l.student_id = p_from and l.invite_to = v_me and l.invite_at > now() - interval '20 seconds'
+           and l.seen_at > now() - interval '6 seconds')
+       or l.student_id = v_me)
+     and (l.match_id is null or not exists (
+            select 1 from public.live_matches m
+             where m.id = l.match_id and m.created_at > now() - interval '20 seconds'));
+  if v_n < 2 or p_from = v_me then return null; end if;
+  insert into public.live_matches (class_code, p1, p2, how)
+  values (v_code, p_from, v_me, 'invite') returning id into v_match;
+  update public.live_lobby
+     set match_id = v_match, seeking = false, invite_to = null, invite_at = null
+   where student_id in (v_me, p_from);
+  return public.live_match_json(v_match, v_me);
+end;
+$$;
+
+-- 打的時候每半秒叫一次：放上我的新動作、拿回對方的。
+--   p_base       p_moves 的第一筆是我的第幾筆（從 0 算）。網路重送時伺服器靠它不重複收。
+--   p_moves      我從 p_base 開始的動作
+--   p_mark       我第幾格以前的動作都送了
+--   p_their_from 對方的動作我已經有幾筆
+--   p_left       我按了離開
+-- 回傳 { mine: 伺服器上我有幾筆, theirs: 對方從 p_their_from 開始的動作, their_mark, their_left }
+create or replace function public.live_sync(
+  p_match uuid, p_base int, p_moves jsonb, p_mark int, p_their_from int, p_left boolean default false
+)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_me    uuid := public.current_student_id();
+  m       public.live_matches;
+  v_seat  int;
+  v_mine  jsonb;
+  v_n     int;
+  v_add   jsonb;
+  v_their jsonb;
+begin
+  if v_me is null then raise exception '還沒加入班級'; end if;
+  select * into m from public.live_matches where id = p_match for update;
+  if m.id is null or v_me not in (m.p1, m.p2) then raise exception '不是你的對戰'; end if;
+  -- 一場三分鐘，十分鐘前的場次不再收
+  if m.created_at < now() - interval '10 minutes' then raise exception '這場已經結束了'; end if;
+  v_seat := case when m.p1 = v_me then 1 else 2 end;
+  v_mine := case when v_seat = 1 then m.moves1 else m.moves2 end;
+  -- 開打了：大廳那一列不再指著這一場，不然提早離開又馬上回到對戰頁，會被拉回同一場
+  update public.live_lobby set match_id = null where student_id = v_me and match_id = p_match;
+  v_n := jsonb_array_length(v_mine);
+
+  -- 接得上才收（p_base 不能跳過還沒收到的）。接不上就什麼都不收、mark 也不動，
+  -- 前端看回傳的 mine 從那裡重送——少一筆的話兩支手機就算歪了。
+  if p_base is not null and p_base <= v_n and jsonb_typeof(p_moves) = 'array' then
+    select coalesce(jsonb_agg(e order by i), '[]'::jsonb) into v_add
+      from jsonb_array_elements(p_moves) with ordinality as x(e, i)
+     where i > v_n - p_base;
+    if v_n + jsonb_array_length(v_add) <= 3000 then
+      v_mine := v_mine || v_add;
+      v_n := jsonb_array_length(v_mine);
+      if v_seat = 1 then
+        update public.live_matches set moves1 = v_mine, mark1 = greatest(mark1, coalesce(p_mark, -1)),
+               seen1 = now(), left1 = left1 or coalesce(p_left, false) where id = p_match;
+      else
+        update public.live_matches set moves2 = v_mine, mark2 = greatest(mark2, coalesce(p_mark, -1)),
+               seen2 = now(), left2 = left2 or coalesce(p_left, false) where id = p_match;
+      end if;
+    end if;
+  elsif coalesce(p_left, false) then
+    if v_seat = 1 then update public.live_matches set left1 = true where id = p_match;
+    else update public.live_matches set left2 = true where id = p_match; end if;
+  end if;
+
+  v_their := case when v_seat = 1 then m.moves2 else m.moves1 end;
+  return jsonb_build_object(
+    'mine', v_n,
+    'theirs', coalesce((select jsonb_agg(e order by i)
+                          from jsonb_array_elements(v_their) with ordinality as x(e, i)
+                         where i > greatest(coalesce(p_their_from, 0), 0)), '[]'::jsonb),
+    'their_mark', case when v_seat = 1 then m.mark2 else m.mark1 end,
+    'their_left', case when v_seat = 1 then m.left2 else m.left1 end);
+end;
+$$;
+
+-- 老師開關「班上真人對戰出不出聽音題」
+create or replace function public.class_set_live_listen(p_code text, p_on boolean)
+returns boolean language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_code text := upper(btrim(p_code));
+begin
+  if not public.is_teacher_of(v_code) then raise exception '這不是你的班'; end if;
+  update public.classes set live_listen = coalesce(p_on, false) where code = v_code;
+  return coalesce(p_on, false);
+end;
+$$;
+
+grant execute on function
+  public.live_poll(boolean, numeric),
+  public.live_invite(uuid),
+  public.live_accept(uuid),
+  public.live_sync(uuid, int, jsonb, int, int, boolean),
+  public.class_set_live_listen(text, boolean)
 to authenticated;

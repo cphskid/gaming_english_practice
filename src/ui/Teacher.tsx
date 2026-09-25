@@ -161,6 +161,13 @@ export function Teacher({
                   })}>
                   {room.open ? '✅ 開放加入中（點一下關起來）' : '🔒 已關閉（點一下開放）'}
                 </button>
+                <button className={'btn small' + (room.liveListen ? '' : ' ghost')}
+                  onClick={() => void run(async () => {
+                    await repo.setClassLiveListen(room.code, !room.liveListen)
+                    return room.liveListen ? '真人對戰不出聽音題了' : '真人對戰會出聽音題（旁邊的人聽得到答案，在家比較適合）'
+                  })}>
+                  {room.liveListen ? '🔊 真人對戰有聽音題（點一下關掉）' : '🔇 真人對戰不出聽音題（點一下打開）'}
+                </button>
                 <button className="btn ghost small" onClick={() => void run(async () => {
                   const next = await repo.regenerateClassCode(room.code)
                   setActive(next)

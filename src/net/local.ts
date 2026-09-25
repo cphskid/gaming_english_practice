@@ -14,6 +14,7 @@ import type {
 import type {
   AchievementRow, AddedTeacher, BadgeCount, ClassRosterRow, LeaderRow, LevelResult, PublicProfile,
   Repository, RoomBrief, RoomMember, RoomState, SavedResult, VersusMatchInput, Ghost, GhostRow,
+  LiveLobby, LiveMatchInfo, LiveSyncResult, LivePerson,
 } from './repository'
 import { packMoves, unpackMoves, type PackedMove } from '@/core/opponent'
 import { evaluateAchievements, tierOf, type AchValue, type VersusRecord } from '@/core/achievements'
@@ -21,6 +22,19 @@ import { evaluateAchievements, tierOf, type AchValue, type VersusRecord } from '
 /** 本地版存的徽章。舊資料沒有 tier，當成 1。 */
 interface LocalAch { id: string; at: number; tier?: number; tierAt?: number }
 import { ACHIEVEMENTS, ACH_BY_ID } from '@/data/achievements'
+
+/** 本地版的真人對戰「伺服器」（見 livePoll） */
+interface LocalLiveLobby {
+  classCode: string; seeking: boolean; rate: number
+  inviteTo: string | null; inviteAt: number; matchId: string | null; seen: number
+}
+interface LocalLive {
+  lobby: Record<string, LocalLiveLobby>
+  matches: Record<string, {
+    p1: string; p2: string; classCode: string; how: 'random' | 'invite'; createdAt: number
+    moves1: unknown[]; moves2: unknown[]; mark1: number; mark2: number; left1: boolean; left2: boolean
+  }>
+}
 
 /** 本地版存的分身（最近一場） */
 interface LocalGhost { legion: string; endedAt: number; correct: number; moves: PackedMove[] }
@@ -67,6 +81,7 @@ const k = {
   ghost: (id: string) => `${NS}.ghost.${id}`,
   itemUses: (id: string) => `${NS}.itemuses.${id}`,
   staff: `${NS}.staff`,
+  live: `${NS}.live`,
 }
 
 function read<T>(key: string, fallback: T): T {
@@ -87,6 +102,25 @@ function write(key: string, value: unknown): void {
 }
 
 /**
+ * 現在登入的是誰。**每個分頁先看自己的**（sessionStorage），沒有才看整個瀏覽器共用的。
+ *
+ * 本地版原本一個瀏覽器只能是一個人；真人對戰要兩個人，本機測試就開兩個分頁
+ * 各登入一個學生（tools/test/live-e2e.mjs）。平常只開一個分頁，行為跟以前一樣。
+ */
+function sessionOf(): string | null {
+  try {
+    const tab = sessionStorage.getItem(k.session)
+    if (tab) return JSON.parse(tab) as string | null
+  } catch { /* 讀不到就看共用的 */ }
+  return read<string | null>(k.session, null)
+}
+
+function setSession(id: string | null): void {
+  write(k.session, id)
+  try { sessionStorage.setItem(k.session, JSON.stringify(id)) } catch { /* 存不進去就算了 */ }
+}
+
+/**
  * 本地版的密碼「雜湊」。
  *
  * **這不是安全機制，也沒打算是。** 本地版整份資料就攤在使用者自己的瀏覽器裡，
@@ -101,7 +135,7 @@ export class LocalRepository implements Repository {
   private remember(student: Student): Student {
     write(k.student(student.id), student)
     write(k.byLogin(student.loginId), student.id)
-    write(k.session, student.id)
+    setSession(student.id)
     if (student.classCode) {
       const roster = read<string[]>(k.roster(student.classCode), [])
       if (!roster.includes(student.id)) write(k.roster(student.classCode), [...roster, student.id])
@@ -139,16 +173,16 @@ export class LocalRepository implements Repository {
   }
 
   async currentStudent(): Promise<Student | null> {
-    const id = read<string | null>(k.session, null)
+    const id = sessionOf()
     return id ? read<Student | null>(k.student(id), null) : null
   }
 
   async logout(): Promise<void> {
-    write(k.session, null)
+    setSession(null)
   }
 
   async setPassword(oldPassword: string, newPassword: string): Promise<void> {
-    const id = read<string | null>(k.session, null)
+    const id = sessionOf()
     if (!id) throw new Error('請先登入')
     if (read<string | null>(k.password(id), null) !== scramble(oldPassword.toLowerCase())) {
       throw new Error('舊密碼不對')
@@ -157,7 +191,7 @@ export class LocalRepository implements Repository {
   }
 
   async setNickname(nickname: string): Promise<string> {
-    const id = read<string | null>(k.session, null)
+    const id = sessionOf()
     const student = id ? read<Student | null>(k.student(id), null) : null
     if (!student) throw new Error('請先登入')
     const next = nickname.trim()
@@ -166,7 +200,7 @@ export class LocalRepository implements Repository {
   }
 
   async joinClass(classCode: string): Promise<string> {
-    const id = read<string | null>(k.session, null)
+    const id = sessionOf()
     const student = id ? read<Student | null>(k.student(id), null) : null
     if (!student) throw new Error('請先登入')
     const code = classCode.trim().toUpperCase()
@@ -195,7 +229,7 @@ export class LocalRepository implements Repository {
    * 本機版的存檔本來就在自己的瀏覽器裡。
    */
   private current(): Character {
-    const id = read<string | null>(k.session, null)
+    const id = sessionOf()
     const c = id ? read<Character | null>(k.character(id), null) : null
     if (!c) throw new Error('請先登入')
     return c
@@ -560,6 +594,12 @@ export class LocalRepository implements Repository {
     return code
   }
 
+  async setClassLiveListen(code: string, on: boolean): Promise<boolean> {
+    const all = read<ClassRoom[]>(k.classes, [])
+    write(k.classes, all.map((c) => (c.code === code ? { ...c, liveListen: on } : c)))
+    return on
+  }
+
   // ---------------------------------------------------------------- 成就
   //
   // **本地版是鏡像，不是真相。** 真正算數的是 supabase/schema.sql 的
@@ -744,6 +784,130 @@ export class LocalRepository implements Repository {
         legion: g.legion, endedAt: g.endedAt, correct: g.correct,
       }]
     }).sort((a, b) => b.endedAt - a.endedAt)
+  }
+
+  // ------------------------------------------------------------ 真人即時對戰
+  //
+  // 本機版的「伺服器」就是 localStorage 裡的一包（同一個瀏覽器的分頁共用），
+  // 規則照 schema.sql 的 live_poll / live_invite / live_accept / live_sync 抄一份。
+  // 只有同一個瀏覽器開兩個分頁才打得起來——本來就只拿來測。
+
+  private liveState(): LocalLive {
+    return read<LocalLive>(k.live, { lobby: {}, matches: {} })
+  }
+
+  private liveMatchFor(st: LocalLive, id: string, me: string): LiveMatchInfo | null {
+    const m = st.matches[id]
+    if (!m || (m.p1 !== me && m.p2 !== me)) return null
+    const foe = m.p1 === me ? m.p2 : m.p1
+    const s = read<Student | null>(k.student(foe), null)
+    const c = read<Character | null>(k.character(foe), null)
+    const cls = read<ClassRoom[]>(k.classes, []).find((x) => x.code === m.classCode)
+    return {
+      id, seat: m.p1 === me ? 1 : 2, foe, foeName: s?.nickname ?? '?', foeAvatar: c?.avatar ?? '',
+      foeLegion: c ? legionOf(c.equipped).id : '', foeRate: st.lobby[foe]?.rate ?? 14,
+      noListen: !cls?.liveListen, how: m.how,
+    }
+  }
+
+  private person(id: string): LivePerson {
+    const s = read<Student | null>(k.student(id), null)
+    const c = read<Character | null>(k.character(id), null)
+    return { id, nickname: s?.nickname ?? '?', avatar: c?.avatar ?? '' }
+  }
+
+  async livePoll(seeking: boolean, rate: number): Promise<LiveLobby> {
+    const me = await this.currentStudent()
+    if (!me?.classCode) throw new Error('還沒加入班級')
+    const now = Date.now()
+    const st = this.liveState()
+    const row = st.lobby[me.id] ?? { classCode: me.classCode, seeking, rate, inviteTo: null, inviteAt: 0, matchId: null, seen: now }
+    Object.assign(row, { classCode: me.classCode, seeking, rate, seen: now })
+    st.lobby[me.id] = row
+    if (row.matchId && !(st.matches[row.matchId]?.createdAt > now - 20000)) row.matchId = null
+    if (!row.matchId && seeking) {
+      const other = Object.entries(st.lobby)
+        .filter(([id, l]) => id !== me.id && l.classCode === me.classCode && l.seeking && !l.matchId && l.seen > now - 6000)
+        .sort((a, b) => Math.abs(a[1].rate - rate) - Math.abs(b[1].rate - rate))[0]
+      if (other) this.liveOpen(st, other[0], me.id, me.classCode, 'random')
+    }
+    write(k.live, st)
+    return {
+      match: row.matchId ? this.liveMatchFor(st, row.matchId, me.id) : null,
+      inviting: row.inviteAt > now - 20000 ? row.inviteTo : null,
+      invites: Object.entries(st.lobby)
+        .filter(([, l]) => l.inviteTo === me.id && l.inviteAt > now - 20000 && l.seen > now - 6000 && !l.matchId)
+        .map(([id]) => this.person(id)),
+      online: Object.entries(st.lobby)
+        .filter(([id, l]) => id !== me.id && l.classCode === me.classCode && l.seen > now - 6000)
+        .map(([id, l]) => ({ ...this.person(id), busy: !!l.matchId })),
+    }
+  }
+
+  private liveOpen(st: LocalLive, p1: string, p2: string, classCode: string, how: 'random' | 'invite'): string {
+    const id = `live-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    st.matches[id] = {
+      p1, p2, classCode, how, createdAt: Date.now(),
+      moves1: [], moves2: [], mark1: -1, mark2: -1, left1: false, left2: false,
+    }
+    for (const who of [p1, p2]) Object.assign(st.lobby[who], { matchId: id, seeking: false, inviteTo: null, inviteAt: 0 })
+    return id
+  }
+
+  async liveInvite(to: string | null): Promise<boolean> {
+    const me = await this.currentStudent()
+    if (!me?.classCode) throw new Error('還沒加入班級')
+    const st = this.liveState()
+    const row = st.lobby[me.id]
+    if (!row) return false
+    const target = to ? st.lobby[to] : null
+    if (!to || !target || to === me.id || target.classCode !== me.classCode || target.seen < Date.now() - 6000) {
+      row.inviteTo = null; row.inviteAt = 0
+      if (!to) row.seeking = false
+      write(k.live, st)
+      return false
+    }
+    Object.assign(row, { inviteTo: to, inviteAt: Date.now(), seeking: false })
+    write(k.live, st)
+    return true
+  }
+
+  async liveAccept(from: string): Promise<LiveMatchInfo | null> {
+    const me = await this.currentStudent()
+    if (!me?.classCode) throw new Error('還沒加入班級')
+    const st = this.liveState()
+    const now = Date.now()
+    const a = st.lobby[from]
+    const b = st.lobby[me.id]
+    const free = (l: LocalLiveLobby) => !l.matchId || !(st.matches[l.matchId]?.createdAt > now - 20000)
+    if (!a || !b || from === me.id || a.inviteTo !== me.id || a.inviteAt < now - 20000
+        || a.seen < now - 6000 || !free(a) || !free(b)) return null
+    const id = this.liveOpen(st, from, me.id, me.classCode, 'invite')
+    write(k.live, st)
+    return this.liveMatchFor(st, id, me.id)
+  }
+
+  async liveSync(
+    matchId: string, base: number, moves: unknown[], mark: number, theirFrom: number, left: boolean,
+  ): Promise<LiveSyncResult> {
+    const me = await this.currentStudent()
+    const st = this.liveState()
+    const m = st.matches[matchId]
+    if (!me || !m || (m.p1 !== me.id && m.p2 !== me.id)) throw new Error('不是你的對戰')
+    const one = m.p1 === me.id
+    const mine = one ? m.moves1 : m.moves2
+    if (st.lobby[me.id]?.matchId === matchId) st.lobby[me.id].matchId = null
+    if (base <= mine.length) {
+      mine.push(...moves.slice(mine.length - base))
+      if (one) m.mark1 = Math.max(m.mark1, mark); else m.mark2 = Math.max(m.mark2, mark)
+    }
+    if (left) { if (one) m.left1 = true; else m.left2 = true }
+    write(k.live, st)
+    const theirs = one ? m.moves2 : m.moves1
+    return {
+      mine: mine.length, theirs: theirs.slice(Math.max(0, theirFrom)),
+      theirMark: one ? m.mark2 : m.mark1, theirLeft: one ? m.left2 : m.left1,
+    }
   }
 
   async loadGhost(studentId: string): Promise<Ghost | null> {

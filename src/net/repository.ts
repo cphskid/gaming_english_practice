@@ -228,6 +228,22 @@ export interface Repository {
   /** 某個同學最近一場的答題串。不同班、或是還沒打過，回 null。 */
   loadGhost(studentId: string): Promise<Ghost | null>
 
+  // ------------------------------------------------------------ 真人即時對戰
+  /**
+   * 對戰頁每一秒半叫一次：報到（班上同學才看得到我在線上）、排隊（seeking）、
+   * 湊對，順便帶回誰在邀我、班上誰在對戰頁。配到了 match 就不是 null。
+   */
+  livePoll(seeking: boolean, rate: number): Promise<LiveLobby>
+  /** 邀一個同學。null＝收回邀請。 */
+  liveInvite(to: string | null): Promise<boolean>
+  /** 接受邀請。邀請過期、對方已經跟別人打了，回 null。 */
+  liveAccept(from: string): Promise<LiveMatchInfo | null>
+  /** 打的時候每半秒一次：放上我的新動作、拿回對方的（見 net/live.ts） */
+  liveSync(matchId: string, base: number, moves: unknown[], mark: number,
+    theirFrom: number, left: boolean): Promise<LiveSyncResult>
+  /** 老師：班上真人對戰出不出聽音題 */
+  setClassLiveListen(code: string, on: boolean): Promise<boolean>
+
   listTeachers(): Promise<TeacherRow[]>
   listInvites(): Promise<{ email: string; used: boolean }[]>
   setTeacherActive(userId: string, active: boolean): Promise<void>
@@ -382,6 +398,8 @@ export interface VersusMatchInput {
   opponentName: string
   /** 打分身時，分身是誰 */
   opponentStudent?: string
+  /** 真人即時對戰那一場的編號。opponentKind 是 'student' 時伺服器靠它確認真的有這一場。 */
+  liveMatch?: string
   /** 這一場自己做過的事。存起來就是別人挑戰你時的分身。 */
   moves: Move[]
   won: boolean
@@ -396,6 +414,49 @@ export interface VersusMatchInput {
 }
 
 /** 選對手那一頁的一列：一個可以挑戰的同學分身。 */
+/** 配好的一場真人對戰，照「我」的角度 */
+export interface LiveMatchInfo {
+  id: string
+  /** 第一位永遠在戰場左邊（見 games/tug-of-war/lockstep.ts） */
+  seat: 1 | 2
+  foe: string
+  foeName: string
+  foeAvatar: string
+  foeLegion: string
+  /** 對方每分鐘大概答對幾題。他斷線、又沒有分身的時候，電腦照這個速度接手。 */
+  foeRate: number
+  /** 這一班的真人對戰不出聽音題（老師沒打開） */
+  noListen: boolean
+  how: 'random' | 'invite'
+}
+
+export interface LivePerson {
+  id: string
+  nickname: string
+  avatar: string
+  /** 正在跟別人打 */
+  busy?: boolean
+}
+
+export interface LiveLobby {
+  match: LiveMatchInfo | null
+  /** 我正在邀誰（20 秒內） */
+  inviting: string | null
+  /** 誰正在邀我 */
+  invites: LivePerson[]
+  /** 班上現在在對戰頁的同學 */
+  online: LivePerson[]
+}
+
+export interface LiveSyncResult {
+  /** 伺服器上我有幾筆。比我送的少，就是中間漏了，下次從這裡重送。 */
+  mine: number
+  /** 對方從 theirFrom 開始的動作，還沒解開（見 lockstep.ts 的 unpackLive） */
+  theirs: unknown[]
+  theirMark: number
+  theirLeft: boolean
+}
+
 export interface GhostRow {
   studentId: string
   nickname: string

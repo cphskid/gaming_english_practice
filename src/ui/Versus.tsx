@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { RULES } from '@/games/tug-of-war/battle'
 import { repo } from '@/net'
-import type { GhostRow } from '@/net/repository'
+import type { GhostRow, LiveLobby, LiveMatchInfo } from '@/net/repository'
 import { avatarSrc } from '@/data/jobs'
 import { legionById } from '@/data/legions'
 
@@ -16,21 +16,32 @@ function ago(at: number): string {
   return d === 1 ? '昨天' : `${d} 天前`
 }
 
+/** 排隊、邀請等多久沒回音就放棄。Chuck 定的 20 秒。 */
+const WAIT_S = 20
+/** 多久報到一次（live_poll）。伺服器 6 秒沒看到就當你不在了。 */
+const POLL_MS = 1500
+
 /**
  * 對戰前的那一頁。
  *
- * 兩種對手：同學的分身（重播他最近一場），和電腦。兩種都**老實寫出來**——
+ * 最上面是真人對戰（2026-09-25）：隨機對戰當主按鈕，另外列出班上現在也在這一頁的同學，
+ * 點頭像邀請。**隨機對戰沒有「拒絕」這一步**，不認識人、人緣比較差的小朋友也一定配得到；
+ * 邀請沒人接只顯示「他現在沒空」，不說「被拒絕」。
+ *
+ * 下面兩種對手：同學的分身（重播他最近一場），和電腦。兩種都**老實寫出來**——
  * 小孩被騙到會更不爽，以為同學在線上跟他打、跑去問才發現不是，那更糟。
  * 之後的即時配對接在同一頁，對引擎來說都只是換一串答題（見 core/opponent.ts）。
  */
 export function Versus({
-  myRate, onStart, onGhost, onBack,
+  myRate, onStart, onGhost, onLive, onBack,
 }: {
   /** 我現在大概每分鐘答得完幾題，拿來說明對手有多快 */
   myRate: number
   onStart: (hardness: number, name: string) => void
   /** 挑戰某個同學的分身。回傳錯誤訊息（抓不到那一場）或 null */
   onGhost: (studentId: string) => Promise<string | null>
+  /** 真人對戰配到人了 */
+  onLive: (m: LiveMatchInfo) => void
   onBack: () => void
 }) {
   const [ghosts, setGhosts] = useState<GhostRow[] | null>(null)
@@ -43,6 +54,91 @@ export function Versus({
       .catch(() => { if (alive) { setGhosts([]); setGhostErr('同學名單讀不到，網路好一點再回來看看') } })
     return () => { alive = false }
   }, [])
+
+  // ------------------------------------------------------------ 真人對戰
+  const [lobby, setLobby] = useState<LiveLobby | null>(null)
+  const [lobbyErr, setLobbyErr] = useState(false)
+  /** 按了隨機對戰的時間（Date.now），沒在排是 0 */
+  const [seekAt, setSeekAt] = useState(0)
+  /** 我邀了誰、什麼時候邀的 */
+  const [invite, setInvite] = useState<{ id: string; at: number } | null>(null)
+  /** 邀請過期的人（他現在沒空），下面那一列改成「打他的分身」 */
+  const [noAnswer, setNoAnswer] = useState<string | null>(null)
+  /** 按了「現在不要」的邀請，這一輪不再跳出來 */
+  const [dismissed, setDismissed] = useState<string[]>([])
+  const [liveMsg, setLiveMsg] = useState<string | null>(null)
+  const [, setNow] = useState(0)
+  const started = useRef(false)
+  const seekRef = useRef(0)
+  seekRef.current = seekAt
+  const onLiveRef = useRef(onLive)
+  onLiveRef.current = onLive
+
+  useEffect(() => {
+    let alive = true
+    const poll = async () => {
+      if (started.current) return
+      try {
+        const l = await repo.livePoll(seekRef.current > 0, myRate)
+        if (!alive || started.current) return
+        setLobby(l)
+        setLobbyErr(false)
+        if (l.match) { started.current = true; onLiveRef.current(l.match) }
+      } catch {
+        if (alive) setLobbyErr(true)
+      }
+    }
+    void poll()
+    const t = setInterval(() => { void poll(); setNow(Date.now()) }, POLL_MS)
+    // 離開這一頁：收回邀請、退出隊伍（伺服器 6 秒沒看到也會自己當你不在）
+    return () => { alive = false; clearInterval(t); if (!started.current) void repo.liveInvite(null).catch(() => {}) }
+  }, [myRate])
+
+  // 排隊 20 秒還沒配到：改打一位程度接近的同學的分身，沒有分身就打跟你差不多快的電腦
+  const left = (at: number) => Math.max(0, WAIT_S - Math.floor((Date.now() - at) / 1000))
+  useEffect(() => {
+    if (!seekAt || left(seekAt) > 0 || started.current) return
+    setSeekAt(0)
+    const want = myRate * (RULES.seconds / 60)
+    const near = [...(ghosts ?? [])].sort((a, b) => Math.abs(a.correct - want) - Math.abs(b.correct - want))[0]
+    if (near) {
+      setLiveMsg(`現在沒有同學在排隊，改打${near.nickname}的分身`)
+      void challenge(near.studentId)
+    } else {
+      setLiveMsg('現在沒有同學在排隊，先打一場電腦')
+      onStart(1.0, '同班同學')
+    }
+  })
+  useEffect(() => {
+    if (!invite || left(invite.at) > 0) return
+    setNoAnswer(invite.id)
+    setInvite(null)
+    void repo.liveInvite(null).catch(() => {})
+  })
+
+  function seek() {
+    if (seekAt) { setSeekAt(0); return }
+    setInvite(null); setNoAnswer(null); setLiveMsg(null)
+    setSeekAt(Date.now())
+  }
+
+  async function inviteOne(id: string) {
+    setSeekAt(0); setNoAnswer(null); setLiveMsg(null)
+    const ok = await repo.liveInvite(id).catch(() => false)
+    if (ok) setInvite({ id, at: Date.now() })
+    else setLiveMsg('他剛離開對戰頁了')
+  }
+
+  async function accept(id: string) {
+    const m = await repo.liveAccept(id).catch(() => null)
+    if (m && !started.current) { started.current = true; onLiveRef.current(m); return }
+    setLiveMsg('這個邀請過期了，換你邀他看看')
+    setDismissed((d) => [...d, id])
+  }
+
+  const invites = (lobby?.invites ?? []).filter((p) => !dismissed.includes(p.id))
+  const online = lobby?.online ?? []
+  const ghostOf = (id: string) => ghosts?.find((g) => g.studentId === id)
 
   async function challenge(id: string) {
     if (busy) return
@@ -65,6 +161,52 @@ export function Versus({
         <h2>⚔️ 兵推對戰</h2>
         <span className="spacer" />
         <button className="btn ghost" onClick={onBack}>回選關</button>
+      </div>
+
+      <h3 className="vs-h">⚡ 真人對戰</h3>
+      {invites.map((p) => (
+        <div key={p.id} className="panel vs-invite">
+          <span className="mugbox vs-mug"><img src={avatarSrc(p.avatar)} alt="" /></span>
+          <span className="txt"><b>{p.nickname}</b> 邀你對戰！</span>
+          <button className="btn small" onClick={() => void accept(p.id)}>接受</button>
+          <button className="btn ghost small" onClick={() => setDismissed((d) => [...d, p.id])}>現在不要</button>
+        </div>
+      ))}
+      <div className="vs-live">
+        <button className={'panel vs-seek' + (seekAt ? ' on' : '')} onClick={seek}>
+          <span className="ic">🎲</span>
+          <span className="txt">
+            <b>{seekAt ? `配對中…還有 ${left(seekAt)} 秒` : '隨機對戰'}</b>
+            <small>{seekAt
+              ? '找班上也在排隊、程度跟你差不多的同學。沒配到就改打分身（再按一下取消）'
+              : '系統幫你配一位班上的同學，跟本人即時對打'}</small>
+          </span>
+        </button>
+        <p className="vs-sub muted">
+          {online.length ? `班上現在在這一頁的同學（${online.length}）：點「邀請」找他對打` : '現在班上沒有其他同學在這一頁。按隨機對戰等一下，或先挑戰分身。'}
+        </p>
+        {online.map((p) => {
+          const waiting = invite?.id === p.id
+          const busyNo = noAnswer === p.id
+          const g = ghostOf(p.id)
+          return (
+            <div key={p.id} className="panel vs-person">
+              <span className="mugbox vs-mug"><img src={avatarSrc(p.avatar)} alt="" /></span>
+              <span className="txt">
+                <b>{p.nickname}</b>
+                <small className="muted">
+                  {p.busy ? '正在對戰中' : waiting ? `等他回應…${left(invite!.at)}` : busyNo ? '他現在沒空' : '在線上'}
+                </small>
+              </span>
+              {busyNo && g
+                ? <button className="btn ghost small" onClick={() => void challenge(p.id)}>打他的分身</button>
+                : <button className="btn small" disabled={p.busy || waiting}
+                    onClick={() => void inviteOne(p.id)}>{waiting ? '邀請中' : '邀請'}</button>}
+            </div>
+          )
+        })}
+        {lobbyErr && <p className="vs-sub err">連不上對戰大廳，網路好一點會自己接上</p>}
+        {liveMsg && <p className="vs-sub">{liveMsg}</p>}
       </div>
 
       <div className="panel vs-intro">
@@ -120,7 +262,8 @@ export function Versus({
       </div>
 
       <p className="vs-note muted">
-        打贏電腦或分身不會記進戰旗勝場，金幣和經驗照樣拿得到（那本來就只從答對來）。
+        只有跟同學真人對戰打贏才記進戰旗勝場；打贏電腦或分身不算，金幣和經驗照樣拿得到（那本來就只從答對來）。
+        真人對戰不能用道具。
       </p>
     </div>
   )

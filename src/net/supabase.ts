@@ -6,6 +6,7 @@ import type {
 import type {
   AchievementRow, AddedTeacher, BadgeCount, Pin, ClassRosterRow, LeaderRow, LevelResult, PublicProfile,
   Repository, RoomBrief, RoomMember, RoomState, SavedResult, VersusMatchInput, Ghost, GhostRow,
+  LiveLobby, LiveMatchInfo, LiveSyncResult,
 } from './repository'
 import { packMoves, unpackMoves } from '@/core/opponent'
 
@@ -510,10 +511,11 @@ export class SupabaseRepository implements Repository {
 
   async listClasses(): Promise<ClassRoom[]> {
     const { data, error } = await this.db
-      .from('classes').select('code, name, open').order('created_at')
+      .from('classes').select('code, name, open, live_listen').order('created_at')
     fail('讀取班級失敗', error)
-    return ((data as ClassRoom[] | null) ?? []).map((r) => ({
-      code: r.code, name: r.name, open: r.open,
+    type Row = ClassRoom & { live_listen?: boolean }
+    return ((data as Row[] | null) ?? []).map((r) => ({
+      code: r.code, name: r.name, open: r.open, liveListen: !!r.live_listen,
     }))
   }
 
@@ -649,8 +651,61 @@ export class SupabaseRepository implements Repository {
       p_opponent_name: m.opponentName,
       p_opponent: m.opponentStudent ?? null,
       p_moves: packMoves(m.moves),
+      p_live: m.liveMatch ?? null,
     })
     fail('記不了這一場戰績', error)
+  }
+
+  async livePoll(seeking: boolean, rate: number): Promise<LiveLobby> {
+    const { data, error } = await this.db.rpc('live_poll', { p_seeking: seeking, p_rate: rate })
+    fail('連不上對戰大廳', error)
+    const d = (data ?? {}) as {
+      match: RawLiveMatch | null; inviting: string | null
+      invites: RawPerson[] | null; online: (RawPerson & { busy?: boolean })[] | null
+    }
+    return {
+      match: d.match ? liveMatchOf(d.match) : null,
+      inviting: d.inviting ?? null,
+      invites: (d.invites ?? []).map((p) => ({ id: p.id, nickname: p.nickname, avatar: p.avatar ?? '' })),
+      online: (d.online ?? []).map((p) => ({
+        id: p.id, nickname: p.nickname, avatar: p.avatar ?? '', busy: !!p.busy,
+      })),
+    }
+  }
+
+  async liveInvite(to: string | null): Promise<boolean> {
+    const { data, error } = await this.db.rpc('live_invite', { p_to: to })
+    fail('邀請送不出去', error)
+    return !!data
+  }
+
+  async liveAccept(from: string): Promise<LiveMatchInfo | null> {
+    const { data, error } = await this.db.rpc('live_accept', { p_from: from })
+    fail('接受不了邀請', error)
+    return data ? liveMatchOf(data as RawLiveMatch) : null
+  }
+
+  async liveSync(
+    matchId: string, base: number, moves: unknown[], mark: number, theirFrom: number, left: boolean,
+  ): Promise<LiveSyncResult> {
+    const { data, error } = await this.db.rpc('live_sync', {
+      p_match: matchId, p_base: base, p_moves: moves, p_mark: mark,
+      p_their_from: theirFrom, p_left: left,
+    })
+    fail('對戰連線中斷', error)
+    const d = data as { mine: number; theirs: unknown[] | null; their_mark: number; their_left: boolean }
+    return {
+      mine: Number(d.mine ?? 0), theirs: d.theirs ?? [],
+      theirMark: Number(d.their_mark ?? -1), theirLeft: !!d.their_left,
+    }
+  }
+
+  async setClassLiveListen(code: string, on: boolean): Promise<boolean> {
+    const { data, error } = await this.db.rpc('class_set_live_listen', {
+      p_code: code.trim().toUpperCase(), p_on: on,
+    })
+    fail('設定失敗', error)
+    return (data as boolean) ?? on
   }
 
   async listGhosts(): Promise<GhostRow[]> {
@@ -811,5 +866,18 @@ function toEvent(r: EventRow): AnswerEvent {
     sessionId: r.session_id ?? '',
     ord: r.ord ?? 0,
     at: ms(r.at),
+  }
+}
+
+type RawPerson = { id: string; nickname: string; avatar: string | null }
+type RawLiveMatch = {
+  id: string; seat: number; foe: string; foe_name: string; foe_avatar: string | null
+  foe_legion: string | null; foe_rate: number | null; no_listen: boolean; how: string
+}
+function liveMatchOf(r: RawLiveMatch): LiveMatchInfo {
+  return {
+    id: r.id, seat: r.seat === 1 ? 1 : 2, foe: r.foe, foeName: r.foe_name,
+    foeAvatar: r.foe_avatar ?? '', foeLegion: r.foe_legion ?? '', foeRate: Number(r.foe_rate ?? 14),
+    noListen: r.no_listen !== false, how: r.how === 'invite' ? 'invite' : 'random',
   }
 }

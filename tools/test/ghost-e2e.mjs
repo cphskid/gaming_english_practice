@@ -86,6 +86,7 @@ try {
   // ---- 小乙同一班，挑戰小甲的分身
   await page.evaluate(() => {
     for (const k of Object.keys(localStorage)) if (k.endsWith('.session')) localStorage.removeItem(k)
+    sessionStorage.clear()   // 每個分頁自己記的登入（見 net/local.ts 的 sessionOf）
   })
   await signUp('小乙')
   await page.getByRole('button', { name: '對戰' }).click()

@@ -266,8 +266,8 @@ if (by('20 vs 16').winRate < 0.55) fails.push('快一點的人沒有比較容易
       const us = s.units.filter((u) => u.side === fs && u.hp > 0).sort((a, b) => (a.x - b.x) * d).slice(0, 3)
       M.strike(s, side, us[Math.floor(picks[side]() * 3)] ?? null, r)
     }
-    const f1 = M.makeFeeder(M.botOpponent({ name: 'a', rate: 26, accuracy: 1, seed: 5 + k }), act('me'))
-    const f2 = M.makeFeeder(M.botOpponent({ name: 'b', rate: 9, accuracy: 1, seed: 600 + k }), act('foe'))
+    const f1 = M.makeFeeder(M.botOpponent({ name: 'a', rate: 30, accuracy: 1, seed: 5 + k }), act('me'))
+    const f2 = M.makeFeeder(M.botOpponent({ name: 'b', rate: 6, accuracy: 1, seed: 600 + k }), act('foe'))
     let last = { ...s.castleHp }
     while (!s.over) {
       f1(s.t); f2(s.t)

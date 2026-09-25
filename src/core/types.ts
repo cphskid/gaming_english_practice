@@ -195,6 +195,63 @@ export interface Opponent {
   legion?: string
   /** 到第 t 秒為止，對手做過的事（累計，可以重複問）。 */
   movesUntil(t: number): Move[]
+  /**
+   * 真人即時對戰才有：跟對方手機之間的那條線（見 LiveLink）。
+   * 有這個的時候 movesUntil 不用，戰場改走 lockstep（games/tug-of-war/lockstep.ts）。
+   */
+  live?: LiveLink
+  /**
+   * 這一場不出聽音題。教室裡大家一起對戰，旁邊同學的手機一念，答案就被聽到了——
+   * 班上對戰預設關掉，老師可以在班級設定打開。
+   */
+  noListen?: boolean
+}
+
+/**
+ * 真人對戰裡的一個動作。跟 Move 很像，差在時間用**格數**（一秒 30 格）而不是秒：
+ * 兩支手機要在同一格套用同一個動作，秒數是小數，兩邊加總出來可能差一點點，格數不會。
+ *
+ * 答對那一槍打哪一隻也要記（target＝兵的編號，-1＝打城牆守衛），
+ * 兩邊才會打在同一隻上。
+ */
+export interface LiveMove {
+  /** 在第幾格做的 */
+  k: number
+  act: 'answer' | 'summon' | 'up'
+  correct?: boolean
+  target?: number
+  line?: Skill
+  rank?: number
+}
+
+/**
+ * 跟對方手機之間的線。實作在 net/live.ts（每半秒問一次伺服器，不用長連線）。
+ *
+ * 規則只有一條：**我說「第 k 格以前的動作都送了」，就不會再送 k 以前的動作。**
+ * 對方靠這個知道自己可以放心往前算到哪一格（見 lockstep.ts）。
+ */
+export interface LiveLink {
+  /**
+   * 我是第一位還是第二位。兩支手機算的是**同一份戰場**，第一位永遠在那份戰場的左邊；
+   * 第二位的手機畫的時候左右翻過來，所以每個人看到的都是自己在左邊。
+   */
+  seat: 1 | 2
+  /** 這一場在伺服器上的編號 */
+  matchId: string
+  /** 送出一個動作 */
+  send(m: LiveMove): void
+  /** 第 k 格以前的動作都送出了 */
+  mark(k: number): void
+  /** 對方到現在送來的所有動作，照他做的順序（累計，可以重複問） */
+  theirMoves(): LiveMove[]
+  /** 對方說過「第幾格以前都送了」。還沒聽到任何消息是 -1。 */
+  theirMark(): number
+  /** 對方按了離開 */
+  theirGone(): boolean
+  /** 對方斷線或離開之後改打這個（他的分身，沒有分身就是電腦） */
+  fallback: Opponent
+  /** 打完或離開。left＝中途離開，對方那邊會改成打分身。 */
+  close(left: boolean): void
 }
 
 export interface GameContext {
@@ -256,6 +313,12 @@ export interface GameOutcome {
     topTier: number
     /** 這一場自己做過的事，照時間排。存起來就是同學挑戰你時的「分身」。 */
     moves: Move[]
+    /**
+     * 真人即時對戰：打到最後都是跟本人打（true），還是中途對方斷線、
+     * 剩下的改打分身（false）。**只有 true 的那場贏了才算戰旗。**
+     * 不是真人對戰就沒有這一欄。
+     */
+    liveToEnd?: boolean
   }
 }
 
@@ -348,6 +411,8 @@ export interface ClassRoom {
   code: string
   name: string
   open: boolean
+  /** 班上真人對戰出不出聽音題（教室裡會互相聽到答案，預設不出） */
+  liveListen?: boolean
 }
 
 /** 管理員看到的一位老師。 */
