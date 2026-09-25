@@ -47,7 +47,7 @@
 
 備戰階段會把空地的射程用虛線畫出來，已蓋好的塔則畫實線，方便比較擺哪裡划算。
 
-地形用的是 Tiny Swords 的 `Terrain/Tileset/Tilemap_color1.png`（9×6 格、每格 64 像素的接邊組）。
+地形用的是 Tiny Swords 的 `Terrain/Tileset/Tilemap_color1.png`（9×6 格、每格 64 像素的接邊組）。Tiny Swords 禁止散布，原檔與這裡的 `art.js` 都放在私有 repo，要先跑 `sh tools/private-assets.sh` 才會出現。
 這套圖塊**沒有土路磚**，所以路是用兩層半透明土色壓在草地上畫出來的「被踩禿的草」。
 
 ## 銅幣

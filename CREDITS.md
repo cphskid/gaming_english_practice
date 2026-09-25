@@ -2,9 +2,13 @@
 
 ## 美術素材
 
+> 只收 CC0 或允許再散布的素材。「可以用但禁止散布」的素材（Tiny Swords、多數付費包）放私有 repo `cphskid/gaming_english_assets` 的 `overlay/`，路徑照這個 repo 擺，再把路徑加進 `.gitignore`，詳見 `tools/private-assets.sh`。
+
 **Tiny Swords** — [Pixel Frog](https://pixelfrog-assets.itch.io/tiny-swords)
 
 角色、建築、地形、UI 與特效素材皆出自此素材包。作者授權可自由用於個人與商業專案並可修改，且不強制標註；此處仍列出以示感謝。
+
+**但授權也寫明「不得再散布、轉售或重新包裝，改過的也一樣」**，所以原檔和裁出來的遊戲圖都不放在這個公開 repo，改放私有 repo `cphskid/gaming_english_assets`，發佈時才拉進來打包（見 `tools/private-assets.sh`）。2026-09-25 以前的 commit 裡還有舊的副本。
 
 **Treasure Hunters** — [Pixel Frog](https://pixelfrog-assets.itch.io/treasure-hunters)
 

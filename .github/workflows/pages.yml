@@ -24,11 +24,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # 禁散布的圖放在私有 repo，用只能讀那個 repo 的金鑰拉下來，見 tools/private-assets.sh
+      - uses: actions/checkout@v4
+        with:
+          repository: cphskid/gaming_english_assets
+          token: ${{ secrets.ASSETS_TOKEN }}
+          path: private-assets
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: sh tools/private-assets.sh private-assets
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
