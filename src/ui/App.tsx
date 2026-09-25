@@ -9,7 +9,7 @@ import type {
   Character, GameModule, GameOutcome, LevelData, LevelProgress, Opponent, RaidLink, Skill, Staff, Student,
 } from '@/core/types'
 import { botOpponent, ghostOpponent } from '@/core/opponent'
-import { WORDS, WORDS_BY_ID, wordsOfThemes } from '@/data/words'
+import { CORE_WORDS, WORDS_BY_ID, wordsOfLevel } from '@/data/words'
 import { bossRaid, towerDefense, tugOfWar } from '@/games'
 import { BOSS_BY_ID, bossWords } from '@/data/bosses'
 import { loadArt } from '@/games/tower-defense/art'
@@ -178,7 +178,7 @@ export function App() {
     audio.unlock()
     // 關卡描述地圖和怪，模式描述規則。這裡是 solo，但 Session 天生支援多人。
     const quizOpts = {
-      words: wordsOfThemes(level.themes),
+      words: wordsOfLevel(level),
       maxWordLevel: level.maxWordLevel,
       stat,
     }
@@ -278,7 +278,7 @@ export function App() {
     if (!student) return
     audio.unlock()
     const rate = Math.max(8, Math.min(30, Math.round(myRate() * hardness)))
-    const quizOpts = { words: WORDS, stat }
+    const quizOpts = { words: CORE_WORDS, stat }
     const session = new Session({
       mode: 'versus',
       gameId: tugOfWar.id,
@@ -315,7 +315,7 @@ export function App() {
       alreadyCleared: false,
     })
     setPlaying({
-      level: null, game: tugOfWar, session, quizzes: new Map(), quizOpts: { words: WORDS, stat },
+      level: null, game: tugOfWar, session, quizzes: new Map(), quizOpts: { words: CORE_WORDS, stat },
       opponent: ghostOpponent(g.nickname, g.moves, g.legion),
       ghostOf: g.studentId,
     })
@@ -346,7 +346,7 @@ export function App() {
       alreadyCleared: false,
     })
     setPlaying({
-      level: null, game: tugOfWar, session, quizzes: new Map(), quizOpts: { words: WORDS, stat },
+      level: null, game: tugOfWar, session, quizzes: new Map(), quizOpts: { words: CORE_WORDS, stat },
       opponent: {
         name: info.foeName, isBot: false, legion: info.foeLegion, noListen: info.noListen,
         movesUntil: () => [],

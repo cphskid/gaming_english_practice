@@ -1,5 +1,5 @@
 import type { Word } from '@/core/types'
-import { WORDS } from './words'
+import { CORE_WORDS } from './words'
 import ART from './raid-art.json'
 
 /**
@@ -88,8 +88,8 @@ export const BOSSES: BossDef[] = [
 export const BOSS_BY_ID: Map<string, BossDef> = new Map(BOSSES.map((b) => [b.id, b]))
 
 export function bossWords(b: BossDef): Word[] {
-  if (!b.themes.length) return WORDS
-  return WORDS.filter((w) => b.themes.includes(w.theme))
+  if (!b.themes.length) return CORE_WORDS
+  return CORE_WORDS.filter((w) => b.themes.includes(w.theme))
 }
 
 /** 素材在 public/raid/ 底下的網址 */

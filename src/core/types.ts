@@ -47,6 +47,13 @@ export interface Word {
   /** 課綱要求要會拼寫的字 */
   spell: boolean
   level: WordLevel
+  /**
+   * 哪一層字庫，也就是哪一章：1＝國小核心 300、2＝基本 1,200 剩下的、3＝其他常用 800。
+   * 守塔以外的遊戲（兵推、團戰）先只出第 1 層，免得國小生在對戰裡撞到國中字。
+   */
+  tier: 1 | 2 | 3
+  /** 課綱括號裡的別名或變化形（airplane 的 plane、be 的 am/is/are），只給人看，不出題 */
+  alt?: string
 }
 
 export interface Question {
@@ -138,6 +145,16 @@ export interface LevelData {
   name: string
   /** 這一關考哪些主題的字。空陣列代表全部。 */
   themes: string[]
+  /**
+   * 這一關考哪些字（題庫 id）。有這欄就照這份出題，不看 themes。
+   * 第二、三章的大主題（動作、其他名詞）一個主題就上百個字，要切成好幾關，
+   * 所以不能只靠主題；themes 那時只拿來寫關卡上的小字。
+   */
+  wordIds?: number[]
+  /** 第幾章（1～3）。章跟章之間要整章打完才開下一章。 */
+  chapter: 1 | 2 | 3
+  /** 首次通關的金幣（伺服器 levels.bonus 同一個數字，見 core/progress.ts firstClearBonus） */
+  bonus: number
   /** 出題最高到第幾級 */
   maxWordLevel: WordLevel
   isBoss: boolean

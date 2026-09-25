@@ -42,6 +42,16 @@ create table if not exists public.levels (
 -- 訂得刻意寬鬆：擋的是「一題都沒答就說自己通關」，不是去評誰打得好。
 alter table public.levels add column if not exists min_correct int not null default 0;
 
+-- 兩千字、八十五關（2026-09-25）：
+--   words.tier      哪一層字庫＝哪一章（1 核心 300／2 基本 1,200 剩下的／3 其他常用 800）
+--   levels.chapter  第幾章。「全破」一章一個徽章，要知道每關屬於哪一章。
+--   levels.bonus    首次通關的金幣。以前是 40＋編號×10，第 85 關會變 890，
+--                   所以改成 seed 灌進來的數字（src/core/progress.ts 同一條公式）。
+--                   null 的舊資料照舊公式算，新舊版本交接那段時間不會出錯。
+alter table public.words  add column if not exists tier    smallint not null default 1;
+alter table public.levels add column if not exists chapter smallint not null default 1;
+alter table public.levels add column if not exists bonus   int;
+
 -- -----------------------------------------------------------------------------
 -- 2. 老師與班級
 --    老師是真的 Supabase 帳號（email 登入）。學生不是。
@@ -1011,7 +1021,7 @@ declare
 begin
   if v_student is null then raise exception '還沒加入班級'; end if;
 
-  select l.no, l.min_correct into v_no, v_min from public.levels l where l.id = p_level_id;
+  select l.no, l.min_correct, l.bonus into v_no, v_min, v_bonus from public.levels l where l.id = p_level_id;
   if v_no is null then raise exception '沒有這一關：%', p_level_id; end if;
 
   -- 這一場答了什麼，資料庫自己數。沒有 session id 就一題都不算，
@@ -1035,7 +1045,9 @@ begin
    where lp.student_id = v_student and lp.level_id = p_level_id;
 
   if v_win and v_was is null then
-    v_bonus := 40 + v_no * 10;
+    v_bonus := coalesce(v_bonus, 40 + v_no * 10);
+  else
+    v_bonus := 0;
   end if;
 
   insert into public.level_progress as lp
@@ -2449,6 +2461,7 @@ declare
   v_up      text[] := '{}';
   v_n       int;
   v_all     int;
+  v_ch      int;
   v_items   jsonb;
   v_jobs    text[];
   v_new     text;
@@ -2551,16 +2564,25 @@ begin
    where lp.student_id = v_student;
   v_up := array_append(v_up, public.ach_put(v_student, 'stars-30', v_n, v_all * 3));
 
+  -- 屠魔：2026-09-25 從「三個魔王關都過」改成分階（3／6／10／14／全部）
   select count(*) into v_n
     from public.level_progress lp join public.levels l on l.id = lp.level_id
    where lp.student_id = v_student and lp.cleared_at is not null and l.is_boss;
-  if v_n > 0 and v_n >= (select count(*) from public.levels where is_boss) then
-    v_got := array_append(v_got, 'boss-slayer');
-  end if;
+  v_up := array_append(v_up, public.ach_put(v_student, 'boss-slayer', v_n,
+                                            (select count(*)::int from public.levels where is_boss)));
 
-  select count(*) into v_n from public.level_progress lp
-   where lp.student_id = v_student and lp.cleared_at is not null;
-  if v_n >= v_all then v_got := array_append(v_got, 'all-clear'); end if;
+  -- 全破：一章一個。第一章沿用舊的 'all-clear'。
+  for v_ch in 1..3 loop
+    if exists (select 1 from public.levels l where l.chapter = v_ch)
+       and not exists (
+         select 1 from public.levels l
+          where l.chapter = v_ch
+            and not exists (select 1 from public.level_progress lp
+                             where lp.student_id = v_student and lp.level_id = l.id
+                               and lp.cleared_at is not null)) then
+      v_got := array_append(v_got, case v_ch when 1 then 'all-clear' else 'all-clear-' || v_ch end);
+    end if;
+  end loop;
 
   -- ---------------------------------------------------------------- 對戰
   select count(*) into v_n from public.versus_matches m where m.student_id = v_student;

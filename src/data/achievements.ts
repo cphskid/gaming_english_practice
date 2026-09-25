@@ -1,5 +1,5 @@
 /**
- * 成就：五十一格徽章，八個大類，其中二十六格分五階（2026-09-24 第二版，2026-09-25 加魔王剋星與合作類）。
+ * 成就：五十三格徽章，八個大類，其中二十六格分五階（2026-09-24 第二版，2026-09-25 加魔王剋星與合作類）。
  *
  * **三條原則**（2026-09-21 跟 Chuck 談定）：
  *
@@ -103,16 +103,16 @@ export const ACHIEVEMENTS: AchDef[] = [
     desc: '把 {n} 個錯過三次以上的字，練到連對三次。',
     hint: '把 {n} 個常錯的字練到連對三次', rewardTitle: '不放棄' },
   { id: 'theme-king', category: 'learn', name: '主題王',
-    tiers: [3, 5, 10, 15, ALL],
+    tiers: [3, 8, 15, 25, ALL],
     desc: '{n} 個主題的字全部答對過。', hint: '把 {n} 個主題的字全部答對過' },
   // 「500 字、750 字」題庫裝不下，所以算「字 × 技能」：同一個字認得、聽得出、
   // 拼得出分開算。300 字是 300＋300＋180（要拼的）＝780 組。
   { id: 'mastered-50', category: 'learn', name: '精通',
-    tiers: [50, 250, 500, 750, ALL],
+    tiers: [100, 500, 1500, 3000, ALL],
     desc: '{n} 組「字 × 技能」練到熟（連對三次）。',
     hint: '{n} 組「字 × 技能」練到熟——認字、聽音、拼字分開算' },
   { id: 'literate', category: 'learn', name: '識字者',
-    tiers: [50, 100, 200, 250, ALL],
+    tiers: [100, 300, 800, 1500, ALL],
     desc: '{n} 個不同的字答對過。', hint: '{n} 個不同的字至少答對過一次',
     rewardItem: 'frame-laurel', rewardTier: 5 },
 
@@ -133,7 +133,7 @@ export const ACHIEVEMENTS: AchDef[] = [
     tiers: [10, 30, 80, 150, 300],
     desc: '拼對八個字母以上的字 {n} 次' + CAP + '。', hint: '拼對八個字母以上的長字 {n} 次' },
   { id: 'balanced', category: 'skill', name: '均衡',
-    tiers: [20, 50, 100, 150, ALL],
+    tiers: [30, 100, 300, 500, ALL],
     desc: '三種技能各有 {n} 個字練到熟。', hint: '三種技能各熟 {n} 個字',
     rewardItem: 'frame-wave', rewardTier: 2 },
   { id: 'combo', category: 'skill', name: '連對',
@@ -144,18 +144,28 @@ export const ACHIEVEMENTS: AchDef[] = [
   { id: 'first-clear', category: 'tower', name: '初戰',
     desc: '通關第一關。', hint: '通關任何一關' },
   { id: 'three-star', category: 'tower', name: '滿星',
-    tiers: [1, 3, 7, 10, ALL],
+    tiers: [1, 5, 15, 30, ALL],
     desc: '{n} 關拿到三顆星。', hint: '{n} 關拿到三顆星' },
   { id: 'no-damage', category: 'tower', name: '城牆不倒',
-    tiers: [1, 3, 7, 10, ALL],
+    tiers: [1, 5, 15, 30, ALL],
     desc: '{n} 關城堡一滴血都沒掉就通關。', hint: '{n} 關城堡一滴血都沒掉就通關' },
+  // 2026-09-25 擴成八十五關：本來是「三個魔王關都過」的一次性徽章，改成分階。
+  // 舊的已經拿到的學生（第一章三個魔王都過了）直接就是銅階，不會掉。
   { id: 'boss-slayer', category: 'tower', name: '屠魔',
-    desc: '三個魔王關都通關。', hint: '三個魔王關都通關' },
+    tiers: [3, 6, 10, 14, ALL],
+    desc: '{n} 個魔王關通關。', hint: '{n} 個魔王關通關' },
   { id: 'stars-30', category: 'tower', name: '星星',
-    tiers: [5, 15, 25, 35, ALL],
+    tiers: [10, 40, 100, 160, ALL],
     desc: '累計 {n} 顆星。', hint: '累計 {n} 顆星' },
-  { id: 'all-clear', category: 'tower', name: '全破',
-    desc: '十四關全部通關。', hint: '十四關全部通關', rewardItem: 'frame-flame' },
+  // 一章一個全破徽章，各給一個外框，第三章的最稀有（2026-09-25）。
+  // 第一章沿用舊 id，已經拿到火焰框的人不受影響。
+  { id: 'all-clear', category: 'tower', name: '全破・第一章',
+    desc: '第一章草地城堡的關卡全部通關。', hint: '第一章的關卡全部通關', rewardItem: 'frame-flame' },
+  { id: 'all-clear-2', category: 'tower', name: '全破・第二章',
+    desc: '第二章雪地神殿的關卡全部通關。', hint: '第二章的關卡全部通關', rewardItem: 'frame-frost' },
+  { id: 'all-clear-3', category: 'tower', name: '全破・第三章',
+    desc: '第三章草原木堡的關卡全部通關。兩千字全部走過一遍。', hint: '第三章的關卡全部通關',
+    rewardItem: 'frame-legend', rewardTitle: '兩千字勇者' },
 
   // ---------------------------------------------------------------- 對戰
   { id: 'first-match', category: 'versus', name: '初上戰場',

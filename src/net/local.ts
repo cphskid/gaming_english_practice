@@ -348,7 +348,7 @@ export class LocalRepository implements Repository {
     if (mine.length > 0) this.noteColorPlayed()
 
     // 首通獎金也在這裡發，跟資料庫那邊同一條規則：第一次真的通關才有
-    const bonusCoins = win && !was?.clearedAt ? firstClearBonus(level.no, false) : 0
+    const bonusCoins = win && !was?.clearedAt ? firstClearBonus(level, false) : 0
     if (bonusCoins) write(k.character(id), { ...this.current(), coins: this.current().coins + bonusCoins })
     return { progress: merged, bonusCoins }
   }

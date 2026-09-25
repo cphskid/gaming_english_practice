@@ -395,9 +395,58 @@ export const finalTrial: Layout = {
   ],
 }
 
-export const LAYOUTS = {
+const BASE = {
   islandTwin, zigzag, forestS, fork, tripleRush,
   homeLoop, corridor, crossroads, hairpin, stormTriple,
   twinLoops, switchback, clockTower, finalTrial,
 }
+
+/**
+ * 上下翻過來的同一張圖（第二、三章用）。
+ *
+ * 八十五關不可能一關畫一張，所以後兩章拿第一章的圖上下翻、再換地形和城堡。
+ * **為什麼只翻上下不翻左右**：城堡固定在右邊、怪從左邊進場，左右翻要連引擎一起改。
+ * 上下翻是繞陸地的中線（y＝288）鏡射；城堡跟著翻到 y＝256，路的終點還是走到它腳下。
+ * 塔位涵蓋數、路長都不變，所以怪血怪速跟原圖幾乎一樣（layout-geom 會印出來對）。
+ * 高地、塔位、裝飾物都一起翻；高地的列數也要翻（第 r 列 → 第 8−r 列）。
+ */
+export function mirrorY(L: Layout): Layout {
+  const MID2 = (L.land.r0 + L.land.r1 + 1) * 64 // 陸地上緣＋下緣
+  const fy = (y: number) => MID2 - y
+  const fr = (r: number) => L.land.r0 + L.land.r1 - r
+  return {
+    land: L.land,
+    plateaus: L.plateaus.map((p) => ({ c0: p.c0, c1: p.c1, r0: fr(p.r1), r1: fr(p.r0) })),
+    paths: L.paths.map((pts) => pts.map((q) => ({ x: q.x, y: fy(q.y) }))),
+    castle: { x: L.castle.x, y: fy(L.castle.y) },
+    // 塔是從腳下往上 20px 的地方放箭，怪的中心在腳下往上 22px；翻過來之後這 2px 的差
+    // 會變成反方向，塔位再往上挪 4px 才跟原圖的射程涵蓋一模一樣。
+    // 挪了會壓到路（離路心不到 56px）或掉出陸地的那幾個就不挪。
+    slots: L.slots.map((q) => {
+      const y = fy(q.y) - 4
+      const paths = L.paths.map((pts) => pts.map((p) => ({ x: p.x, y: fy(p.y) })))
+      const ok = y >= L.land.r0 * 64 && paths.every((pts) => distToPolyline({ x: q.x, y }, pts) >= 56)
+      return { ...q, y: ok ? y : fy(q.y) }
+    }),
+    decor: L.decor.map((d) => ({ ...d, y: fy(d.y) })),
+  }
+}
+
+function distToPolyline(p: { x: number; y: number }, pts: { x: number; y: number }[]): number {
+  let best = Infinity
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i]
+    const dx = b.x - a.x, dy = b.y - a.y
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)))
+    best = Math.min(best, Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy))
+  }
+  return best
+}
+
+type BaseName = keyof typeof BASE
+const MIRRORED = Object.fromEntries(
+  Object.entries(BASE).map(([k, L]) => [k + 'M', mirrorY(L)]),
+) as Record<`${BaseName}M`, Layout>
+
+export const LAYOUTS = { ...BASE, ...MIRRORED }
 export type LayoutName = keyof typeof LAYOUTS

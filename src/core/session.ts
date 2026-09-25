@@ -160,7 +160,7 @@ export class Session {
     const me = scores[0]
     const stars = starsFor({ outcome, correct: me?.correct ?? 0, asked: me?.asked ?? 0 })
     const bonusCoins =
-      outcome.win && this.level ? firstClearBonus(this.level.no, this.alreadyCleared) : 0
+      outcome.win && this.level ? firstClearBonus(this.level, this.alreadyCleared) : 0
 
     return {
       levelId: this.level?.id ?? null,

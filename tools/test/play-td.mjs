@@ -15,7 +15,7 @@ page.on('pageerror', (e) => errors.push(String(e)))
 
 // 老師開放全部關卡，測試才進得去後面的關
 await page.addInitScript((code) => {
-  const ids = Array.from({ length: 14 }, (_, i) => `td-${String(i + 1).padStart(2, '0')}`)
+  const ids = Array.from({ length: 85 }, (_, i) => `td-${String(i + 1).padStart(2, '0')}`)
   try {
     localStorage.setItem(`gep.v1.teacherOpen.${code}`, JSON.stringify(ids))
     localStorage.setItem('gep.v1.classes', JSON.stringify([{ code, name: '測試班', open: true }]))
@@ -39,7 +39,11 @@ if (await page.locator('.jobs .job').count()) {
   await page.locator('button.btn.big').click()
 }
 await page.waitForSelector('.levels', { timeout: 20000 })
-await page.locator('.lv').nth(LEVEL - 1).click()
+// 八十五關分三章，一次只攤開一章：先打開那一章再點
+const chIdx = LEVEL <= 14 ? 0 : LEVEL <= 52 ? 1 : 2
+const head = page.locator('.chhead').nth(chIdx)
+if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click()
+await page.locator('.lv', { hasText: `第 ${LEVEL} 關` }).first().click()
 await page.waitForSelector('.td-cv')
 await page.waitForTimeout(700)
 

@@ -1,6 +1,7 @@
-import { LEVELS, LEVEL_IDS } from '@/data/levels'
+import { useState } from 'react'
+import { CHAPTERS, LEVELS } from '@/data/levels'
 import { THEME_NAME } from '@/data/words'
-import { expIntoLevel, isUnlocked, levelFromExp } from '@/core/progress'
+import { chapterCleared, expIntoLevel, isUnlocked, levelFromExp } from '@/core/progress'
 import type { Character, LevelData, LevelProgress, Student } from '@/core/types'
 import { JOB_NAME } from '@/core/character'
 import type { RoomBrief } from '@/net'
@@ -35,6 +36,13 @@ export function LevelSelect({
   const cleared = new Set([...progress.values()].filter((p) => p.clearedAt).map((p) => p.levelId))
   const lv = levelFromExp(character.exp)
   const { into, need } = expIntoLevel(character.exp)
+  // 一次只攤開一章，85 關全部攤開在手機上要滑很久。預設攤開「正在打的那一章」：
+  // 已經打開、而且還沒全破的最後一章；三章都破了就攤開第三章。
+  const [openCh, setOpenCh] = useState<number>(() => {
+    const live = CHAPTERS.filter((c) => isUnlocked(c.levels[0].no, LEVELS, { cleared, teacherOpen }))
+    const cur = live.find((c) => !chapterCleared(c.no, LEVELS, cleared)) ?? live[live.length - 1]
+    return cur?.no ?? 1
+  })
 
   return (
     <div className="screen">
@@ -55,25 +63,53 @@ export function LevelSelect({
 
       {rooms.length > 0 && <RoomBanner rooms={rooms} onRoom={onRoom} />}
 
-      <div className="levels">
-        {LEVELS.map((l) => {
-          const p = progress.get(l.id)
-          const unlocked = isUnlocked(l.no, LEVEL_IDS, { cleared, teacherOpen })
-          const stars = p?.stars ?? 0
-          return (
-            <button key={l.id} className={'lv' + (l.isBoss ? ' boss' : '')}
-              disabled={!unlocked} onClick={() => onPlay(l)}>
-              {!unlocked && <span className="lock">🔒</span>}
-              <div className="no">第 {l.no} 關{l.isBoss ? '・魔王' : ''}</div>
-              <div className="nm">{l.name}</div>
-              <div className="th">
-                {l.themes.length ? l.themes.map((t) => THEME_NAME[t] ?? t).join('、') : '全部主題'}
-              </div>
-              <div className="st">{'★'.repeat(stars)}{'☆'.repeat(3 - stars)}</div>
+      {CHAPTERS.map((ch, ci) => {
+        const first = ch.levels[0]
+        const open = isUnlocked(first.no, LEVELS, { cleared, teacherOpen })
+          || ch.levels.some((l) => teacherOpen.has(l.id))
+        const done = ch.levels.filter((l) => cleared.has(l.id)).length
+        const stars = ch.levels.reduce((n, l) => n + (progress.get(l.id)?.stars ?? 0), 0)
+        const shown = openCh === ch.no
+        return (
+          <section key={ch.no} className={'chapter ch' + ch.no + (open ? '' : ' locked')}>
+            <button className="chhead" onClick={() => setOpenCh(shown ? 0 : ch.no)} aria-expanded={shown}>
+              <span className="chno">第{'一二三'[ci]}章</span>
+              <span className="chnm">{ch.name}</span>
+              <span className="chst">
+                {open ? `${done}/${ch.levels.length} 關　★ ${stars}` : '🔒'}
+              </span>
+              <span className="chcaret">{shown ? '▾' : '▸'}</span>
             </button>
-          )
-        })}
-      </div>
+            {shown && !open && (
+              <div className="chlock">
+                把第{'一二三'[ci - 1]}章的 {CHAPTERS[ci - 1].levels.length} 關全部打過，就會打開這一章。
+                （還差 {CHAPTERS[ci - 1].levels.filter((l) => !cleared.has(l.id)).length} 關）
+              </div>
+            )}
+            {shown && (
+              <div className="levels">
+                {ch.levels.map((l) => {
+                  const p = progress.get(l.id)
+                  const unlocked = isUnlocked(l.no, LEVELS, { cleared, teacherOpen })
+                  const st = p?.stars ?? 0
+                  return (
+                    <button key={l.id} className={'lv' + (l.isBoss ? ' boss' : '')}
+                      disabled={!unlocked} onClick={() => onPlay(l)}>
+                      {!unlocked && <span className="lock">🔒</span>}
+                      <div className="no">第 {l.no} 關{l.isBoss ? '・魔王' : ''}</div>
+                      <div className="nm">{l.name}</div>
+                      <div className="th">
+                        {l.themes.length ? l.themes.slice(0, 3).map((t) => THEME_NAME[t] ?? t).join('、') : '全部主題'}
+                      </div>
+                      <div className="st">{'★'.repeat(st)}{'☆'.repeat(3 - st)}</div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+        )
+      })}
     </div>
   )
 }

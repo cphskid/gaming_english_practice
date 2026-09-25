@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { LEVELS } from '@/data/levels'
+import { CHAPTERS } from '@/data/levels'
 import { WORDS_BY_ID } from '@/data/words'
 import { WordStat } from '@/core/wordStat'
 import { SKILL_NAME, type ClassRoom, type Staff } from '@/core/types'
@@ -231,19 +231,24 @@ export function Teacher({
               <h2>這禮拜開放的關卡</h2>
               <p className="lede left">點一下就額外開放，不受學生自己的進度限制。</p>
             </div>
-            <div className="open">
-              {LEVELS.map((l) => (
-                <button key={l.id} className={open.has(l.id) ? 'on' : ''}
-                  onClick={() => void run(async () => {
-                    const next = new Set(open)
-                    if (next.has(l.id)) next.delete(l.id)
-                    else next.add(l.id)
-                    await repo.setTeacherOpen(room.code, [...next])
-                  })}>
-                  {l.no}. {l.name}
-                </button>
-              ))}
-            </div>
+            {CHAPTERS.map((ch, ci) => (
+              <div key={ch.no}>
+                <h3 className="opench">第{'一二三'[ci]}章　{ch.name}</h3>
+                <div className="open">
+                  {ch.levels.map((l) => (
+                    <button key={l.id} className={open.has(l.id) ? 'on' : ''}
+                      onClick={() => void run(async () => {
+                        const next = new Set(open)
+                        if (next.has(l.id)) next.delete(l.id)
+                        else next.add(l.id)
+                        await repo.setTeacherOpen(room.code, [...next])
+                      })}>
+                      {l.no}. {l.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </>
         )}
       </div>

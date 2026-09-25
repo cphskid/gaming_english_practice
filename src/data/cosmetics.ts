@@ -57,11 +57,13 @@ export const FRAMES: FrameDef[] = [
   { id: 'frame-crown', name: '皇冠框', className: 'f-crown', badge: '👑' },
   { id: 'frame-rainbow', name: '彩虹框', className: 'f-rainbow' },
 
-  // 成就限定。**這六個商店買不到**——買不到才有稀缺性，這是 Chuck 要的那一點。
+  // 成就限定。**這八個商店買不到**——買不到才有稀缺性，這是 Chuck 要的那一點。
   // 資料庫那邊 shop_items.achievement_only = true，buy_item 會直接擋掉。
   { id: 'frame-laurel', name: '葉冠框', className: 'f-laurel', fromAchievement: 'literate' },
   { id: 'frame-wave', name: '音波框', className: 'f-wave', fromAchievement: 'balanced' },
   { id: 'frame-flame', name: '火焰框', className: 'f-flame', fromAchievement: 'all-clear' },
+  { id: 'frame-frost', name: '冰晶框', className: 'f-frost', fromAchievement: 'all-clear-2' },
+  { id: 'frame-legend', name: '傳說框', className: 'f-legend', badge: '⚜️', fromAchievement: 'all-clear-3' },
   { id: 'frame-banner', name: '戰旗框', className: 'f-banner', fromAchievement: 'war-flag' },
   { id: 'frame-stardust', name: '星塵框', className: 'f-stardust', fromAchievement: 'dual-job' },
   { id: 'frame-calendar', name: '日曆框', className: 'f-calendar', fromAchievement: 'week-5' },

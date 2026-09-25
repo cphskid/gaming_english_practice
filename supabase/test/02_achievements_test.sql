@@ -110,7 +110,7 @@ select test_as('b0000000-0000-0000-0000-000000000001', true);
 
 \echo '── 一題都沒答的時候'
 select test_ok((select count(*) from public.refresh_achievements()) = 0, '什麼都還沒有');
-select test_ok((select count(*) from public.my_achievements()) = 51, '牆上五十一格都回得出來');
+select test_ok((select count(*) from public.my_achievements()) = 53, '牆上五十三格都回得出來');
 select test_ok((select count(*) from public.my_achievements() where unlocked_at is not null) = 0,
                '一個都還沒解開');
 
@@ -128,13 +128,13 @@ select public.refresh_achievements();
 select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'hundred') = 1, '一百題＝萬題銅階');
 select test_ok((select value from public.my_achievements() where id = 'hundred') = 101,
                '牆上看得到現在答對幾題（「還差多少」要用）');
-select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'literate') = 2,
-               '一百個不同的字＝識字者銀階');
+select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'literate') = 1,
+               '一百個不同的字＝識字者銅階（兩千字之後門檻是 100／300／800／1500／全部）');
 select test_ok((select goal_all from public.my_achievements() where id = 'literate')
                = (select count(*) from public.words),
                '識字者的「全部」照題庫字數算');
 select test_ok(test_item('b1000000-0000-0000-0000-000000000001', 'frame-laurel') = 0,
-               '桂冠框要到鑽石階才給，銀階還沒有');
+               '桂冠框要到鑽石階才給，銅階還沒有');
 
 \echo '── 分階：同一個字一天最多算 5 次，擋掉狂刷'
 select test_force($$
@@ -196,14 +196,18 @@ select test_ok(not test_has('b1000000-0000-0000-0000-000000000001', 'all-clear')
 select test_force($$
   insert into public.level_progress (student_id, level_id, stars, best_correct, cleared_at, best_survival)
   select 'b1000000-0000-0000-0000-000000000001', l.id, 1, 20, now(), 0.2
-    from public.levels l where l.id <> 'td-01'
+    from public.levels l where l.id <> 'td-01' and l.chapter = 1
 $$);
 select public.refresh_achievements();
-select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'all-clear'), '十四關全破');
-select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'boss-slayer'), '三個魔王關都過了');
--- 3 + 13 × 1 ＝ 16 顆：過了 15（銀）、還沒到 25（金）
-select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'stars-30') = 2,
-               '十六顆星＝星星銀階');
+select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'all-clear'), '第一章十四關全破');
+select test_ok(not test_has('b1000000-0000-0000-0000-000000000001', 'all-clear-2'), '第二章沒打不算第二章全破');
+select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'boss-slayer') = 1,
+               '第一章三個魔王關＝屠魔銅階');
+select test_ok((select goal_all from public.my_achievements() where id = 'boss-slayer')
+               = (select count(*) from public.levels where is_boss), '屠魔的「全部」＝魔王關數');
+-- 3 + 13 × 1 ＝ 16 顆：過了 10（銅）、還沒到 40（銀）
+select test_ok(test_tier('b1000000-0000-0000-0000-000000000001', 'stars-30') = 1,
+               '十六顆星＝星星銅階');
 select test_ok((select goal_all from public.my_achievements() where id = 'stars-30')
                = 3 * (select count(*) from public.levels), '星星的「全部」＝關數 × 3');
 

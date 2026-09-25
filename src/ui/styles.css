@@ -61,6 +61,20 @@ button{font-family:inherit}
 .topbar .stat{font-size:14px;color:var(--gold);font-weight:700}
 .levels{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:11px;
   width:100%;max-width:880px}
+.chapter{width:100%;max-width:880px;margin-bottom:12px}
+.chhead{display:flex;align-items:center;gap:10px;width:100%;text-align:left;cursor:pointer;
+  padding:11px 14px;border-radius:12px;border:2px solid var(--line);color:inherit;
+  background:linear-gradient(90deg,var(--chtint,#3b6b3a) 0,var(--panel2) 70%)}
+.chapter.ch2{--chtint:#5a7fa6}
+.chapter.ch3{--chtint:#8a6a34}
+.chapter.locked .chhead{opacity:.6}
+.chhead .chno{font-size:12px;color:var(--muted);white-space:nowrap}
+.chhead .chnm{font-size:17px;font-weight:800;flex:1;min-width:0}
+.chhead .chst{font-size:12.5px;white-space:nowrap}
+.chhead .chcaret{font-size:14px;color:var(--muted)}
+.chlock{margin:10px 2px 0;padding:10px 12px;border-radius:10px;background:var(--panel2);
+  color:var(--muted);font-size:13.5px;line-height:1.5}
+.chapter .levels{margin-top:10px}
 .lv{position:relative;text-align:left;padding:12px 13px;border-radius:12px;cursor:pointer;
   background:var(--panel2);border:2px solid var(--line);color:inherit}
 .lv:disabled{opacity:.4;cursor:not-allowed}
@@ -646,6 +660,13 @@ h2.sec small{font-size:12px;font-weight:400;color:var(--muted)}
 .mugbox.f-flame{border-color:#ff7a3c;box-shadow:0 0 10px rgba(255,122,60,.65);
   animation:flamepulse 1.6s ease-in-out infinite}
 @keyframes flamepulse{50%{box-shadow:0 0 16px rgba(255,160,60,.9)}}
+.mugbox.f-frost{border-color:#bfe6ff;box-shadow:0 0 10px rgba(150,210,255,.7),inset 0 0 6px rgba(220,245,255,.6)}
+.mugbox.f-legend{border-color:transparent;background-clip:padding-box;
+  box-shadow:0 0 14px rgba(255,215,106,.8);animation:legendglow 2s ease-in-out infinite}
+.mugbox.f-legend::before{content:'';position:absolute;inset:-3px;border-radius:10px;z-index:-1;
+  background:conic-gradient(#ffd76a,#fff3c4,#ff9a3c,#ffd76a,#b86bff,#6ad0ff,#ffd76a);
+  animation:spinhue 5s linear infinite}
+@keyframes legendglow{50%{box-shadow:0 0 22px rgba(255,236,160,1)}}
 .mugbox.f-banner{border-color:var(--gold)}
 .mugbox.f-banner::after{content:'';position:absolute;right:-4px;top:-4px;width:36%;height:36%;
   background:linear-gradient(135deg,var(--gold) 45%,transparent 46%);pointer-events:none}
@@ -732,3 +753,4 @@ input.pin{width:7.5em;font-size:20px;letter-spacing:.3em;text-align:center;paddi
 /* 新隊友／還沒對打過（2026-09-25 合作類）：鼓勵跟不同的人玩 */
 .fresh{color:#2f8f9d;font-weight:600}
 .rank .nm small.fresh{display:block;color:#2f8f9d;font-weight:600;line-height:1.3}
+.opench{font-size:14px;margin:12px 0 6px;color:var(--muted)}

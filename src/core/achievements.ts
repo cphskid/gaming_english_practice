@@ -170,9 +170,13 @@ export function evaluateAchievements(input: AchInput): AchEval {
   put('three-star', progress.filter((p) => p.stars >= 3).length, LEVELS.length)
   put('no-damage', cleared.filter((p) => (p.bestSurvival ?? 0) >= 1).length, LEVELS.length)
   const bosses = LEVELS.filter((l) => l.isBoss)
-  win('boss-slayer', bosses.length > 0 && bosses.every((l) => clearedIds.has(l.id)))
+  put('boss-slayer', bosses.filter((l) => clearedIds.has(l.id)).length, bosses.length)
   put('stars-30', progress.reduce((n, p) => n + p.stars, 0), LEVELS.length * 3)
-  win('all-clear', LEVELS.every((l) => clearedIds.has(l.id)))
+  // 一章一個全破（第一章沿用舊的 id）
+  for (const [id, ch] of [['all-clear', 1], ['all-clear-2', 2], ['all-clear-3', 3]] as const) {
+    const mine = LEVELS.filter((l) => l.chapter === ch)
+    win(id, mine.length > 0 && mine.every((l) => clearedIds.has(l.id)))
+  }
 
   // ---------------------------------------------------------------- 對戰
   const byTime = [...matches].sort((a, b) => a.endedAt - b.endedAt)

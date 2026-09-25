@@ -170,6 +170,14 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   let terrain: HTMLCanvasElement | null = null
   // 地形先畫在暫存畫布上再整張貼；地形用到的圖後到的話得把它作廢重畫。
   const unArt = onArt((k) => { if (TERRAIN_KEYS.includes(k)) terrain = null })
+
+  // 各章的外觀（2026-09-25）：第二章雪地、第三章乾草原。圖是同一套調色出來的，
+  // 鍵名後面接 _snow / _meadow；那一張還沒下載到（或第一章）就用原本的，畫面不會空掉。
+  const TILESET = level.skin.tileset === 'snow' || level.skin.tileset === 'meadow' ? level.skin.tileset : ''
+  const skinned = (key: string): HTMLImageElement | undefined =>
+    (TILESET && img[key + '_' + TILESET]) || img[key]
+  // 城堡：第二章是神殿（瘦高），其他章是城堡。照圖本身的比例畫，不壓扁。
+  const CASTLE_KEY = TILESET === 'snow' ? 'temple' : 'castle'
   let raf = 0
   let dead = false
   let paused = false
@@ -681,13 +689,14 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     const c = document.createElement('canvas')
     c.width = W; c.height = H
     const g = c.getContext('2d')!
-    if (img.water?.complete) {
-      g.fillStyle = g.createPattern(img.water, 'repeat')!
+    const water = skinned('water'), tiles = skinned('tiles')
+    if (water?.complete) {
+      g.fillStyle = g.createPattern(water, 'repeat')!
       g.fillRect(0, 0, W, H)
     } else { g.fillStyle = '#2a5b8f'; g.fillRect(0, 0, W, H) }
 
     const tile = (sc: number, sr: number, dx: number, dy: number) => {
-      if (img.tiles?.complete) g.drawImage(img.tiles, sc * 64, sr * 64, 64, 64, dx, dy, 64, 64)
+      if (tiles?.complete) g.drawImage(tiles, sc * 64, sr * 64, 64, 64, dx, dy, 64, 64)
     }
 
     // 圖塊是 4×4 的接邊組：欄 0/1/2/3 是左/中/右/單，列 0/1/2/3 是上/中/下/單。
@@ -848,7 +857,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   function drawDecor(d: { k: string; x: number; y: number }) {
-    const im = img[d.k]
+    const im = skinned(d.k)
     if (!im?.complete) return
     shadow(d.x, d.y - 3, im.width * 0.3)
     c2d.drawImage(im, d.x - im.width / 2, d.y - im.height, im.width, im.height)
@@ -867,10 +876,12 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   function drawCastle() {
-    const im = art('castle')
+    const im = art(CASTLE_KEY) ?? art('castle')
     if (!im?.complete) return
     shadow(layout.castle.x, layout.castle.y - 6, 62)
-    c2d.drawImage(im, layout.castle.x - 75, layout.castle.y - 120, 150, 120)
+    // 城堡原圖縮一半是 160×128，一直是畫成 150×120；神殿用同一個倍率，高度照它自己的
+    const w = im.width * 0.9375, h = im.height * 0.9375
+    c2d.drawImage(im, layout.castle.x - w / 2, layout.castle.y - h, w, h)
   }
 
   function drawTower(t: Tower, s: Point) {

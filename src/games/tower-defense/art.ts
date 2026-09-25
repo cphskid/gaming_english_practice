@@ -25,6 +25,8 @@ export const ART: Record<string, HTMLImageElement> = {}
 /** 地形是先畫在一張暫存畫布上再整張貼的，用到這幾張；它們到了就得重畫一次。 */
 export const TERRAIN_KEYS = [
   'water', 'tiles', 'rock1', 'rock2', 'rock3', 'rock4', 'tree1', 'tree2',
+  // 第二章雪地、第三章乾草原（tools/build-chapter-art.py）
+  'water_snow', 'tiles_snow', 'tree1_snow', 'tree2_snow', 'tiles_meadow', 'tree1_meadow', 'tree2_meadow',
   // 豬軍團兵推戰場的城堡室內（見 tug-of-war/engine.ts 的 buildCastleHall）
   'pig_wall', 'pig_floor', 'pig_under', 'pig_window',
   // 炸彈海盜、寶藏海盜的船艙（同一個 buildCastleHall，照前綴拿）

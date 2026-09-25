@@ -1,9 +1,16 @@
 import type { Layout, LevelData, WaveSpec } from '@/core/types'
 import { FOCUS_MAX, FOCUS_STEP, TOWERS } from './towers'
 import { LAYOUTS, type LayoutName } from './layouts'
+import plan from '../../data/level-plan.json'
 
 /**
- * 十四關，用 300 字全部。
+ * 八十五關，分三章（2026-09-25 從十四關擴成兩千字）。
+ *   第一章 1～14：核心 300 字（原本的十四關，一個數字都沒動）
+ *   第二章 15～52：基本 1,200 字裡剩下的 911 字
+ *   第三章 53～85：其他常用 800 字
+ * 後兩章每一關考哪些字存在 data/level-plan.json（tools/gen-level-plan.py 產生）。
+ *
+ * 以下是第一章原本的說明：十四關，用 300 字全部。
  *
  * **關卡照主題切，不照年級。** 課綱附錄五沒有年級分類，但表三有官方的主題分類，
  * 而主題本身就帶難度：具體名詞（身體、動物、顏色、數字）LV1 很多，
@@ -97,8 +104,10 @@ function pointAtDist(pts: { x: number; y: number }[], dist: number): { x: number
  * 驗證用 tools/test/play-td.mjs，不是手感。
  */
 function waves(waveCount: number, d: number, pathLen: number, volley: number): WaveSpec[] {
-  const rate = 11 + d                                   // 目標：每分鐘答對幾題
-  const hits = d <= 4 ? 1 : d <= 9 ? 2 : 3              // 一隻怪要答對幾次才會死
+  // d 是「難度刻度」，第一章就是關卡編號 1～14。後兩章不是一路加上去，而是每章
+  // 從頭爬一次、最高一樣到 14（見 chapterLevels），所以封頂在每分鐘 25 題。
+  const rate = Math.min(25, 11 + d)                     // 目標：每分鐘答對幾題
+  const hits = d <= 4.5 ? 1 : d <= 9.5 ? 2 : 3          // 一隻怪要答對幾次才會死
   const gap = (60 / rate) * hits                        // 出怪間隔
   const onScreen = Math.max(14, 24 - d * 0.6)           // 怪在畫面上待幾秒
   const speed = Math.round(pathLen / onScreen)
@@ -153,34 +162,99 @@ function tilesetFor(no: number): string {
   return 'color4'
 }
 
-export const LEVELS: LevelData[] = SEEDS.map((s, i) => {
-  const no = i + 1
-  const layout = LAYOUTS[s.layout]
+function build(o: {
+  no: number; name: string; chapter: 1 | 2 | 3; themes: string[]; wordIds?: number[]
+  layout: LayoutName; waveCount: number; boss: boolean; d: number; tileset: string
+}): LevelData {
+  const layout = LAYOUTS[o.layout]
   // 用最短的一條路算，怪走最短那條時也要有合理的時間
   // 速度用「畫面內的長度」回推，怪在畫面上待多久才是玩家真正感受到的時間
   const pathLen = Math.min(...layout.paths.map((p) => visibleLength(p)))
   const volley = volleyOf(layout)
   return {
-    id: `td-${String(no).padStart(2, '0')}`,
-    no,
-    name: s.name,
-    themes: s.themes,
+    id: `td-${String(o.no).padStart(2, '0')}`,
+    no: o.no,
+    name: o.name,
+    chapter: o.chapter,
+    themes: o.themes,
+    ...(o.wordIds ? { wordIds: o.wordIds } : {}),
     // 主題本身就帶難度，所以字級不再另外限制
     maxWordLevel: 3,
-    isBoss: !!s.boss,
-    skin: { tileset: s.tileset ?? tilesetFor(no) },
+    isBoss: o.boss,
+    // 第一章照舊 40＋編號×10；後兩章照章內難度刻度，不然第 85 關會給 890
+    bonus: o.chapter === 1 ? 40 + o.no * 10 : 40 + Math.round(o.d * 10) + 30 * (o.chapter - 1),
+    skin: { tileset: o.tileset },
     layout,
     rules: {
-      castleHp: s.boss ? 15 : 20,
-      startCoins: 120 + Math.floor(no / 3) * 20,
-      waves: waves(s.waveCount, no, pathLen, volley),
-      boss: s.boss
+      castleHp: o.boss ? 15 : 20,
+      startCoins: 120 + Math.floor(o.d / 3) * 20,
+      waves: waves(o.waveCount, o.d, pathLen, volley),
+      boss: o.boss
         // 魔王要六次齊射才倒，單塔絕對打不動，一定要集火
         ? { hp: volley * 6, speed: Math.round(pathLen / 26), art: 'goblinPurple', scale: 1.6 }
         : undefined,
     },
   }
-})
+}
+
+const CHAPTER1: LevelData[] = SEEDS.map((s, i) => build({
+  no: i + 1, name: s.name, chapter: 1, themes: s.themes, layout: s.layout,
+  waveCount: s.waveCount, boss: !!s.boss, d: i + 1, tileset: s.tileset ?? tilesetFor(i + 1),
+}))
+
+interface PlanRow { no: number; chapter: 2 | 3; name: string; boss: boolean; themes: string[]; wordIds: number[] }
+
+/**
+ * 第二、三章的佈局順序。
+ *
+ * 八十五關不一關畫一張：拿第一章的十四張，加上它們上下翻過來的版本（見 layouts.ts 的
+ * mirrorY），再配上每章自己的地形與城堡。第二章先用翻過來的、第三章先用原版，
+ * 同一張圖在相鄰兩章看起來也不一樣。魔王關固定用三條路的圖——三條路才逼得出集火。
+ */
+const BOSS_LAYOUTS: Record<2 | 3, LayoutName[]> = {
+  2: ['tripleRushM', 'stormTripleM', 'finalTrialM', 'tripleRush', 'stormTriple', 'finalTrial', 'tripleRushM', 'stormTripleM'],
+  3: ['stormTriple', 'finalTrial', 'tripleRush', 'stormTripleM', 'finalTrialM', 'tripleRushM', 'stormTriple'],
+}
+const NORMAL_LAYOUTS: Record<2 | 3, LayoutName[]> = {
+  2: ['islandTwinM', 'zigzagM', 'forestSM', 'forkM', 'homeLoopM', 'corridorM', 'crossroadsM', 'hairpinM',
+    'twinLoopsM', 'switchbackM', 'clockTowerM', 'islandTwin', 'zigzag', 'forestS', 'fork', 'homeLoop',
+    'corridor', 'crossroads', 'hairpin', 'twinLoops', 'switchback', 'clockTower'],
+  3: ['fork', 'crossroads', 'twinLoops', 'zigzag', 'corridor', 'hairpin', 'islandTwin', 'clockTower',
+    'forestS', 'homeLoop', 'switchback', 'forkM', 'crossroadsM', 'twinLoopsM', 'zigzagM', 'corridorM',
+    'hairpinM', 'islandTwinM', 'clockTowerM', 'forestSM', 'homeLoopM', 'switchbackM'],
+}
+
+/**
+ * 後兩章的難度：**每章從頭爬一次，不是接著第一章往上加。**
+ *
+ * 舊公式「每分鐘答對 11＋關卡編號 題」到第 85 關會變成一分鐘 96 題。後面章節難在字本身
+ * （國中字、抽象字），速度就不必再加：第二章從刻度 2 爬到 14、第三章從 3 爬到 14，
+ * 最後幾關跟第一章最後一關一樣是每分鐘 25 題。
+ */
+function chapterLevels(ch: 2 | 3): LevelData[] {
+  const rows = (plan as PlanRow[]).filter((r) => r.chapter === ch)
+  const start = ch === 2 ? 2 : 3
+  let b = 0, n = 0
+  return rows.map((r, i) => {
+    const d = start + ((14 - start) * i) / Math.max(1, rows.length - 1)
+    const layout = r.boss ? BOSS_LAYOUTS[ch][b++ % BOSS_LAYOUTS[ch].length]
+      : NORMAL_LAYOUTS[ch][n++ % NORMAL_LAYOUTS[ch].length]
+    return build({
+      no: r.no, name: r.name, chapter: ch, themes: r.themes, wordIds: r.wordIds, layout,
+      waveCount: Math.min(7, 4 + Math.floor((d - 1) / 3.5)) + (r.boss ? 1 : 0) - (r.boss && d > 10 ? 1 : 0),
+      boss: r.boss, d, tileset: ch === 2 ? 'snow' : 'meadow',
+    })
+  })
+}
+
+export const LEVELS: LevelData[] = [...CHAPTER1, ...chapterLevels(2), ...chapterLevels(3)]
+
+/** 每一章的關卡。解鎖與選關畫面照章分。 */
+export const CHAPTERS: { no: 1 | 2 | 3; name: string; levels: LevelData[] }[] = [
+  { no: 1, name: '草地城堡', levels: LEVELS.filter((l) => l.chapter === 1) },
+  { no: 2, name: '雪地神殿', levels: LEVELS.filter((l) => l.chapter === 2) },
+  { no: 3, name: '草原木堡', levels: LEVELS.filter((l) => l.chapter === 3) },
+]
 
 export const LEVEL_IDS: string[] = LEVELS.map((l) => l.id)
 
