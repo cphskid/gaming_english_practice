@@ -118,30 +118,30 @@ export interface Repository {
   loadTeacherOpen(classCode: string): Promise<string[]>
   setTeacherOpen(classCode: string, levelIds: string[]): Promise<void>
 
-  // -------------------------------------------------------------- 房間
+  // -------------------------------------------------------------- 房間（魔王團戰）
   /**
-   * 老師開一場：全班同一關、同時開始。
+   * 開一場魔王團戰（2026-09-25 起房間只剩這一種）。
    *
    * **沒有房間代碼。** 房間掛在班級上，同班的人在選關畫面就看得到現在開著哪幾場，
-   * 按一下就進去——叫三十個小朋友抄一組四位數字，得到的只會是一批
-   * 「我打不進去」的手。老師再開一場就是換一關重開，老師自己的舊場自動收掉。
+   * 按一下就進去。私人房才要四位數密碼（防故意跑進來搗亂的），清單上掛鎖頭。
+   *
+   * 老師傳 classCode（開在他的班、排最前面、沒有房主）；學生不傳，
+   * 開在自己班上、開完直接算他進來了，一個人同時只能開一場。
+   * rate＝他每分鐘大概答對幾題，開打時拿來算魔王的血。
    */
-  openRoom(classCode: string, levelId: string, mode: Mode): Promise<string>
-  /**
-   * 學生自己揪一場。上課是老師開場，下課和回家是誰想打誰開，同一套機制。
-   * 開完就算他已經進來了，而且一個人同時只能開一場。
-   */
-  studentOpenRoom(levelId: string, mode: Mode): Promise<string>
+  openRaid(bossId: string, pass: string | null, classCode?: string, rate?: number, familiar?: number): Promise<string>
+  /** 房主請某個人離開。只在還沒開打時；被請出去的人這一場不能再進來。 */
+  kickFromRoom(roomId: string, studentId: string): Promise<void>
   /** 人到齊了，大家一起開始。老師或開這一場的學生才按得動。 */
   startRoom(roomId: string): Promise<void>
   /** 收掉這一場。收掉之後就從班上的清單消失了。 */
   closeRoom(roomId: string): Promise<void>
 
   /**
-   * 加入班上的某一場，回傳房間 id。已經開始的也進得去（遲到的人照樣要能玩）。
-   * 不指定就進老師那場，沒有老師的場就進最新的一場。
+   * 加入班上的某一場，回傳房間 id。不指定就進老師那場，沒有老師的場就進最新的一場。
+   * 開打之後、被請出去、密碼不對、滿六個人都進不去（已經在名單上的人不受影響）。
    */
-  joinRoom(roomId?: string): Promise<string>
+  joinRoom(roomId?: string, pass?: string, rate?: number, familiar?: number): Promise<string>
   /** 離開。開這一場的人離開就等於收掉，不然會留下一個沒人按得了開始的房間。 */
   leaveRoom(roomId: string): Promise<void>
   /** 班上現在開著哪幾場。老師開的排最前面。老師要傳班級代碼，學生不用。 */
@@ -154,6 +154,17 @@ export interface Repository {
   /** 我開打了，這是我這一場的 Session.id。分數之後從答題事件算，靠它對起來。 */
   roomPlaying(roomId: string, sessionId: string): Promise<void>
   roomFinished(roomId: string): Promise<void>
+  /** 魔王團戰打的時候每 0.4 秒一次：放上我的新動作、拿回大家的（見 net/raid.ts） */
+  raidSync(roomId: string, base: number, moves: unknown[], mark: number,
+    from: number[], left: boolean): Promise<RaidSyncResult>
+  /**
+   * 打完回報。兩個人都說贏伺服器才認（見 schema.sql 的 raid_result），
+   * 還沒認的話過兩秒再叫一次（重複叫沒關係）。
+   */
+  raidResult(roomId: string, won: boolean, dealt: number, correct: number,
+    sessionId: string): Promise<RaidResult>
+  /** 誰打倒過哪幾隻魔王、各幾次（魔王 id → 次數）。不給 id 是自己。 */
+  raidKills(studentId?: string): Promise<Record<string, number>>
 
   // -------------------------------------------------------------- 管理員
   /** 還沒有任何管理員的時候，第一個呼叫的人就是管理員。之後永遠拒絕。 */
@@ -283,8 +294,13 @@ export interface LeaderRow {
 /** 班上開著的一場，清單上那一列。 */
 export interface RoomBrief {
   id: string
-  levelId: string
-  mode: Mode
+  /** 打哪一隻魔王（data/bosses.ts） */
+  bossId: string
+  /** 私人房（要密碼） */
+  locked: boolean
+  /** 名單上幾個人（最多六個） */
+  members: number
+  mode: Mode | 'raid'
   status: 'lobby' | 'playing'
   /** 開這一場的人。老師開的是空字串。 */
   hostName: string
@@ -300,8 +316,16 @@ export interface RoomBrief {
 export interface RoomState {
   id: string
   classCode: string
-  levelId: string
-  mode: Mode
+  bossId: string
+  locked: boolean
+  /** 密碼。只有房主和老師拿得到，讓他告訴要找的人。 */
+  pass: string | null
+  /** 開打那一刻定的亂數種子 */
+  seed: number | null
+  noListen: boolean
+  /** 開打之後的座位 */
+  seats: RaidSeat[]
+  mode: Mode | 'raid'
   /** lobby＝在等人，playing＝開打了。收掉的場讀不到，所以不會有 done。 */
   status: 'lobby' | 'playing' | 'done'
   startedAt: number | null
@@ -324,6 +348,38 @@ export interface RoomMember {
   /** 最近還有在回報。關掉分頁的人會變成 false，老師才看得出誰不在了。 */
   here: boolean
   me: boolean
+  /** 每分鐘大概答對幾題 */
+  rate: number
+  /** 這隻魔王的字他認得幾成（0~1），沒回報是 null */
+  familiar: number | null
+}
+
+export interface RaidSeat {
+  seat: number
+  studentId: string
+  nickname: string
+  rate: number
+  avatar: string
+  equipped: string[]
+  me: boolean
+}
+
+export interface RaidSyncResult {
+  /** 伺服器上我有幾筆 */
+  mine: number
+  /** 我被判斷線了 */
+  gone: boolean
+  /** 每個座位從我給的 from 開始的動作（還沒解開）、送到第幾格、出局時凍住的格數 */
+  seats: { moves: unknown[]; mark: number; final: number | null }[]
+}
+
+export interface RaidResult {
+  /** 打倒魔王伺服器認了沒 */
+  confirmed: boolean
+  /** 我打倒這隻魔王幾次了 */
+  kills: number
+  /** 這一場是我第一次打倒它（外框就是這一場拿到的） */
+  first: boolean
 }
 
 export interface AddedTeacher {

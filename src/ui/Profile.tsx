@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { RaidKills } from './Room'
 import type { Character, Student } from '@/core/types'
 import { repo } from '@/net'
 import type { AchievementRow, BadgeCount, Pin, PublicProfile } from '@/net/repository'
@@ -196,6 +197,8 @@ export function Profile({
           </div>
         </div>
       )}
+
+      <RaidKills />
 
       {error && <p className="error">{error}</p>}
       {!rows && !error && <p className="lede">正在數你的徽章…</p>}
@@ -412,6 +415,8 @@ export function PeerProfile({ studentId, onBack }: { studentId: string; onBack: 
               <div className="pinrow"><PinnedBadges pins={pins} /></div>
             </div>
           </div>
+
+          <RaidKills studentId={studentId} />
 
           {CATEGORIES.map((cat) => (
             <div className="achblock" key={cat.key}>

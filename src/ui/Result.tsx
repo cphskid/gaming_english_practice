@@ -1,13 +1,18 @@
 import type { SessionResult } from '@/core/session'
+import type { RaidResult } from '@/net/repository'
+import { BOSS_BY_ID } from '@/data/bosses'
+import { BossFace } from './Room'
 import { useState } from 'react'
 import { ACH_BY_ID, CATEGORIES, TIER_NAMES, badgeLabel, parseUnlock } from '@/data/achievements'
 import { Badge } from './Profile'
 import { Icon } from './Icon'
 
 export function Result({
-  result, bonus, unlocked = [], onRetry, onBack,
+  result, bonus, unlocked = [], raid, onRetry, onBack,
 }: {
   result: SessionResult
+  /** 魔王團戰：伺服器認了沒、打倒幾次、是不是第一次（外框就是這一場拿到的） */
+  raid?: RaidResult & { bossId: string }
   bonus: { coins: number; exp: number }
   /** 這一場解開的徽章。整個成就系統唯一會主動找上門的時刻，所以放在最顯眼的地方。 */
   unlocked?: string[]
@@ -40,11 +45,12 @@ export function Result({
             <div className="row"><span>首次通關獎勵</span><b><Icon name="coin" size={15} /> {result.bonusCoins}</b></div>
           )}
         </div>
+        {raid && raid.confirmed && <RaidWin raid={raid} />}
         {unlocked.length > 0 && <Unlocked ids={unlocked} />}
 
         <div style={{ display: 'flex', gap: 10 }}>
           <button className="btn ghost" onClick={onBack}>回選關</button>
-          <button className="btn" onClick={onRetry}>{versus ? '再來一場' : '再玩一次'}</button>
+          <button className="btn" onClick={onRetry}>{raid ? '再揪一團' : versus ? '再來一場' : '再玩一次'}</button>
         </div>
       </div>
     </div>
@@ -92,5 +98,22 @@ function Unlocked({ ids }: { ids: string[] }) {
         </div>
       </div>
     </>
+  )
+}
+
+/** 打倒魔王：第一次的話外框已經放進背包了，要講出來（不然小朋友不知道要去穿） */
+function RaidWin({ raid }: { raid: RaidResult & { bossId: string } }) {
+  const b = BOSS_BY_ID.get(raid.bossId)
+  if (!b) return null
+  return (
+    <div className="unlocked">
+      <span className="ttl">{raid.first ? `第一次打倒${b.name}！` : `打倒${b.name} ${raid.kills} 次了`}</span>
+      <div className="row">
+        <span className="one">
+          <BossFace b={b} size={52} />
+          {raid.first ? <small>拿到「{b.name}框」，去「我的角色」戴上</small> : <small>個人檔案記了一筆</small>}
+        </span>
+      </div>
+    </div>
   )
 }

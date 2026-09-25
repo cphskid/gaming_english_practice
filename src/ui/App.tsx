@@ -6,16 +6,18 @@ import { needsCreation } from '@/core/character'
 import { colorOf } from '@/data/cosmetics'
 import { legionOf } from '@/data/legions'
 import type {
-  Character, GameModule, GameOutcome, LevelData, LevelProgress, Opponent, Skill, Staff, Student,
+  Character, GameModule, GameOutcome, LevelData, LevelProgress, Opponent, RaidLink, Skill, Staff, Student,
 } from '@/core/types'
 import { botOpponent, ghostOpponent } from '@/core/opponent'
-import { LEVELS } from '@/data/levels'
 import { WORDS, WORDS_BY_ID, wordsOfThemes } from '@/data/words'
-import { towerDefense, tugOfWar } from '@/games'
+import { bossRaid, towerDefense, tugOfWar } from '@/games'
+import { BOSS_BY_ID, bossWords } from '@/data/bosses'
 import { loadArt } from '@/games/tower-defense/art'
 import { repo } from '@/net'
 import type { LiveMatchInfo, SavedResult } from '@/net/repository'
 import { liveLink } from '@/net/live'
+import { raidLink } from '@/net/raid'
+import type { RaidResult, RoomState } from '@/net/repository'
 import { audio } from '@/audio'
 import { Login } from './Login'
 import { StaffAuth } from './StaffAuth'
@@ -30,7 +32,7 @@ import { Shop } from './Shop'
 import { MyCharacter } from './MyCharacter'
 import { Leaderboard } from './Leaderboard'
 import { PeerProfile, Profile } from './Profile'
-import { RoomList, RoomLobby, useRoomList, useRoomState } from './Room'
+import { RoomList, RoomLobby, familiarity, useRoomList, useRoomState } from './Room'
 import { Versus } from './Versus'
 
 type Screen =
@@ -59,6 +61,8 @@ interface Playing {
   ghostOf?: string
   /** 真人即時對戰那一場。斷線接手時要知道接手的是分身還是電腦，所以整包留著。 */
   live?: LiveMatchInfo
+  /** 魔王團戰那一場 */
+  raid?: RaidLink
 }
 
 export function App() {
@@ -70,7 +74,7 @@ export function App() {
   const [stat, setStat] = useState<WordStat>(() => new WordStat())
   const [playing, setPlaying] = useState<Playing | null>(null)
   const [result, setResult] = useState<
-    { r: SessionResult; coins: number; exp: number; unlocked: string[] } | null>(null)
+    { r: SessionResult; coins: number; exp: number; unlocked: string[]; raid?: RaidResult & { bossId: string } } | null>(null)
   const [rotateOff, setRotateOff] = useState(false)
   const [staff, setStaff] = useState<Staff | null>(null)
   /** 現在在哪一場房間裡。null＝沒參加。 */
@@ -192,36 +196,6 @@ export function App() {
     return session
   }, [student, stat, progress])
 
-  /** 老師按了開始，等待室把我們推進來。回報這一場的 session，老師那邊才看得到誰在打。 */
-  const startFromRoom = useCallback((levelId: string) => {
-    const level = LEVELS.find((l) => l.id === levelId)
-    if (!level) return
-    const session = startLevel(level)
-    if (session && roomId) void repo.roomPlaying(roomId, session.id).catch(() => {})
-  }, [startLevel, roomId])
-
-  /** 加入某一場。不指定就進老師那場（選關畫面那一條就是這樣用的）。 */
-  const joinRoom = useCallback(async (id?: string) => {
-    try {
-      setRoomId(await repo.joinRoom(id))
-      setScreen('lobby')
-    } catch {
-      // 那一場剛好被收掉了。回去看清單，下一次輪詢就會發現。
-      setScreen('rooms')
-    }
-  }, [])
-
-  /** 自己揪一場。成功就直接進等待室，失敗把訊息交回畫面顯示。 */
-  const openRoom = useCallback(async (levelId: string): Promise<string | null> => {
-    try {
-      setRoomId(await repo.studentOpenRoom(levelId, 'solo'))
-      setScreen('lobby')
-      return null
-    } catch (e) {
-      return e instanceof Error ? e.message : String(e)
-    }
-  }, [])
-
   /**
    * 我大概多快。拿自己答對過的字的平均反應時間回推「每分鐘答得完幾題」，
    * 電腦對手的速度就照這個調。
@@ -236,6 +210,68 @@ export function App() {
     const avg = seen.reduce((n, e) => n + e.avgMs, 0) / seen.length / 1000
     return Math.max(8, Math.min(30, Math.round(60 / (avg + 0.6))))
   }, [stat])
+
+  /**
+   * 加入某一場魔王團戰。不指定就進老師那場（選關畫面那一條就是這樣用的）。
+   * 失敗（密碼不對、滿了、開打了）把訊息交回畫面顯示。
+   */
+  const joinRoom = useCallback(async (id?: string, pass?: string): Promise<string | null> => {
+    const b = BOSS_BY_ID.get(rooms.find((r) => r.id === id)?.bossId ?? '')
+    try {
+      setRoomId(await repo.joinRoom(id, pass, myRate(), b ? familiarity(b, stat) : undefined))
+      setScreen('lobby')
+      return null
+    } catch (e) {
+      setScreen('rooms')
+      return e instanceof Error ? e.message.replace(/^.*?：/, '') : String(e)
+    }
+  }, [rooms, myRate, stat])
+
+  /** 自己開一場魔王團戰。成功就直接進等待室。 */
+  const openRaid = useCallback(async (bossId: string, pass: string | null): Promise<string | null> => {
+    const b = BOSS_BY_ID.get(bossId)
+    try {
+      setRoomId(await repo.openRaid(bossId, pass, undefined, myRate(), b ? familiarity(b, stat) : undefined))
+      setScreen('lobby')
+      return null
+    } catch (e) {
+      return e instanceof Error ? e.message.replace(/^.*?：/, '') : String(e)
+    }
+  }, [myRate, stat])
+
+  /**
+   * 房主按了開打，等待室把我們推進來。座位、種子、每個人的速度都是伺服器定好的，
+   * 每支手機拿到的一樣，戰場才算得一樣（見 games/boss-raid/lockstep.ts）。
+   */
+  const startRaid = useCallback((room: RoomState) => {
+    if (!student || !room.seed) return
+    const mine = room.seats.find((s) => s.me)
+    const b = BOSS_BY_ID.get(room.bossId)
+    if (!mine || !b) return
+    audio.unlock()
+    const session = new Session({
+      mode: 'team',
+      gameId: bossRaid.id,
+      level: null,
+      participants: [{ studentId: student.id, nickname: student.nickname }],
+      wordsById: WORDS_BY_ID,
+      stat,
+      alreadyCleared: false,
+    })
+    const link = raidLink(repo, {
+      roomId: room.id, bossId: room.bossId, seed: room.seed, seat: mine.seat, noListen: room.noListen,
+      seats: room.seats.map((s) => ({
+        seat: s.seat, studentId: s.studentId, nickname: s.nickname, rate: s.rate, me: s.me,
+        legion: legionOf(s.equipped).id,
+      })),
+    })
+    void repo.roomPlaying(room.id, session.id).catch(() => {})
+    setPlaying({
+      level: null, game: bossRaid, session, quizzes: new Map(),
+      quizOpts: { words: bossWords(b), stat }, opponent: null, raid: link,
+    })
+    setScreen('play')
+  }, [student, stat])
 
   /** 開一場對戰。v1 只打電腦，但對手是一串答題，之後換成真人這裡只改一行。 */
   const startVersus = useCallback((hardness: number, name: string) => {
@@ -404,22 +440,37 @@ export function App() {
         }).catch((e) => { console.warn('記戰績失敗', e) })
       }
 
+      // 魔王團戰：回報輸贏。**兩個人都說贏伺服器才認**，隊友還沒回報的話隔兩秒再問，
+      // 最多問十秒——認了之後才有外框、才算打倒次數，成就重算要排在它後面。
+      let raidRes: (RaidResult & { bossId: string }) | undefined
+      if (playing.raid && outcome.raid && !outcome.raid.kickedOut) {
+        const rd = outcome.raid
+        for (let i = 0; i < 6; i++) {
+          const res = await repo.raidResult(playing.raid.roomId, rd.won, rd.dealt, rd.correct, playing.session.id)
+            .catch(() => null)
+          if (res) raidRes = { ...res, bossId: playing.raid.bossId }
+          if (!rd.won || res?.confirmed) break
+          await new Promise((ok) => setTimeout(ok, 2000))
+        }
+      }
+
       // 成就重算。放在最後而且吞掉錯誤：徽章晚一點出現沒關係，
       // 但不能因為它失敗就讓小朋友看不到結算畫面。
       const unlocked = await repo.refreshAchievements().catch(() => [] as string[])
-      // 解到新徽章就把角色再讀一次——成就限定的外框是直接放進背包的
-      if (unlocked.length) setCharacter(await repo.loadCharacter(student.id))
+      // 解到新徽章（或第一次打倒魔王）就把角色再讀一次——外框是直接放進背包的
+      if (unlocked.length || raidRes?.first) setCharacter(await repo.loadCharacter(student.id))
 
       const bonusCoins = saved?.bonusCoins ?? 0
       setResult({
         r: { ...r, stars: nextProgress?.stars ?? 0, bonusCoins },
-        coins: me.coins + bonusCoins, exp: me.exp, unlocked,
+        coins: me.coins + bonusCoins, exp: me.exp, unlocked, raid: raidRes,
       })
       setSettling(null)
       setScreen('result')
       // 在房間裡的話，跟老師說我打完了。不等它——晚一點才看到沒關係，
       // 但不能因為它慢就把結算畫面卡在後面。
       if (roomId) void repo.roomFinished(roomId).catch(() => {})
+      if (playing.raid) setRoomId(null)
     } catch (e) {
       // 這裡以前沒有 catch：後端一失敗，畫面就永遠定在那一格，
       // 小朋友只看得到一個不會動的戰場。現在至少看得到發生什麼事、按得了重試。
@@ -437,6 +488,8 @@ export function App() {
     // 真人對戰中途離開：跟對方說一聲，他那邊剩下的時間改打你的分身。
     // 不放在遊戲的 destroy 裡——開發版 React 會把畫面掛兩次，第一次拆掉時就會誤送「我離開了」。
     playing.opponent?.live?.close(true)
+    // 魔王團戰中途離開：跟大家說一聲，大家那邊馬上由電腦接手我的座位
+    playing.raid?.close(true)
     const r = playing.session.finish({ win: false, survival: 0, detail: '中途離開' })
     const me = r.scores[0]
 
@@ -604,9 +657,9 @@ export function App() {
 
       {screen === 'rooms' && student && (
         <RoomList
-          rooms={rooms} progress={progress} teacherOpen={teacherOpen}
-          onJoin={(id) => void joinRoom(id)}
-          onOpen={openRoom}
+          rooms={rooms} stat={stat}
+          onJoin={joinRoom}
+          onOpen={openRaid}
           onBack={() => setScreen('select')}
         />
       )}
@@ -614,7 +667,7 @@ export function App() {
       {screen === 'lobby' && room && (
         <RoomLobby
           room={room}
-          onStart={startFromRoom}
+          onStart={startRaid}
           onLeave={() => void (async () => {
             if (roomId) await repo.leaveRoom(roomId).catch(() => {})
             setRoomId(null)
@@ -633,7 +686,9 @@ export function App() {
           // 按了卻跳到一份清單會讓人以為按錯了。要挑別場就按上面那顆「一起玩」。
           onRoom={() => {
             const top = rooms.find((r) => r.mine) ?? rooms[0]
-            if (top) void joinRoom(top.id)
+            // 私人房要打密碼，帶去清單那一頁打
+            if (!top || (top.locked && !top.mine)) { setScreen('rooms'); return }
+            void joinRoom(top.id)
           }}
           onRooms={() => setScreen('rooms')}
           onVersus={() => setScreen('versus')}
@@ -674,6 +729,7 @@ export function App() {
           // 真人對戰不用道具：道具是金幣買的，拿來打同學就變成花錢買贏
           items={playing.live ? {} : character.items}
           opponent={playing.opponent}
+          raid={playing.raid}
           nextQuestion={nextQuestion}
           onFinish={(o) => void finish(o)}
           onLeave={() => void leave()}
@@ -687,10 +743,11 @@ export function App() {
         <Result
           result={result.r} bonus={{ coins: result.coins, exp: result.exp }}
           unlocked={result.unlocked}
+          raid={result.raid}
           onRetry={() => {
             if (!playing) return
             if (playing.level) startLevel(playing.level)
-            else setScreen('versus')
+            else setScreen(playing.raid ? 'rooms' : 'versus')
           }}
           onBack={() => setScreen('select')}
         />

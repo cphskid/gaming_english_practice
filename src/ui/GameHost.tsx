@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type {
-  GameContext, GameHandle, GameModule, GameOutcome, Job, LevelData, Opponent, Question, Skill,
+  GameContext, GameHandle, GameModule, GameOutcome, Job, LevelData, Opponent, Question, RaidLink, Skill,
 } from '@/core/types'
 import type { Session } from '@/core/session'
 import { audio } from '@/audio'
@@ -19,13 +19,15 @@ import type { IconName } from '@/data/icons'
  * 所以每一個新遊戲都自動有返回路徑，不用各寫一次。
  */
 export function GameHost({
-  game, level, session, studentId, job, color, legion, items, opponent,
+  game, level, session, studentId, job, color, legion, items, opponent, raid,
   nextQuestion, onFinish, onLeave, onUseItem,
 }: {
   game: GameModule
   level: LevelData | null
   /** 對戰模式的對手。單人遊戲不用給。 */
   opponent?: Opponent | null
+  /** 魔王團戰才有 */
+  raid?: RaidLink
   session: Session
   studentId: string
   job: Job
@@ -62,6 +64,7 @@ export function GameHost({
       color,
       legion,
       opponent: opponent ?? null,
+      raid,
       nextQuestion: (skill) => nextRef.current(skill),
       report: (r) => { session.report(studentId, { ...r, combo: session.comboOf(studentId) }) },
       audio,
@@ -71,7 +74,7 @@ export function GameHost({
     const handle = game.mount(el, ctx)
     handleRef.current = handle
     return () => { handleRef.current = null; handle.destroy() }
-  }, [game, level, session, studentId, job, color, legion, opponent])
+  }, [game, level, session, studentId, job, color, legion, opponent, raid])
 
   /**
    * 道具列放在容器，不放在遊戲裡——跟離開鍵同一個道理：

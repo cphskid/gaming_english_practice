@@ -1,11 +1,11 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type {
-  AdminClassRow, AnswerEvent, Character, ClassRoom, Job, LevelProgress, Mode, Skill, Staff,
+  AdminClassRow, AnswerEvent, Character, ClassRoom, Job, LevelProgress, Skill, Staff,
   Student, TeacherRow, WordStatEntry,
 } from '@/core/types'
 import type {
   AchievementRow, AddedTeacher, BadgeCount, Pin, ClassRosterRow, LeaderRow, LevelResult, PublicProfile,
-  Repository, RoomBrief, RoomMember, RoomState, SavedResult, VersusMatchInput, Ghost, GhostRow,
+  Repository, RoomBrief, RoomMember, RoomState, RaidSeat, RaidSyncResult, RaidResult, SavedResult, VersusMatchInput, Ghost, GhostRow,
   LiveLobby, LiveMatchInfo, LiveSyncResult,
 } from './repository'
 import { packMoves, unpackMoves } from '@/core/opponent'
@@ -367,22 +367,21 @@ export class SupabaseRepository implements Repository {
   // 查詢對資料庫來說是小事，而輪詢在教室的 wifi 斷一下再回來時會自己接上——
   // 長連線斷掉要自己處理重連，那才是真的會在上課中出事的地方。
 
-  async openRoom(classCode: string, levelId: string, mode: Mode): Promise<string> {
-    const { data, error } = await this.db.rpc('open_room', {
-      p_class_code: classCode.trim().toUpperCase(),
-      p_level_id: levelId,
-      p_mode: mode,
+  async openRaid(
+    bossId: string, pass: string | null, classCode?: string, rate = 14, familiar?: number,
+  ): Promise<string> {
+    const { data, error } = await this.db.rpc('open_raid', {
+      p_boss: bossId, p_pass: pass || null,
+      p_class_code: classCode ? classCode.trim().toUpperCase() : null,
+      p_rate: rate, p_familiar: familiar ?? null,
     })
-    fail('開一場失敗', error)
+    fail('開不成這一場', error)
     return String(data)
   }
 
-  async studentOpenRoom(levelId: string, mode: Mode): Promise<string> {
-    const { data, error } = await this.db.rpc('student_open_room', {
-      p_level_id: levelId, p_mode: mode,
-    })
-    fail('揪不成一場', error)
-    return String(data)
+  async kickFromRoom(roomId: string, studentId: string): Promise<void> {
+    const { error } = await this.db.rpc('room_kick', { p_room: roomId, p_student: studentId })
+    fail('請他離開失敗', error)
   }
 
   async startRoom(roomId: string): Promise<void> {
@@ -395,8 +394,10 @@ export class SupabaseRepository implements Repository {
     fail('結束這一場失敗', error)
   }
 
-  async joinRoom(roomId?: string): Promise<string> {
-    const { data, error } = await this.db.rpc('join_room', { p_room: roomId ?? null })
+  async joinRoom(roomId?: string, pass?: string, rate = 14, familiar?: number): Promise<string> {
+    const { data, error } = await this.db.rpc('join_room', {
+      p_room: roomId ?? null, p_pass: pass || null, p_rate: rate, p_familiar: familiar ?? null,
+    })
     fail('加入失敗', error)
     return String(data)
   }
@@ -411,22 +412,33 @@ export class SupabaseRepository implements Repository {
       p_class_code: classCode ? classCode.trim().toUpperCase() : null,
     })
     fail('讀取場次失敗', error)
-    return ((data as RoomBrief[] | null) ?? []).map((r) => ({ ...r, here: Number(r.here) }))
+    return ((data as RoomBrief[] | null) ?? []).map((r) => ({
+      ...r, here: Number(r.here), members: Number(r.members ?? 0), locked: !!r.locked,
+    }))
   }
 
   async roomState(roomId: string): Promise<RoomState | null> {
     const { data, error } = await this.db.rpc('room_state', { p_room: roomId })
     fail('讀取這一場失敗', error)
-    type Row = Omit<RoomState, 'startedAt' | 'members'> & {
+    type Row = Omit<RoomState, 'startedAt' | 'members' | 'seats'> & {
       startedAt: string | null
       members: RoomMember[] | null
+      seats: RaidSeat[] | null
     }
     const row = data as Row | null
     if (!row) return null
     return {
       ...row,
+      locked: !!row.locked,
+      pass: row.pass ?? null,
+      seed: row.seed ?? null,
+      noListen: row.noListen !== false,
       startedAt: row.startedAt ? ms(row.startedAt) : null,
-      members: (row.members ?? []).map((m) => ({ ...m, equipped: m.equipped ?? [] })),
+      members: (row.members ?? []).map((m) => ({
+        ...m, equipped: m.equipped ?? [], rate: Number(m.rate ?? 14),
+        familiar: m.familiar === null || m.familiar === undefined ? null : Number(m.familiar),
+      })),
+      seats: (row.seats ?? []).map((s) => ({ ...s, equipped: s.equipped ?? [], rate: Number(s.rate ?? 14) })),
     }
   }
 
@@ -440,6 +452,39 @@ export class SupabaseRepository implements Repository {
   async roomFinished(roomId: string): Promise<void> {
     const { error } = await this.db.rpc('room_finished', { p_room: roomId })
     fail('回報打完失敗', error)
+  }
+
+  async raidSync(
+    roomId: string, base: number, moves: unknown[], mark: number, from: number[], left: boolean,
+  ): Promise<RaidSyncResult> {
+    const { data, error } = await this.db.rpc('raid_sync', {
+      p_room: roomId, p_base: base, p_moves: moves, p_mark: mark, p_from: from, p_left: left,
+    })
+    fail('魔王團戰連線中斷', error)
+    const d = data as { mine: number; gone: boolean; seats: RaidSyncResult['seats'] | null }
+    return {
+      mine: Number(d.mine ?? 0), gone: !!d.gone,
+      seats: (d.seats ?? []).map((s) => ({
+        moves: s.moves ?? [], mark: Number(s.mark ?? -1), final: s.final === null ? null : Number(s.final),
+      })),
+    }
+  }
+
+  async raidResult(
+    roomId: string, won: boolean, dealt: number, correct: number, sessionId: string,
+  ): Promise<RaidResult> {
+    const { data, error } = await this.db.rpc('raid_result', {
+      p_room: roomId, p_won: won, p_dealt: Math.round(dealt), p_correct: correct, p_session: sessionId,
+    })
+    fail('回報魔王戰結果失敗', error)
+    const d = data as RaidResult
+    return { confirmed: !!d.confirmed, kills: Number(d.kills ?? 0), first: !!d.first }
+  }
+
+  async raidKills(studentId?: string): Promise<Record<string, number>> {
+    const { data, error } = await this.db.rpc('raid_kill_list', { p_student: studentId ?? null })
+    fail('讀不到魔王紀錄', error)
+    return (data as Record<string, number> | null) ?? {}
   }
 
   // ------------------------------------------------------------ 老師與管理員

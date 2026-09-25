@@ -1775,6 +1775,9 @@ alter table public.rooms add column if not exists no_listen boolean not null def
 alter table public.rooms add column if not exists raid_won boolean;
 -- 每分鐘大概答對幾題，開打時照這個算魔王的血
 alter table public.room_members add column if not exists rate numeric not null default 14;
+-- 這隻魔王的字他認得幾成（0~1，前端從自己的答題紀錄算的）。等待室顯示全隊平均。
+-- 只是給人看的參考，報假的什麼都拿不到。
+alter table public.room_members add column if not exists familiar numeric;
 
 -- 被房主請出去的人，這一場不能再進來
 create table if not exists public.room_bans (
@@ -1843,6 +1846,8 @@ create policy room_members_read on public.room_members for select to authenticat
 drop function if exists public.room_state(text);
 drop function if exists public.join_room();
 drop function if exists public.join_room(uuid);
+drop function if exists public.join_room(uuid, text, numeric);
+drop function if exists public.open_raid(text, text, text, numeric);
 
 -- -----------------------------------------------------------------------------
 -- 小幫手
@@ -2000,7 +2005,8 @@ $$;
 -- p_rate 是他每分鐘大概答對幾題（前端從自己的作答速度算的），開打時拿來算魔王的血。
 -- 報假的只會讓自己那一隊的魔王變硬或變軟，拿不到任何東西，所以信前端沒關係。
 create or replace function public.join_room(
-  p_room uuid default null, p_pass text default null, p_rate numeric default 14)
+  p_room uuid default null, p_pass text default null, p_rate numeric default 14,
+  p_familiar numeric default null)
 returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_student uuid := public.current_student_id();
         v_code    text := public.current_class_code();
@@ -2042,9 +2048,10 @@ begin
    where m.student_id = v_student and m.room_id <> v_room.id
      and exists (select 1 from public.rooms r where r.id = m.room_id and r.status = 'lobby');
 
-  insert into public.room_members as m (room_id, student_id, rate)
-       values (v_room.id, v_student, v_rate)
-    on conflict (room_id, student_id) do update set seen_at = now(), rate = excluded.rate;
+  insert into public.room_members as m (room_id, student_id, rate, familiar)
+       values (v_room.id, v_student, v_rate, least(greatest(p_familiar, 0), 1))
+    on conflict (room_id, student_id) do update
+      set seen_at = now(), rate = excluded.rate, familiar = coalesce(excluded.familiar, m.familiar);
   return v_room.id;
 end;
 $$;
@@ -2194,6 +2201,7 @@ begin
                'host',      m.student_id = v_room.host_student,
                'finished',  m.finished_at is not null,
                'rate',      m.rate,
+               'familiar',  m.familiar,
                -- 三十秒沒回報就當作人不在了。輪詢是每幾秒一次，
                -- 抓太短會讓網路頓一下的人一直閃掉。
                'here',      m.seen_at > now() - interval '30 seconds',
@@ -2254,7 +2262,7 @@ grant execute on function
   public.current_student_id(),
   public.current_class_code(),
   public.rebuild_word_stats(uuid),
-  public.join_room(uuid, text, numeric),
+  public.join_room(uuid, text, numeric, numeric),
   public.leave_room(uuid),
   public.room_playing(uuid, uuid),
   public.room_finished(uuid),
@@ -3368,7 +3376,8 @@ to authenticated;
 --   學生：p_class_code 留空，開在自己班上，開完直接算他進來了。
 -- p_pass：null 或空字串＝公開房；四位數字＝私人房。
 create or replace function public.open_raid(
-  p_boss text, p_pass text default null, p_class_code text default null, p_rate numeric default 14)
+  p_boss text, p_pass text default null, p_class_code text default null, p_rate numeric default 14,
+  p_familiar numeric default null)
 returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_student uuid := public.current_student_id();
         v_code    text;
@@ -3410,8 +3419,8 @@ begin
     delete from public.room_members m
      where m.student_id = v_student and m.room_id <> v_id
        and exists (select 1 from public.rooms r where r.id = m.room_id and r.status = 'lobby');
-    insert into public.room_members (room_id, student_id, rate)
-    values (v_id, v_student, least(greatest(coalesce(p_rate, 14), 6), 32));
+    insert into public.room_members (room_id, student_id, rate, familiar)
+    values (v_id, v_student, least(greatest(coalesce(p_rate, 14), 6), 32), least(greatest(p_familiar, 0), 1));
   end if;
   return v_id;
 end;
@@ -3596,7 +3605,7 @@ end;
 $$;
 
 grant execute on function
-  public.open_raid(text, text, text, numeric),
+  public.open_raid(text, text, text, numeric, numeric),
   public.room_kick(uuid, uuid),
   public.raid_sync(uuid, int, jsonb, int, jsonb, boolean),
   public.raid_result(uuid, boolean, int, int, uuid),

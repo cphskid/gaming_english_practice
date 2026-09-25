@@ -8,12 +8,12 @@ import { colorOf } from '@/data/cosmetics'
 import { legionOf } from '@/data/legions'
 import { WordStat } from '@/core/wordStat'
 import type {
-  AdminClassRow, AnswerEvent, Character, ClassRoom, LevelProgress, Mode, Staff, Student,
+  AdminClassRow, AnswerEvent, Character, ClassRoom, LevelProgress, Staff, Student,
   TeacherRow, WordStatEntry,
 } from '@/core/types'
 import type {
   AchievementRow, AddedTeacher, BadgeCount, ClassRosterRow, LeaderRow, LevelResult, PublicProfile,
-  Repository, RoomBrief, RoomMember, RoomState, SavedResult, VersusMatchInput, Ghost, GhostRow,
+  Repository, RoomBrief, RoomMember, RoomState, RaidSeat, RaidSyncResult, RaidResult, SavedResult, VersusMatchInput, Ghost, GhostRow,
   LiveLobby, LiveMatchInfo, LiveSyncResult, LivePerson,
 } from './repository'
 import { packMoves, unpackMoves, type PackedMove } from '@/core/opponent'
@@ -43,14 +43,16 @@ interface LocalGhost { legion: string; endedAt: number; correct: number; moves: 
 interface StoredRoom {
   id: string
   classCode: string
-  levelId: string
-  mode: Mode
+  bossId: string
+  pass: string | null
   status: 'lobby' | 'playing' | 'done'
   startedAt: number | null
+  seed: number | null
   /** 開這一場的學生。null＝老師開的。 */
   hostStudent: string | null
   hostName: string
   members: Omit<RoomMember, 'here' | 'me'>[]
+  seats: Omit<RaidSeat, 'me'>[]
 }
 
 /**
@@ -74,6 +76,8 @@ const k = {
   session: `${NS}.session`,
   classes: `${NS}.classes`,
   rooms: (code: string) => `${NS}.rooms.${code}`,
+  raidKills: (id: string) => `${NS}.raidKills.${id}`,
+  raidDone: (id: string) => `${NS}.raidDone.${id}`,
   achievements: (id: string) => `${NS}.ach.${id}`,
   achProgress: (id: string) => `${NS}.achp.${id}`,
   matches: (id: string) => `${NS}.versus.${id}`,
@@ -396,14 +400,19 @@ export class LocalRepository implements Repository {
     write(k.teacherOpen(classCode.trim().toUpperCase()), levelIds)
   }
 
-  // ------------------------------------------------------------------ 房間
+  // ------------------------------------------------------------------ 房間（魔王團戰）
   //
   // 本地版只有一個人，所以房間在這裡沒什麼戲唱：開得起來、進得去、狀態會變，
   // 就夠讓選關畫面與老師後台在沒有後端的情況下也跑得動（keyless 的開發伺服器
   // 與版面測試都靠這個）。真正的多人在 Supabase 版，要測就得打真的資料庫。
+  //
+  // 魔王團戰至少要兩個人，本地版開打時補一位「練習夥伴」，
+  // 他一開場就算斷線、由電腦接手（跟正式版斷線接手走同一條路），
+  // 一個人也打得起來，畫面測試才跑得動。
 
   private rooms(code: string): StoredRoom[] {
-    return read<StoredRoom[]>(k.rooms(code), []).filter((r) => r.status !== 'done')
+    // 2026-09-25 以前存的舊房間（一起打同一關）沒有 bossId，當作不存在
+    return read<StoredRoom[]>(k.rooms(code), []).filter((r) => r.status !== 'done' && r.bossId)
   }
 
   private putRooms(code: string, rooms: StoredRoom[]): void {
@@ -426,45 +435,57 @@ export class LocalRepository implements Repository {
     this.putRooms(code, this.rooms(code).map((r) => (r.id === roomId ? f(r) : r)))
   }
 
-  private newRoom(code: string, levelId: string, mode: Mode, host: string | null): StoredRoom {
-    return {
+  private async roomOf(roomId: string): Promise<StoredRoom | null> {
+    const code = await this.classOfRoom(roomId)
+    return code ? this.rooms(code).find((r) => r.id === roomId) ?? null : null
+  }
+
+  async openRaid(
+    bossId: string, pass: string | null, classCode?: string, rate = 14, familiar?: number,
+  ): Promise<string> {
+    if (pass && !/^[0-9]{4}$/.test(pass)) throw new Error('密碼要四位數字')
+    const me = classCode ? null : await this.currentStudent()
+    const code = classCode ? classCode.trim().toUpperCase() : me?.classCode
+    if (!code) throw new Error('還沒加入班級，沒辦法揪人')
+    const room: StoredRoom = {
       id: 'room-' + Math.random().toString(36).slice(2, 10),
-      classCode: code, levelId, mode, status: 'lobby', startedAt: null,
-      hostStudent: host, hostName: '', members: [],
+      classCode: code, bossId, pass: pass || null, status: 'lobby', startedAt: null, seed: null,
+      hostStudent: me?.id ?? null, hostName: me?.nickname ?? '', members: [], seats: [],
     }
-  }
-
-  async openRoom(classCode: string, levelId: string, mode: Mode): Promise<string> {
-    const code = classCode.trim().toUpperCase()
-    const room = this.newRoom(code, levelId, mode, null)
-    // 老師再開一場就是換一關重開，收掉的只有老師自己那場。
-    this.putRooms(code, [...this.rooms(code).filter((r) => r.hostStudent), room])
+    if (me) {
+      const c = await this.loadCharacter(me.id)
+      room.members = [{
+        studentId: me.id, nickname: me.nickname, host: true, team: null,
+        avatar: c.avatar, equipped: c.equipped, finished: false, rate, familiar: familiar ?? null,
+      }]
+    }
+    this.putRooms(code, [...this.rooms(code).filter((r) => !me || r.hostStudent !== me.id), room])
     return room.id
   }
 
-  async studentOpenRoom(levelId: string, mode: Mode): Promise<string> {
-    const me = await this.currentStudent()
-    if (!me?.classCode) throw new Error('還沒加入班級，沒辦法揪人')
-    const c = await this.loadCharacter(me.id)
-    const room = this.newRoom(me.classCode, levelId, mode, me.id)
-    room.hostName = me.nickname
-    room.members = [{
-      studentId: me.id, nickname: me.nickname, host: true, team: null,
-      avatar: c.avatar, equipped: c.equipped, finished: false,
-    }]
-    this.putRooms(me.classCode, [...this.rooms(me.classCode).filter((r) => r.hostStudent !== me.id), room])
-    return room.id
+  async kickFromRoom(roomId: string, studentId: string): Promise<void> {
+    await this.patchRoom(roomId, (r) => ({ ...r, members: r.members.filter((m) => m.studentId !== studentId) }))
   }
 
   async startRoom(roomId: string): Promise<void> {
-    await this.patchRoom(roomId, (r) => ({ ...r, status: 'playing', startedAt: Date.now() }))
+    await this.patchRoom(roomId, (r) => {
+      const seats: StoredRoom['seats'] = r.members.slice(0, 6).map((m, i) => ({
+        seat: i, studentId: m.studentId, nickname: m.nickname, rate: m.rate,
+        avatar: m.avatar, equipped: m.equipped,
+      }))
+      if (seats.length < 2) {
+        seats.push({ seat: seats.length, studentId: 'local-buddy', nickname: '練習夥伴',
+          rate: seats[0]?.rate ?? 14, avatar: '', equipped: [] })
+      }
+      return { ...r, status: 'playing', startedAt: Date.now(), seed: 1 + ((Math.random() * 2e9) | 0), seats }
+    })
   }
 
   async closeRoom(roomId: string): Promise<void> {
     await this.patchRoom(roomId, (r) => ({ ...r, status: 'done' }))
   }
 
-  async joinRoom(roomId?: string): Promise<string> {
+  async joinRoom(roomId?: string, pass?: string, rate = 14, familiar?: number): Promise<string> {
     const me = await this.currentStudent()
     if (!me?.classCode) throw new Error('還沒加入班級')
     const open = this.rooms(me.classCode)
@@ -473,10 +494,14 @@ export class LocalRepository implements Repository {
       : open.find((r) => !r.hostStudent) ?? open[open.length - 1]
     if (!room) throw new Error('這一場已經結束了')
     if (!room.members.some((m) => m.studentId === me.id)) {
+      if (room.status !== 'lobby') throw new Error('這一場已經開打了，等下一場')
+      if (room.pass && room.pass !== (pass ?? '').trim()) throw new Error('密碼不對')
+      if (room.members.length >= 6) throw new Error('這一場滿了（最多六個人）')
       const c = await this.loadCharacter(me.id)
       room.members.push({
         studentId: me.id, nickname: me.nickname, host: room.hostStudent === me.id,
-        team: null, avatar: c.avatar, equipped: c.equipped, finished: false,
+        team: null, avatar: c.avatar, equipped: c.equipped, finished: false, rate,
+        familiar: familiar ?? null,
       })
     }
     // 同時只在一場裡
@@ -501,7 +526,7 @@ export class LocalRepository implements Repository {
     if (!code) return []
     return this.rooms(code)
       .map((r) => ({
-        id: r.id, levelId: r.levelId, mode: r.mode,
+        id: r.id, bossId: r.bossId, locked: !!r.pass, members: r.members.length, mode: 'raid' as const,
         status: r.status as 'lobby' | 'playing',
         hostName: r.hostName, byTeacher: !r.hostStudent,
         mine: r.members.some((m) => m.studentId === me?.id),
@@ -512,17 +537,18 @@ export class LocalRepository implements Repository {
 
   async roomState(roomId: string): Promise<RoomState | null> {
     const me = await this.currentStudent()
-    const code = await this.classOfRoom(roomId)
-    const room = code ? this.rooms(code).find((r) => r.id === roomId) : null
+    const room = await this.roomOf(roomId)
     if (!room) return null
     return {
-      id: room.id, classCode: room.classCode, levelId: room.levelId,
-      mode: room.mode, status: room.status, startedAt: room.startedAt,
+      id: room.id, classCode: room.classCode, bossId: room.bossId, locked: !!room.pass,
+      pass: room.pass, seed: room.seed, noListen: true,
+      mode: 'raid', status: room.status, startedAt: room.startedAt,
       byTeacher: !room.hostStudent,
       // 本地版沒有老師與學生之分，開得了就作得了主。
       mine: true,
       // 本地版沒有別台裝置，所以在不在線上永遠是「在」。
       members: room.members.map((m) => ({ ...m, here: true, me: m.studentId === me?.id })),
+      seats: room.seats.map((s) => ({ ...s, me: s.studentId === me?.id })),
     }
   }
 
@@ -540,6 +566,53 @@ export class LocalRepository implements Repository {
       ...r,
       members: r.members.map((m) => (m.studentId === me?.id ? { ...m, finished } : m)),
     }))
+  }
+
+  /** 本地版的同步：只有我一個真人，其他座位開場就算斷線（由電腦接手）。 */
+  private raidMoves = new Map<string, unknown[]>()
+
+  async raidSync(
+    roomId: string, base: number, moves: unknown[], mark: number, from: number[], _left: boolean,
+  ): Promise<RaidSyncResult> {
+    const room = await this.roomOf(roomId)
+    const me = await this.currentStudent()
+    const mySeat = room?.seats.find((s) => s.studentId === me?.id)?.seat ?? 0
+    const mine = this.raidMoves.get(roomId) ?? []
+    if (base <= mine.length) mine.push(...moves.slice(mine.length - base))
+    this.raidMoves.set(roomId, mine)
+    return {
+      mine: mine.length, gone: false,
+      seats: (room?.seats ?? []).map((s) => (s.seat === mySeat
+        ? { moves: mine.slice(from[s.seat] ?? 0), mark, final: null }
+        : { moves: [], mark: -1, final: -1 })),
+    }
+  }
+
+  async raidResult(
+    roomId: string, won: boolean, _dealt: number, _correct: number, _sessionId: string,
+  ): Promise<RaidResult> {
+    const me = await this.currentStudent()
+    const room = await this.roomOf(roomId)
+    if (!me || !room) return { confirmed: false, kills: 0, first: false }
+    const kills = read<Record<string, number>>(k.raidKills(me.id), {})
+    const done = read<string[]>(k.raidDone(me.id), [])
+    let first = false
+    if (won && !done.includes(roomId)) {
+      kills[room.bossId] = (kills[room.bossId] ?? 0) + 1
+      first = kills[room.bossId] === 1
+      write(k.raidKills(me.id), kills)
+      write(k.raidDone(me.id), [...done, roomId].slice(-50))
+      const c = await this.loadCharacter(me.id)
+      const frame = 'frame-boss-' + room.bossId
+      if (!c.items[frame]) write(k.character(me.id), { ...c, items: { ...c.items, [frame]: 1 } })
+    }
+    await this.closeRoom(roomId)
+    return { confirmed: won, kills: kills[room.bossId] ?? 0, first }
+  }
+
+  async raidKills(studentId?: string): Promise<Record<string, number>> {
+    const id = studentId ?? (await this.currentStudent())?.id
+    return id ? read<Record<string, number>>(k.raidKills(id), {}) : {}
   }
 
   // ------------------------------------------------------------ 老師與管理員

@@ -287,8 +287,46 @@ export interface GameContext {
   audio: AudioBus
   /** 對戰模式才有。單人遊戲是 null。 */
   opponent: Opponent | null
+  /** 魔王團戰才有：這一場的隊友、魔王、跟大家手機之間的線（見 RaidLink） */
+  raid?: RaidLink
   /** 遊戲自己決定什麼時候結束 */
   finish(outcome: GameOutcome): void
+}
+
+/** 魔王團戰的一個座位（第幾號座位＝戰場上第幾座城） */
+export interface RaidSeatInfo {
+  seat: number
+  studentId: string
+  nickname: string
+  /** 他穿的軍團（品項 id，王國軍是空字串） */
+  legion: string
+  /** 每分鐘大概答對幾題，開打時拿來算魔王的血 */
+  rate: number
+  me: boolean
+}
+
+/**
+ * 魔王團戰跟大家手機之間的線。實作在 net/raid.ts（每 0.4 秒問一次伺服器）。
+ * 規則跟 LiveLink 一樣：我說「第 k 格以前的動作都送了」，就不會再送 k 以前的動作。
+ */
+export interface RaidLink {
+  roomId: string
+  bossId: string
+  /** 開打那一刻伺服器定的亂數種子，每支手機一樣 */
+  seed: number
+  /** 我是第幾號座位 */
+  seat: number
+  seats: RaidSeatInfo[]
+  /** 這一場不出聽音題 */
+  noListen: boolean
+  send(m: LiveMove): void
+  mark(k: number): void
+  /** 每個座位到現在的消息（照座位號排） */
+  feeds(): { moves: LiveMove[]; mark: number; final: number | null }[]
+  /** 我被伺服器判斷線了（太久沒消息）。這一份戰場已經跟大家不一樣，要結束。 */
+  kickedOut(): boolean
+  /** 打完或離開。left＝中途離開，大家那邊由電腦接手我的座位。 */
+  close(left: boolean): void
 }
 
 /** 遊戲結束時回報的「遊戲自己的結果」，不含金幣經驗。 */
@@ -319,6 +357,15 @@ export interface GameOutcome {
      * 不是真人對戰就沒有這一欄。
      */
     liveToEnd?: boolean
+  }
+  /** 魔王團戰才有。容器拿去跟伺服器回報（raid_result），兩個人都說贏才算打倒。 */
+  raid?: {
+    won: boolean
+    /** 我對魔王打了多少 */
+    dealt: number
+    correct: number
+    /** 我斷線太久被判出局，這一場的結果不回報 */
+    kickedOut: boolean
   }
 }
 
@@ -359,7 +406,7 @@ export type SfxName =
   | 'coin' | 'ui-tap' | 'explosion' | 'victory' | 'defeat' | 'battle-horn'
 
 /** 有哪幾首曲子。對戰才放音樂，關卡裡不放（一整班同時放會吵到老師）。 */
-export type MusicName = 'battle'
+export type MusicName = 'battle' | 'boss'
 
 export interface AudioBus {
   play(name: SfxName): void
