@@ -80,10 +80,30 @@ export function replayOpponent(name: string, moves: Move[]): Opponent {
  */
 export function ghostOpponent(name: string, moves: Move[], legion = ''): Opponent {
   const sorted = moves.map((m, i) => ({ m, i })).sort((a, b) => a.m.t - b.m.t || a.i - b.i).map((x) => x.m)
+  const all = [...sorted, ...ghostTail(name, sorted)]
   return {
     name, isBot: false, isGhost: true, legion,
-    movesUntil: (now) => sorted.filter((m) => m.t <= now),
+    movesUntil: (now) => all.filter((m) => m.t <= now),
   }
+}
+
+/**
+ * 分身的紀錄播完之後，接著打的那一段（2026-09-25 Chuck 選的 A）。
+ *
+ * 重播是照**時間**走的，所以你打快打慢都不會把他的紀錄「用完」；會用完只有一種情況：
+ * 他錄下來的那一場提早結束（例如第 150 秒就破城）。以前播完就站著不動，
+ * 現在改成電腦照**他那一場的速度與正確率**接著打，看起來還是他。
+ */
+function ghostTail(name: string, sorted: Move[]): Move[] {
+  const answers = sorted.filter((m) => m.act === 'answer')
+  const last = sorted.length ? sorted[sorted.length - 1].t : 0
+  if (!answers.length || last < 5) return []
+  const correct = answers.filter((m) => m.correct).length
+  const rate = Math.max(4, Math.min(40, correct / (last / 60)))
+  const accuracy = Math.max(0.3, Math.min(1, correct / answers.length))
+  return botOpponent({ name, rate, accuracy, seed: sorted.length + 7 })
+    .movesUntil(Infinity)
+    .filter((m) => m.t > last)
 }
 
 /**
