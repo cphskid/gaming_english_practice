@@ -186,7 +186,7 @@ try {
   const slots = out.seen.recognize.slots
   const words = out.seen.recognize.labels
   slots.length > 0 && slots.every((s) => s === 0 || s === 1 || s === 2) && new Set(slots).size === slots.length
-    ? ok(`字牌排在上面三塊木板上，一塊一個（格位 ${slots.join('/')}）`)
+    ? ok(`字牌排在下面三塊木板上，一塊一個（格位 ${slots.join('/')}）`)
     : fail('木板的格位不對：' + JSON.stringify(slots))
 
   words.every((w) => w.length > 1)

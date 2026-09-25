@@ -108,16 +108,17 @@ function ghostTail(name: string, sorted: Move[]): Move[] {
 
 /**
  * 存進資料庫的樣子。一場三分鐘大概兩三百筆，每筆寫成一小串陣列
- * （[秒, 'a', 1] / [秒, 's', 線, 階] / [秒, 'u']），比整個物件小三四倍。
+ * （[秒, 'a', 1, 線] / [秒, 's', 線, 階] / [秒, 'u']），比整個物件小三四倍。
+ * 答題的線是 2026-09-25 加的（答對的槍和水晶照線別給），舊紀錄沒有就當認字。
  * 伺服器也看這個形狀：它會數 'a' 答對幾筆，跟那一場的答題事件對帳。
  */
-export type PackedMove = [number, 'a', 0 | 1] | [number, 's', Skill, number] | [number, 'u']
+export type PackedMove = [number, 'a', 0 | 1] | [number, 'a', 0 | 1, Skill] | [number, 's', Skill, number] | [number, 'u']
 
 export function packMoves(moves: Move[]): PackedMove[] {
   const out: PackedMove[] = []
   for (const m of moves) {
     const t = Math.round(m.t * 10) / 10
-    if (m.act === 'answer') out.push([t, 'a', m.correct ? 1 : 0])
+    if (m.act === 'answer') out.push(m.line ? [t, 'a', m.correct ? 1 : 0, m.line] : [t, 'a', m.correct ? 1 : 0])
     else if (m.act === 'summon' && m.line && m.rank) out.push([t, 's', m.line, m.rank])
     else if (m.act === 'up') out.push([t, 'u'])
   }
@@ -133,7 +134,9 @@ export function unpackMoves(raw: unknown): Move[] {
   for (const r of raw) {
     if (!Array.isArray(r) || typeof r[0] !== 'number' || !(r[0] >= 0)) continue
     const t = r[0]
-    if (r[1] === 'a') out.push({ t, act: 'answer', correct: r[2] === 1, rank: null })
+    if (r[1] === 'a') {
+      out.push({ t, act: 'answer', correct: r[2] === 1, rank: null, ...(SKILLS.includes(r[3]) ? { line: r[3] } : {}) })
+    }
     else if (r[1] === 's' && SKILLS.includes(r[2]) && typeof r[3] === 'number') {
       out.push({ t, act: 'summon', correct: true, line: r[2], rank: Math.max(1, Math.min(3, Math.round(r[3]))) })
     } else if (r[1] === 'u') out.push({ t, act: 'up', correct: true, rank: null })
@@ -161,10 +164,10 @@ export function makeFeeder(o: Opponent, onMove: (correct: boolean, m: Move) => v
 // ---------------------------------------------------------------- 真人即時對戰
 
 /** 網路上傳的樣子：[格, 'a', 對錯, 目標] / [格, 's', 線, 階] / [格, 'u'] */
-export type PackedLive = [number, 'a', 0 | 1, number] | [number, 's', Skill, number] | [number, 'u']
+export type PackedLive = [number, 'a', 0 | 1, number, Skill] | [number, 's', Skill, number] | [number, 'u']
 
 export function packLive(m: LiveMove): PackedLive {
-  if (m.act === 'answer') return [m.k, 'a', m.correct ? 1 : 0, m.target ?? -1]
+  if (m.act === 'answer') return [m.k, 'a', m.correct ? 1 : 0, m.target ?? -1, m.line ?? 'recognize']
   if (m.act === 'summon') return [m.k, 's', m.line ?? 'recognize', m.rank ?? 1]
   return [m.k, 'u']
 }
@@ -176,7 +179,13 @@ export function packLive(m: LiveMove): PackedLive {
 export function unpackLive(raw: unknown): LiveMove {
   const r = Array.isArray(raw) ? raw : []
   const k = typeof r[0] === 'number' && r[0] >= 0 ? Math.floor(r[0]) : 0
-  if (r[1] === 'a') return { k, act: 'answer', correct: r[2] === 1, target: typeof r[3] === 'number' ? r[3] : -1 }
+  if (r[1] === 'a') {
+    // 第五格是哪條線（答對的槍和水晶照線別給）。**沒寫或看不懂就當認字**，兩支手機才會一樣
+    return {
+      k, act: 'answer', correct: r[2] === 1, target: typeof r[3] === 'number' ? r[3] : -1,
+      line: SKILLS.includes(r[4]) ? r[4] : 'recognize',
+    }
+  }
   if (r[1] === 's' && SKILLS.includes(r[2]) && typeof r[3] === 'number') {
     return { k, act: 'summon', line: r[2], rank: Math.round(r[3]) }
   }

@@ -5,7 +5,7 @@ import { ART, TERRAIN_KEYS, loadArt, onArt } from '../tower-defense/art'
 import { legionById, legionUnitArt } from '@/data/legions'
 import {
   LINES, LINE_COST, LINE_IDS, MAX_TIER, RULES, nextCost, newBattle, pushed, statsOf, step,
-  strike, summon, upgrade, OTHER, type BattleState, type Hit, type Line, type Side, type Unit,
+  answered, summon, upgrade, OTHER, type BattleState, type Hit, type Line, type Side, type Unit,
 } from './battle'
 import { DELAY, Lockstep, SEAT_SIDE, TICK, mirror, mirrorHit } from './lockstep'
 
@@ -63,9 +63,9 @@ const SHELL = `
   <canvas class="td-cv" width="1088" height="576"></canvas>
   <div class="td-toast"></div>
   <div class="tw-bar">
-    <button class="tw-line" data-line="recognize">${iconImg('eye', 20)}<b>認字</b></button>
-    <button class="tw-line" data-line="listen">👂<b>聽音</b></button>
-    <button class="tw-line" data-line="spell">${iconImg('quill', 20)}<b>拼字</b></button>
+    <button class="tw-line" data-line="recognize"><span class="tw-pic"></span><b>字母兵</b></button>
+    <button class="tw-line" data-line="listen"><span class="tw-pic"></span><b>音波弓手</b></button>
+    <button class="tw-line" data-line="spell"><span class="tw-pic"></span><b>拼字盾兵</b></button>
     <button class="tw-up">⬆️<b>升階</b><i></i></button>
     <span class="tw-crystal">${iconImg('crystal', 15)} 0</span>
   </div>
@@ -106,8 +106,14 @@ interface Target {
  */
 const SPELL = { slotY: 100, slotW: 48, slotH: 58, slotGap: 8, bankY: 462, bankW: 76, bankH: 66, bankGap: 12 }
 
-/** 三塊木牌的位置與顏色。顏色是木牌與兵身上旗子的對應關係，所以要夠不一樣。 */
-const BOARD = { y: 86, h: 46, w: 258, gap: 22 }
+/**
+ * 三塊木牌的位置與顏色。顏色是木牌與兵身上旗子的對應關係，所以要夠不一樣。
+ *
+ * **放在路下面那條水面上**（2026-09-25 Chuck）：本來在上面，手機橫拿時大拇指要
+ * 橫越整個戰場去按，手指把地圖和兵都遮住了。放下面剛好沒有兵，拼字的字母磚
+ * 本來也在這一帶，三條線的作答位置就一致了。
+ */
+const BOARD = { y: 478, h: 60, w: 258, gap: 22 }
 const SLOT_COLOR = ['#e0963a', '#4fa3cf', '#ab7ad2']
 const slotX = (i: number) =>
   (W - (BOARD.w * 3 + BOARD.gap * 2)) / 2 + i * (BOARD.w + BOARD.gap) + BOARD.w / 2
@@ -211,6 +217,8 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     /** 道具開出來的效果，上面那一條會跑倒數。現在只有寒霜。 */
     buffs: [] as { id: string; icon: string; name: string; left: number; dur: number }[],
     flashes: [] as { x: number; life: number }[],
+    /** 「擋」「攻城」飄字的冷卻，照挨打的那一邊算 */
+    fxCd: { me: 0, foe: 0 } as Record<Side, number>,
     done: false,
     /** 真人對戰：按了升階、還在等它生效（晚 1.5 秒）的時候是按下去那時的階，不然 0 */
     upWait: 0,
@@ -277,8 +285,9 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     (foeLegion.id ? img[legionUnitArt(foeLegion, u.line, LINES[u.line].art, rank)] : undefined)
       ?? theirs(LINES[u.line].art)
   /** 我方某條線某一階的圖。有的軍團每一階長得不一樣（豬軍團的大砲、豬王）。 */
-  const myUnit = (u: Unit, rank: number) =>
-    img[legionUnitArt(legion, u.line, LINES[u.line].art, rank)] ?? img[LINES[u.line].art + ctx.color] ?? img[LINES[u.line].art]
+  const lineArt = (line: Line, rank: number) =>
+    img[legionUnitArt(legion, line, LINES[line].art, rank)] ?? img[LINES[line].art + ctx.color] ?? img[LINES[line].art]
+  const myUnit = (u: Unit, rank: number) => lineArt(u.line, rank)
   /** 戰場的底圖有沒有到。沒到的話 loop 會每三秒再敲一次 loadArt。 */
   const fieldKey = legion.field === 'castle' ? legion.prefix + 'wall' : 'tiles'
 
@@ -334,7 +343,6 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       }
       return
     }
-    S.battle.crystal.foe += R.answerCrystal
     S.botPending++
     if (S.botPending >= S.battle.tier.foe) {
       summon(S.battle, 'foe', S.botLine, S.battle.tier.foe, R)
@@ -343,7 +351,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     // 有錢就升階。不是最佳解（升階會拖慢出兵），但夠當個老實的對手。
     upgrade(S.battle, 'foe')
     const mine = tappable('me')
-    strike(S.battle, 'foe', mine[(Math.random() * TAPPABLE) | 0] ?? null, R)
+    answered(S.battle, 'foe', S.botLine, mine[(Math.random() * TAPPABLE) | 0] ?? null, R)
   }
   let feed = makeFeeder(foe, onFoeMove)
 
@@ -378,9 +386,9 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   function ghostMove(m: Move) {
     if (m.act === 'answer') {
       if (!m.correct) return
-      S.battle.crystal.foe += R.answerCrystal
+      // 舊紀錄的答題沒記線別，當成認字（每題 1 份）
       const mine = tappable('me')
-      strike(S.battle, 'foe', mine[(Math.random() * TAPPABLE) | 0] ?? null, R)
+      answered(S.battle, 'foe', (m.line as Line) ?? 'recognize', mine[(Math.random() * TAPPABLE) | 0] ?? null, R)
     } else if (m.act === 'summon' && m.line) {
       summon(S.battle, 'foe', m.line as Line, Math.min(MAX_TIER, m.rank ?? 1), R)
     } else if (m.act === 'up') {
@@ -554,6 +562,12 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   }
 
   function syncQuiz() {
+    // 聽音線的重播鈕放大、寫字（2026-09-25 Chuck：小朋友沒發現角落那顆小喇叭）
+    const wide = S.line === 'listen'
+    if (elSay.classList.contains('wide') !== wide) {
+      elSay.classList.toggle('wide', wide)
+      elSay.textContent = wide ? '🔊 再聽一次' : '🔊'
+    }
     const need = S.battle.tier.me
     const step = need > 1 ? `（${S.pending + 1}/${need}）` : ''
     if (S.line === 'spell') {
@@ -673,7 +687,28 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   }
 
   /** 底下那一排：哪條線亮著、升階多少錢、水晶剩多少 */
+  /**
+   * 選兵鈕寫的是兵種名字、畫的是那隻兵，**升階就跟著換**（2026-09-25 Chuck：
+   * 「認字、聽音、拼字」是題型，小朋友要選的是兵）。穿別的軍團就畫那一套的兵。
+   * 圖還沒載好就先只寫名字，下一次 syncBar 再補。
+   */
+  let barKey = ''
+  function syncBarLines() {
+    const tier = S.battle.tier.me
+    const key = tier + ':' + elLines.map((b) => (lineArt(b.dataset.line as Line, tier) ? 1 : 0)).join('')
+    if (key === barKey) return
+    barKey = key
+    for (const b of elLines) {
+      const line = b.dataset.line as Line
+      b.querySelector('b')!.textContent = statsOf(line, tier).name
+      const pic = b.querySelector<HTMLElement>('.tw-pic')!
+      const im = lineArt(line, tier)
+      pic.style.backgroundImage = im ? `url("${im.src}")` : ''
+    }
+  }
+
   function syncBar() {
+    syncBarLines()
     for (const b of elLines) b.classList.toggle('on', b.dataset.line === S.line)
     const cost = nextCost(S.battle, 'me')
     const can = cost !== null && S.battle.crystal.me >= cost
@@ -774,26 +809,24 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       wordId: word.id, skill: LINES[S.line].skill, correct,
       ms: Math.round(performance.now() - S.askedAt), combo: S.combo,
     })
-    S.rec.push({ t: S.battle.t, act: 'answer', correct, rank: null })
-    if (liveOn) sendLive({ act: 'answer', correct, target: correct && target ? target.id : -1 })
+    S.rec.push({ t: S.battle.t, act: 'answer', correct, rank: null, line: LINES[S.line].skill })
+    if (liveOn) sendLive({ act: 'answer', correct, target: correct && target ? target.id : -1, line: LINES[S.line].skill })
     if (correct) {
       S.correct++; S.combo++
       buzz(14)
       ctx.audio.play('answer-correct')
       // 答對一定做的事：開一槍（打不到城堡，見 battle.ts 的 strike）、拿水晶。
       // **出不出兵要看累積夠了沒**——兵階上限是幾，就要連對幾題。
-      if (!liveOn) {
-        strike(S.battle, 'me', target, R)
-        S.battle.crystal.me += R.answerCrystal
-      }
+      if (!liveOn) answered(S.battle, 'me', S.line, target, R)
       S.flashes.push({ x: at.x, life: 0.22 })
+      // 聽音答對不再唸一次：馬上就要出下一題的聲音，連著兩個字會分不清哪個是題目
+      if (S.line !== 'listen') speak(word.word)
       S.pending++
       if (S.pending >= S.battle.tier.me) cashOut()
       else S.pops.push({
         x: R.homeMe + 40, y: ROAD_Y - 80,
         text: `${S.pending}/${S.battle.tier.me}`, color: '#ffd76a', life: 0.9,
       })
-      speak(word.word)
     } else {
       S.combo = 0
       buzz(55)
@@ -878,7 +911,15 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       ctx.audio.setMusicRate(1.12)
     }
     const hits = liveOn ? liveStep(dt) : (feed(S.battle.t), step(S.battle, dt, R))
+    for (const side of ['me', 'foe'] as Side[]) S.fxCd[side] = Math.max(0, S.fxCd[side] - dt)
     for (const h of hits) {
+      // 盾牌擋槍、攻城加倍：每一格都有傷害，所以同一邊一秒最多冒一次，不然滿天都是字。
+      if ((h.blocked || h.siege) && S.fxCd[h.side] <= 0) {
+        S.fxCd[h.side] = 1
+        S.pops.push(h.siege
+          ? { x: h.x, y: ROAD_Y - 130, text: '攻城 ×2', color: '#ffb347', life: 0.9 }
+          : { x: h.x, y: ROAD_Y - 90, text: '🛡️ 擋', color: '#d8e4ff', life: 0.8 })
+      }
       if (!h.tower || h.from === undefined) continue
       const from = h.side === 'me' ? towerX('foe') : towerX('me')
       S.arrows.push({ x0: from, y0: ROAD_Y - 92, x1: h.x, y1: ROAD_Y - 28, life: ARROW_LIFE })

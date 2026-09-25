@@ -63,6 +63,10 @@ export interface LineSpec {
   art: 'u_spear' | 'u_bow' | 'u_shield'
   /** 這條線對應的題型，出題器照這個挑字 */
   skill: 'recognize' | 'listen' | 'spell'
+  /** 打城堡的傷害倍數。拼字盾兵是攻城兵（兩倍）。 */
+  castleMul: number
+  /** 被哪條線的兵打到只吃幾成（沒寫就是全吃）。長槍刺不穿盾牌。 */
+  takenFrom: Partial<Record<Line, number>>
 }
 
 export const LINES: Record<Line, LineSpec> = {
@@ -71,6 +75,7 @@ export const LINES: Record<Line, LineSpec> = {
     names: ['字母兵', '字母槍士', '字母將軍'],
     hp: 30, dps: 10, speed: 55, reach: 30, splash: 0,
     sizeMul: 0.95, art: 'u_spear', skill: 'recognize',
+    castleMul: 1, takenFrom: {},
   },  // 血×傷害 ＝ 300，這是基準
   // 聚焦：血只有 18，被近戰貼上去就沒了，要靠前面有人擋。
   // 聽音：唯一的遠程。**射程 150 故意小於箭塔的 200**——不然弓手可以站在
@@ -79,13 +84,21 @@ export const LINES: Record<Line, LineSpec> = {
     names: ['音波弓手', '回音射手', '音闇神射'],
     hp: 24, dps: 17.5, speed: 45, reach: 150, splash: 60,   // 420 ＝ 300 × 1.4
     sizeMul: 1.0, art: 'u_bow', skill: 'listen',
+    castleMul: 1, takenFrom: {},
   },
   // 拼字：肉盾。傷害是三條線裡最低的，但**一階兵裡只有它撐得過箭塔那 200 格**
   // （走完要吃約 59 點，牠有 60 血），所以「想敲對方城堡」這件事從它開始。
+  //
+  // 2026-09-25 起再多兩個專長，讓「花時間拼字」有感（Chuck 跟女兒試玩：一直按認字最強）：
+  // **攻城**——打城堡兩倍；**盾牌**——長槍刺上來只吃三成。
+  // 量測（全認字 vs 全拼字，拼一題要花認字的 3/4/5 倍時間）：認字只贏 13/41/60%，
+  // 以前是 83/93/98%。本來還想讓箭塔對盾兵半傷，但實力懸殊時弱的一方會被
+  // 破城太多（tug-balance 的「推到」掉到 12%），所以沒做。
   spell: {
     names: ['拼字盾兵', '拼字鐵衛', '拼字戰神'],
     hp: 150, dps: 6, speed: 34, reach: 30, splash: 0,        // 900 ＝ 300 × 3
-    sizeMul: 1.1, art: 'u_shield', skill: 'spell',
+    sizeMul: 1.25, art: 'u_shield', skill: 'spell',
+    castleMul: 2, takenFrom: { recognize: 0.3 },
   },
 }
 
@@ -263,6 +276,10 @@ export interface Hit {
   tower?: boolean
   /** 箭是從哪裡射出來的（只有 tower 的時候有） */
   from?: number
+  /** 被盾牌擋掉大半（長槍刺盾兵）。畫面冒一面盾，不然看不出為什麼刺不動。 */
+  blocked?: boolean
+  /** 攻城兵在打城堡（傷害加倍的那一種） */
+  siege?: boolean
 }
 
 export function newBattle(r: BattleRules = RULES): BattleState {
@@ -316,6 +333,9 @@ export function summon(
   s.units.push(u)
   return u
 }
+
+/** 被 from 線的兵打到，這隻吃幾成。 */
+const takenBy = (u: Unit, from: Line) => LINES[u.line].takenFrom[from] ?? 1
 
 const dir = (side: Side) => (side === 'me' ? 1 : -1)
 const homeOf = (side: Side, r: BattleRules) => (side === 'me' ? r.homeMe : r.homeFoe)
@@ -395,13 +415,15 @@ export function step(s: BattleState, dt: number, r: BattleRules = RULES): Hit[] 
   for (const { u, spec, target } of fights) {
     if (!target) {
       const foeSide = OTHER[u.side]
-      s.castleHp[foeSide] -= spec.dps * dt
-      hits.push({ x: homeOf(foeSide, r), side: foeSide, killed: false })
+      const mul = LINES[u.line].castleMul
+      s.castleHp[foeSide] -= spec.dps * mul * dt
+      hits.push({ x: homeOf(foeSide, r), side: foeSide, killed: false, siege: mul > 1 })
       continue
     }
-    target.hp -= spec.dps * dt
+    const taken = takenBy(target, u.line)
+    target.hp -= spec.dps * taken * dt
     target.hurt = 0.12
-    hits.push({ x: target.x, side: target.side, killed: target.hp <= 0 })
+    hits.push({ x: target.x, side: target.side, killed: target.hp <= 0, blocked: taken < 1 })
     // 濺射：只有弓手線有。濺到的吃三成、最多三隻，跟守塔的法師同一套數字，
     // 所以「一發打一片」這件事小朋友在兩個遊戲裡學一次就好。
     // 三成是刻意壓低的——拼字線那隻大的不能被一發濺射掃掉，
@@ -412,7 +434,7 @@ export function step(s: BattleState, dt: number, r: BattleRules = RULES): Hit[] 
         if (splashed >= 3) break
         if (o === target || o.side === u.side) continue
         if (Math.abs(X(o) - X(target)) > spec.splash) continue
-        o.hp -= spec.dps * dt * 0.3
+        o.hp -= spec.dps * takenBy(o, u.line) * dt * 0.3
         o.hurt = 0.12
         splashed++
         hits.push({ x: o.x, side: o.side, killed: o.hp <= 0 })
@@ -497,15 +519,30 @@ export function judge(s: BattleState, r: BattleRules = RULES): Side | null {
  *
  * **這一槍有算進平衡量測裡**（tools/test/tug-balance.mjs），改傷害要重跑。
  */
-export function strike(s: BattleState, _side: Side, target: Unit | null, r: BattleRules = RULES): void {
+export function strike(s: BattleState, _side: Side, target: Unit | null, r: BattleRules = RULES, power = 1): void {
   if (s.over) return
   if (!target || target.hp <= 0) return
-  target.hp -= r.strike
+  target.hp -= r.strike * power
   target.hurt = 0.18
   if (target.hp <= 0) {
     s.crystal[OTHER[target.side]] += r.killCrystal
     s.units = s.units.filter((u) => u.hp > 0)
   }
+}
+
+/**
+ * 答對一題，出兵之外馬上發生的事：拿水晶、對目標開一槍。
+ *
+ * **兩樣都照這條線一題花多少時間給**（LINE_COST）。以前每條線一題都是 3 顆、
+ * 一槍 8 點，於是認字一題最快、同樣時間拿到的槍和水晶是拼字的三倍——兵是打平了，
+ * 多出來的槍和水晶讓「一直按認字」變成最強（2026-09-25 Chuck 跟女兒試玩抓到的）。
+ * 所有答對的地方（自己、電腦、分身、真人對戰、平衡量測）都走這一支。
+ */
+export function answered(s: BattleState, side: Side, line: Line, target: Unit | null, r: BattleRules = RULES): void {
+  if (s.over) return
+  const k = LINE_COST[line]
+  s.crystal[side] += r.answerCrystal * k
+  strike(s, side, target, r, k)
 }
 
 /** 對方最前面那隻（離我最近的那隻）。答對那一槍預設打它。 */
