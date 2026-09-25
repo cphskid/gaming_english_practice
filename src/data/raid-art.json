@@ -116,5 +116,116 @@
    "death": 18
   },
   "cx": 24.5
+ },
+ "badger": {
+  "w": 132,
+  "h": 73,
+  "foot": 73,
+  "anims": {
+   "idle": 5,
+   "attack": 15,
+   "hurt": 4
+  },
+  "cx": 80.0
+ },
+ "rex": {
+  "w": 194,
+  "h": 118,
+  "foot": 118,
+  "anims": {
+   "idle": 5,
+   "attack": 21,
+   "hurt": 4
+  },
+  "cx": 57.0
+ },
+ "frog": {
+  "w": 194,
+  "h": 63,
+  "foot": 63,
+  "anims": {
+   "idle": 5,
+   "attack": 8,
+   "hurt": 4
+  },
+  "cx": 38.0
+ },
+ "gorilla": {
+  "w": 72,
+  "h": 63,
+  "foot": 63,
+  "anims": {
+   "idle": 5,
+   "attack": 17,
+   "hurt": 4
+  },
+  "cx": 32.5
+ },
+ "penguin": {
+  "w": 136,
+  "h": 96,
+  "foot": 96,
+  "anims": {
+   "idle": 5,
+   "attack": 11,
+   "hurt": 4
+  },
+  "cx": 42.0
+ },
+ "flydemon": {
+  "w": 79,
+  "h": 69,
+  "foot": 64,
+  "anims": {
+   "idle": 4,
+   "attack": 8,
+   "hurt": 4,
+   "death": 6
+  },
+  "cx": 39.5
+ },
+ "skelwiz": {
+  "w": 128,
+  "h": 120,
+  "foot": 120,
+  "anims": {
+   "idle": 9,
+   "attack": 27,
+   "death": 20
+  },
+  "cx": 73.0
+ },
+ "winged": {
+  "w": 128,
+  "h": 128,
+  "foot": 128,
+  "anims": {
+   "idle": 8,
+   "attack": 23,
+   "death": 12
+  },
+  "cx": 69.5
+ },
+ "golem": {
+  "w": 71,
+  "h": 71,
+  "foot": 47,
+  "anims": {
+   "idle": 4,
+   "attack": 9,
+   "death": 14
+  },
+  "cx": 25.0
+ },
+ "reaper": {
+  "w": 78,
+  "h": 71,
+  "foot": 70,
+  "anims": {
+   "idle": 4,
+   "attack": 13,
+   "death": 18
+  },
+  "cx": 38.5
  }
 }

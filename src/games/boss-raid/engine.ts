@@ -4,7 +4,7 @@ import { BOSS_BY_ID, BOSSES, raidUrl, type BossDef } from '@/data/bosses'
 import { legionById, legionUnitArt } from '@/data/legions'
 import { ART, loadArt } from '../tower-defense/art'
 import {
-  BOSS, LINES, MAX_TIER, RAID, frontMinions, nextCost, statsOf,
+  BOSS, LINES, MAX_TIER, RAID, RAID_MYTH, frontMinions, nextCost, statsOf,
   type Line, type RHit, type RUnit, type RaidState,
 } from './raid'
 import { DELAY, RaidLockstep, TICK } from './lockstep'
@@ -116,7 +116,8 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
   const elCrystal = $('.tw-crystal')
   const elToast = $('.td-toast')
 
-  const R = RAID
+  // 神話魔王多一個半血變身（raid.ts 的 enrage）。每支手機看同一隻魔王，規則自然一樣。
+  const R = boss.tier === 'myth' ? RAID_MYTH : RAID
   const img = ART
   const me = link.seat
   const seats = link.seats
@@ -165,6 +166,8 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
     wasDown: false,
     lastCastle: R.castleHp,
     castleSfx: 0,
+    /** 神話魔王變身那一刻（講一聲、震一下）已經演過了沒 */
+    enraged: false,
     /** 動畫用的時鐘（跟戰場時間分開，戰場停下來等人的時候畫面照樣會動） */
     anim: 0,
   }
@@ -553,6 +556,12 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
       ctx.audio.play('tower-build')
     }
     S.wasDown = seat.down
+    if (S.s.enraged && !S.enraged) {
+      S.enraged = true
+      S.shakeCam = 0.6
+      toast(`${boss.name}變身了！重擊變快，小兵衝過來了`, 2600)
+      ctx.audio.play('explosion')
+    }
     if (seat.castle < S.lastCastle - 0.5 && S.anim - S.castleSfx > 1.2) {
       S.castleSfx = S.anim
       ctx.audio.play('castle-hit')
@@ -699,13 +708,22 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
     const im = bossArt[anim] ?? bossArt.idle
     if (!im) return
     if (anim === 'idle' || !bossArt[anim]) frame = Math.floor(S.anim * 8) % Math.max(1, count('idle'))
-    const w = a.w * sc, h = a.h * sc
+    // 神話魔王變身之後：大一圈、腳下一圈會跳的紅光
+    const rage = s.enraged ? 1.15 : 1
+    const w = a.w * sc * rage, h = a.h * sc * rage
     // 登場：從左邊滑進來
     const intro = Math.min(1, (performance.now() - t0) / 1000 / 1.2)
     const slide = (1 - intro) * -260
-    const x = R.bossX - a.cx * sc + slide
-    const y = bossFoot() - a.foot * sc
+    const x = R.bossX - a.cx * sc * rage + slide
+    const y = bossFoot() - a.foot * sc * rage
     shadow(R.bossX + slide, bossFoot(), w * 0.3)
+    if (s.enraged) {
+      const k = 0.5 + 0.5 * Math.sin(S.anim * 6)
+      c2d.save()
+      c2d.fillStyle = `rgba(230,40,30,${0.12 + 0.1 * k})`
+      c2d.beginPath(); c2d.ellipse(R.bossX + slide, bossFoot() - h * 0.35, w * 0.26 + 8 * k, h * 0.45 + 8 * k, 0, 0, 7); c2d.fill()
+      c2d.restore()
+    }
     c2d.save()
     c2d.imageSmoothingEnabled = false
     // 沒有倒下動畫的（牛頭人免費版）就淡出
@@ -1025,6 +1043,7 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
       ids: () => [...S.targets.keys()],
       target: () => S.target,
       truth: () => ({ tick: ls.tick, t: ls.truth.t, bossHp: ls.truth.bossHp, over: ls.truth.over, win: ls.truth.win,
+        enraged: ls.truth.enraged,
         seats: ls.truth.seats.map((x) => [Math.round(x.castle * 1000), x.down, x.botFrom]),
         units: ls.truth.units.map((u) => [u.id, u.owner, Math.round(u.x * 1000), Math.round(u.hp * 1000)]) }),
     }

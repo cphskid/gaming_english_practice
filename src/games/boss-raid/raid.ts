@@ -80,6 +80,18 @@ export interface RaidRules {
   seconds: number
   reach: number
   spacing: number
+  /**
+   * 神話魔王的特殊招式「半血變身」（2026-09-25）：血掉到 at 以下的那一刻，
+   * 馬上多派一波小兵、重擊一次，之後小兵來得更密、重擊更快更痛。null＝不會變身。
+   */
+  enrage: Enrage | null
+}
+
+export interface Enrage {
+  at: number
+  minionEvery: number
+  bossEvery: number
+  bossHit: number
 }
 
 export const RAID: RaidRules = {
@@ -97,6 +109,21 @@ export const RAID: RaidRules = {
   answerCrystal: 3, killCrystal: 5,
   repair: 20, repairUp: 60,
   seconds: 180, reach: 30, spacing: 34,
+  enrage: null,
+}
+
+/**
+ * 神話魔王：規則全部一樣，多一個半血變身——變身那一刻多來一波小兵，
+ * 之後重擊從七秒一次變成六秒一次。
+ *
+ * 數字是 raid-balance.mjs --myth 量的，**非常敏感**：只加那一波小兵、別的都不改，
+ * 四人勝率就從六成掉到三成；重擊再快一秒就掉到零。所以血量打九四折補回來，
+ * 四個同程度的人約四成五（普通魔王六成）。比普通難、但打得贏——神話是給三章都破了的人打的。
+ */
+export const RAID_MYTH: RaidRules = {
+  ...RAID,
+  hpByN: RAID.hpByN.map((x) => x * 0.94),
+  enrage: { at: 0.5, minionEvery: RAID.minionEvery, bossEvery: 6, bossHit: RAID.bossHit },
 }
 
 /** -1 是魔王的小兵，其他是座位（0 起算） */
@@ -161,6 +188,8 @@ export interface RaidState {
   over: boolean
   win: boolean
   reason: 'boss' | 'time' | 'castles' | null
+  /** 變身了沒（只有 rules.enrage 的魔王會變） */
+  enraged: boolean
   seq: number
   /** 斷線接手用的亂數（整數，見 rand） */
   rng: number
@@ -206,7 +235,7 @@ export function newRaid(rates: number[], seed = 1, r: RaidRules = RAID): RaidSta
       castle: r.castleHp, down: false, crystal: 0, tier: 1, credit: 0,
       dealt: 0, correct: 0, answered: 0, botFrom: null, botNext: 0, botPending: 0, botRate: 12,
     })),
-    over: false, win: false, reason: null,
+    over: false, win: false, reason: null, enraged: false,
     seq: 1, rng: (seed >>> 0) || 1,
   }
 }
@@ -338,10 +367,19 @@ export function step(s: RaidState, dt: number, r: RaidRules = RAID): RHit[] {
   if (s.bossSwing > 0) s.bossSwing -= dt
   if (s.bossHurt > 0) s.bossHurt -= dt
 
+  // --- 神話魔王半血變身：那一刻馬上多一波小兵、重擊一次（重擊在下面 bossCd 歸零時做）
+  if (r.enrage && !s.enraged && s.bossHp <= s.bossMax * r.enrage.at) {
+    s.enraged = true
+    spawnMinions(s, r)
+    s.minionCd = r.enrage.minionEvery
+  }
+
+  const ev = s.enraged && r.enrage ? r.enrage : r
+
   // --- 小兵
   s.minionCd -= dt
   if (s.minionCd <= 0) {
-    s.minionCd += r.minionEvery
+    s.minionCd += ev.minionEvery
     spawnMinions(s, r)
   }
 
@@ -390,11 +428,11 @@ export function step(s: RaidState, dt: number, r: RaidRules = RAID): RHit[] {
   // 一下一下的重擊看得到、躲不掉，但打完有空檔，兵還是衝得進去。
   s.bossCd -= dt
   if (s.bossCd <= 0) {
-    s.bossCd += r.bossEvery
+    s.bossCd += ev.bossEvery
     s.bossSwing = 0.6
     for (const u of s.units) {
       if (u.owner === BOSS || u.hp <= 0 || u.x - r.bossX > r.bossReach) continue
-      u.hp -= r.bossHit
+      u.hp -= ev.bossHit
       u.hurt = 0.3
       hits.push({ x: u.x, who: u.owner, killed: u.hp <= 0, from: 'boss' })
     }

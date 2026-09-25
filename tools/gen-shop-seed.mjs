@@ -26,6 +26,8 @@ const items = ITEMS.map((i) => ({
   free: !!i.free,
   // 要先拿到哪個成就才買得到（軍團包稀有級）
   need: i.needAchievement ?? null,
+  // 魔王團戰：要把第幾章全部打過才能打這隻魔王（稀有以上）
+  chapter: i.needChapter ?? null,
 }))
 if (!items.length) throw new Error('shop.ts 裡一個品項都沒抓到')
 for (const i of items) {
@@ -36,12 +38,13 @@ for (const i of items) {
 const sql = `
 -- 商店品項。**這一段是 tools/gen-shop-seed.mjs 從 src/data/shop.ts 產生的，不要手改。**
 -- 價格放在資料庫是因為客戶端送來的價格不能信。
-insert into public.shop_items (id, price, kind, slot, unlock_level, achievement_only, free, need_achievement) values
-${items.map((i) => `  ('${i.id}', ${i.price}, '${i.kind}', ${i.slot ? `'${i.slot}'` : 'null'}, ${i.unlock}, ${i.achievementOnly}, ${i.free}, ${i.need ? `'${i.need}'` : 'null'})`).join(',\n')}
+insert into public.shop_items (id, price, kind, slot, unlock_level, achievement_only, free, need_achievement, need_chapter) values
+${items.map((i) => `  ('${i.id}', ${i.price}, '${i.kind}', ${i.slot ? `'${i.slot}'` : 'null'}, ${i.unlock}, ${i.achievementOnly}, ${i.free}, ${i.need ? `'${i.need}'` : 'null'}, ${i.chapter ?? 'null'})`).join(',\n')}
 on conflict (id) do update
   set price = excluded.price, kind = excluded.kind, slot = excluded.slot,
       unlock_level = excluded.unlock_level, achievement_only = excluded.achievement_only,
-      free = excluded.free, need_achievement = excluded.need_achievement;
+      free = excluded.free, need_achievement = excluded.need_achievement,
+      need_chapter = excluded.need_chapter;
 
 -- 商店只認這份清單。舊品項留在資料庫裡會變成「買得到但畫面上沒有」的鬼品項，
 -- 所以不在清單裡的一律刪掉。

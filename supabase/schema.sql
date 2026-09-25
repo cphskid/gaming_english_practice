@@ -182,6 +182,9 @@ alter table public.shop_items add constraint shop_items_slot_ck
 --                     不設外鍵：seed.sql 先灌商店才灌成就目錄，設了新資料庫會灌不進去。
 alter table public.shop_items add column if not exists free boolean not null default false;
 alter table public.shop_items add column if not exists need_achievement text;
+-- 魔王分級（2026-09-25）：魔王團戰的外框（frame-boss-<魔王>）順便記「要把第幾章全部打過
+-- 才能打這隻魔王」。稀有＝第二章、傳說與神話＝第三章，普通是 null。open_raid／join_room 看這一欄。
+alter table public.shop_items add column if not exists need_chapter smallint;
 
 -- 2026-09-20 的品項搬家。第一版賣的「小皇冠／紅披風」是要畫在頭像上的，
 -- 但那 25 張頭像是完成品不是可以疊圖層的人偶，所以改成了「皇冠框／金邊框」。
@@ -2099,6 +2102,7 @@ begin
   if v_room.mode = 'raid' and not exists (
        select 1 from public.room_members m where m.room_id = v_room.id and m.student_id = v_student) then
     if v_room.status <> 'lobby' then raise exception '這一場已經開打了，等下一場'; end if;
+    perform public.raid_boss_check(v_student, v_room.boss_id);
     if exists (select 1 from public.room_bans b where b.room_id = v_room.id and b.student_id = v_student) then
       raise exception '房主請你離開了這一場，換一場吧';
     end if;
@@ -3520,6 +3524,32 @@ to authenticated;
 -- 每隻魔王第一次打倒給一個商店買不到的外框，個人檔案記打倒次數。
 -- =============================================================================
 
+-- 這個學生第幾章是不是每一關都通關了（跟 refresh_achievements 的「全破」同一個算法）
+create or replace function public.chapter_cleared(p_student uuid, p_ch int)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $$
+  select exists (select 1 from public.levels l where l.chapter = p_ch)
+     and not exists (
+       select 1 from public.levels l
+        where l.chapter = p_ch
+          and not exists (select 1 from public.level_progress lp
+                           where lp.student_id = p_student and lp.level_id = l.id
+                             and lp.cleared_at is not null));
+$$;
+revoke all on function public.chapter_cleared(uuid, int) from public, anon, authenticated;
+
+-- 學生能不能打這隻魔王：稀有以上要把對應那章全部打過（Chuck：「這樣才能互相推進」）
+create or replace function public.raid_boss_check(p_student uuid, p_boss text)
+returns void language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare v_ch smallint;
+begin
+  select i.need_chapter into v_ch from public.shop_items i where i.id = 'frame-boss-' || p_boss;
+  if v_ch is not null and not public.chapter_cleared(p_student, v_ch) then
+    raise exception '要先把守塔第%章全部打過，才能打這隻魔王', v_ch;
+  end if;
+end;
+$$;
+revoke all on function public.raid_boss_check(uuid, text) from public, anon, authenticated;
+
 -- 開一場魔王團戰。
 --   老師：p_class_code 填他的班，開出來的房間排最前面、沒有房主（老師自己管）。
 --   學生：p_class_code 留空，開在自己班上，開完直接算他進來了。
@@ -3549,6 +3579,7 @@ begin
     v_code := public.current_class_code();
     if v_student is null then raise exception '請先登入'; end if;
     if v_code is null then raise exception '還沒加入班級，沒辦法揪人'; end if;
+    perform public.raid_boss_check(v_student, p_boss);
     perform public.room_sweep(v_code);
     -- 一個人同時只能開一場（連按十次就是十個空房間）
     update public.rooms set status = 'done', ended_at = now()

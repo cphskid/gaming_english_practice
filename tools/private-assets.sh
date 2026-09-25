@@ -32,5 +32,11 @@ const fs = require("fs")
 const idx = JSON.parse(fs.readFileSync("public/td-art.json", "utf8"))
 const miss = Object.values(idx).filter((p) => !fs.existsSync("public/" + p))
 if (miss.length) { console.error("缺圖：" + miss.join(" ")); process.exit(1) }
-console.log("私有素材放回原位，守塔圖 " + Object.keys(idx).length + " 張都在")
+// 魔王團戰：raid-art.json 裡每隻魔王的每個動作＋頭像都要在（傳說、神話十隻在私有 repo）
+const raid = JSON.parse(fs.readFileSync("src/data/raid-art.json", "utf8"))
+const rmiss = Object.entries(raid).flatMap(([k, v]) =>
+  [...Object.keys(v.anims), "face"].map((a) => "public/raid/" + k + "/" + a + ".png"))
+  .filter((p) => !fs.existsSync(p))
+if (rmiss.length) { console.error("缺魔王圖：" + rmiss.join(" ")); process.exit(1) }
+console.log("私有素材放回原位，守塔圖 " + Object.keys(idx).length + " 張、魔王 " + Object.keys(raid).length + " 隻都在")
 '

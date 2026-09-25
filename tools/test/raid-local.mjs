@@ -6,6 +6,7 @@
  *
  *   npx vite --port 5181 &      （不要設 VITE_SUPABASE_*，才會是本機版）
  *   node tools/test/raid-local.mjs http://localhost:5181/ /tmp/shots
+ *   BOSS=golem node tools/test/raid-local.mjs …   打指定的魔王（先把三章都標成通關，稀有以上才開得了）
  */
 import { chromium } from 'playwright'
 
@@ -32,9 +33,27 @@ try {
   await page.waitForSelector('.levels', { timeout: 20000 })
   ok('註冊好了')
 
+  const BOSS = process.env.BOSS
+  if (BOSS) {
+    // 本機版的進度存在 localStorage：85 關全部標成通關，重新整理讓畫面讀進去
+    await page.evaluate(() => {
+      const key = Object.keys(localStorage).find((x) => x.startsWith('gep.v1.student.'))
+      const id = key.slice('gep.v1.student.'.length)
+      const all = Array.from({ length: 85 }, (_, i) => ({
+        levelId: 'td-' + String(i + 1).padStart(2, '0'), stars: 3, bestCorrect: 20, clearedAt: Date.now(),
+      }))
+      localStorage.setItem('gep.v1.progress.' + id, JSON.stringify(all))
+    })
+    await page.reload({ waitUntil: 'networkidle' })
+    await page.waitForSelector('.levels', { timeout: 20000 })
+  }
+
   await page.getByRole('button', { name: '魔王團戰' }).click()
   await page.waitForSelector('.bossgrid')
   await page.waitForTimeout(800)
+  const locked = await page.locator('.bosspick.locked').count()
+  if (BOSS ? locked === 0 : locked === 15) ok(`鎖住的魔王 ${locked} 隻`)
+  else fail(`鎖住的魔王 ${locked} 隻，不對`)
   const faces = await page.evaluate(() => [...document.querySelectorAll('.bossface img')]
     .map((i) => [i.getAttribute('src'), i.naturalWidth]))
   if (faces.length && faces.every(([, w]) => w > 0)) ok('魔王頭像都載得到')
@@ -42,7 +61,8 @@ try {
   await page.screenshot({ path: `${OUT}/raid-list.png`, fullPage: true })
   ok('魔王團戰那一頁出來了（raid-list.png）')
 
-  await page.locator('.bosspick').nth(1).click()
+  if (BOSS) await page.locator('.bosspick', { has: page.locator(`img[src$="/${BOSS}/face.png"]`) }).click()
+  else await page.locator('.bosspick').nth(1).click()
   await page.getByRole('button', { name: '🔒 私人房' }).click()
   await page.fill('input.pin', '0427')
   await page.getByRole('button', { name: /開一場打/ }).click()
@@ -77,6 +97,12 @@ try {
       await page.evaluate((x) => window.__raid.tapId(x), id)
     }
     if (st.t > 25 && shots === 0) { shots++; await page.screenshot({ path: `${OUT}/raid-fight.png` }) }
+    if (shots < 9 && await page.evaluate(() => window.__raid.truth().enraged)) {
+      shots = 9
+      await page.waitForTimeout(500)
+      await page.screenshot({ path: `${OUT}/raid-enraged.png` })
+      ok('神話魔王半血變身了（raid-enraged.png）')
+    }
     if (st.t > 70 && shots === 1) {
       shots++
       await page.evaluate(() => window.__raid.setLine('spell'))

@@ -138,6 +138,17 @@ if (process.argv.includes('--tune')) {
   process.exit(0)
 }
 
+if (process.argv.includes('--myth')) {
+  // 神話魔王（半血變身）。RULES 可以蓋 enrage 來試數字。
+  const e = { ...M.RAID_MYTH.enrage, ...JSON.parse(process.env.ENRAGE ?? '{}') }
+  for (const [name, rates] of CASES) {
+    const k = Number(process.env.HPK ?? M.RAID_MYTH.hpByN[4] / M.RAID.hpByN[4])
+    const a = many(rates, { enrage: e, hpByN: M.RAID.hpByN.map((x) => x * k) }, 200)
+    console.log(`${name.padEnd(22)} 神話勝率 ${pct(a.win).padStart(4)}  贏在 ${Math.round(a.winT)}s  剩${pct(a.left)}  壓制${Math.round(a.down)}s`)
+  }
+  process.exit(0)
+}
+
 const rows = {}
 for (const [name, rates] of CASES) {
   const m = many(rates)

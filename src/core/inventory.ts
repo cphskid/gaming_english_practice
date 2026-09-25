@@ -51,6 +51,8 @@ export interface ItemDef {
   free?: boolean
   /** 要先拿到這個成就才買得到（軍團包的稀有級）。擋的是 buy_item。 */
   needAchievement?: string
+  /** 魔王團戰外框：這隻魔王要把第幾章全部打過才能打（伺服器 open_raid／join_room 用） */
+  needChapter?: number
 }
 
 export function count(c: Character, itemId: string): number {

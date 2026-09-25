@@ -1,6 +1,6 @@
 import type { ItemDef, ItemMode } from '@/core/inventory'
 import { LEGIONS, TIERS, legionNeed } from './legions'
-import { BOSSES } from './bosses'
+import { BOSSES, needChapter } from './bosses'
 import { AVATAR_TIERS, SHOP_AVATARS } from './avatars'
 
 /** 守塔和對戰都吃得下的道具。三個消耗品現在都是。 */
@@ -86,5 +86,6 @@ export const ITEMS: ItemDef[] = [
   ...BOSSES.map((b): ItemDef => ({
     id: b.frame, name: b.name + '框', icon: '', desc: `第一次打倒${b.name}的人才有`,
     price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true,
+    needChapter: needChapter(b) ?? undefined,
   })),
 ]

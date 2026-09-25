@@ -740,6 +740,16 @@ h2.sec small{font-size:12px;font-weight:400;color:var(--muted)}
 .mugbox.f-boss-frost{--boss:#4aa3d8;--face:url(/raid/frost/face.png)}
 .mugbox.f-boss-shadow{--boss:#7a4fb0;--face:url(/raid/shadow/face.png)}
 .mugbox.f-boss-lich{--boss:#8fa0c0;--face:url(/raid/lich/face.png)}
+.mugbox.f-boss-badger{--boss:#d8c24a;--face:url(/raid/badger/face.png)}
+.mugbox.f-boss-gorilla{--boss:#9a4a3a;--face:url(/raid/gorilla/face.png)}
+.mugbox.f-boss-frog{--boss:#4fa04a;--face:url(/raid/frog/face.png)}
+.mugbox.f-boss-penguin{--boss:#5a7ab8;--face:url(/raid/penguin/face.png)}
+.mugbox.f-boss-rex{--boss:#5ab8c8;--face:url(/raid/rex/face.png)}
+.mugbox.f-boss-golem{--boss:#40c8d8;--face:url(/raid/golem/face.png)}
+.mugbox.f-boss-reaper{--boss:#6a6a7a;--face:url(/raid/reaper/face.png)}
+.mugbox.f-boss-skelwiz{--boss:#6a5ad8;--face:url(/raid/skelwiz/face.png)}
+.mugbox.f-boss-winged{--boss:#d05aa0;--face:url(/raid/winged/face.png)}
+.mugbox.f-boss-flydemon{--boss:#e03a2a;--face:url(/raid/flydemon/face.png)}
 
 /* 魔王團戰（2026-09-25）：選魔王、等待室、戰績 */
 .bossface{display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:50%;
@@ -753,6 +763,14 @@ h2.sec small{font-size:12px;font-weight:400;color:var(--muted)}
 .bosspick small{font-size:11px;color:var(--muted);line-height:1.35}
 .bosspick .fam,.bosscard .fam{color:var(--gold);font-weight:700}
 .bosspick.on{border-color:var(--boss);box-shadow:0 0 0 2px var(--boss)}
+.bosspick.locked{opacity:.5;cursor:not-allowed;filter:grayscale(.7)}
+.bosstier{width:100%;max-width:640px;margin:6px 0 4px}
+.bosstier h3{margin:10px 0 6px;font-size:16px}
+.bosstier h3 small{font-size:12px;color:var(--muted);font-weight:400}
+.bosstier h3 .lockmsg{color:var(--gold)}
+.bosstier.tier-rare h3{color:#6fb3ff}
+.bosstier.tier-legend h3{color:#f0b429}
+.bosstier.tier-myth h3{color:#ff6a8a}
 .bosscard{display:flex;align-items:center;gap:14px;padding:12px 14px;width:100%;max-width:640px;
   background:var(--panel);border:3px solid var(--boss);border-radius:14px}
 .bosscard .txt{display:flex;flex-direction:column;gap:3px;min-width:0}

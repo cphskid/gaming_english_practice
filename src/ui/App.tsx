@@ -658,6 +658,7 @@ export function App() {
       {screen === 'rooms' && student && (
         <RoomList
           rooms={rooms} stat={stat}
+          cleared={new Set([...progress.values()].filter((p) => p.clearedAt).map((p) => p.levelId))}
           onJoin={joinRoom}
           onOpen={openRaid}
           onBack={() => setScreen('select')}

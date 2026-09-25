@@ -31,6 +31,15 @@
 - 寒冰守衛、惡魔史萊姆、牛頭人、深海克蘇魯 — [chierit](https://chierit.itch.io/)（Frost Guardian、Boss Demon Slime、Minotaur、Cthulu）。授權為 Creative Commons Attribution 4.0 (CC BY 4.0)，**須標註作者 chierit 並附連結**。
 - 邪惡巫師（三款）、火焰巨蟲、暴君國王、寶箱怪 — [LuizMelo](https://luizmelo.itch.io/)（Evil Wizard 1/2/3、Fire Worm、Medieval King Pack、Monsters Creatures Fantasy 2）。授權為 Creative Commons Zero (CC0)，不強制標註；此處仍列出以示感謝。
 
+傳說、神話十隻（2026-09-25）是**免費、可商用但禁止再散布**的素材：原檔與切好的圖只放私有 repo
+`cphskid/gaming_english_assets`（`raid-bosses/` 原檔、`overlay/public/raid/<魔王>/` 遊戲圖），
+發佈時由 `tools/private-assets.sh` 放回來，公開 repo 裡沒有這些圖。
+
+- 蜜獾大王、暴龍、青蛙將軍、大猩猩、企鵝老大 — [admurin](https://admurin.itch.io/)（Bosses：Badger、Dino Rex、Frogger、Gollux、Pengu）。可用於個人與商業專案，不可再散布或轉賣素材。
+- 飛天惡魔 — [xzany](https://xzany.itch.io/flying-demon-2d-pixel-art)（Flying Demon 2D Pixel Art）。可用於個人與商業遊戲，不可當素材再散布或轉賣，不得做成 NFT；不強制標註。
+- 骷髏巫師、翼魔 — [oliveiramiro2](https://oliveiramiro2.itch.io/)（Necromancer Skeleton Boss、Crawller Winged Boss）。作者頁面寫可免費用在你的專案。
+- 機械石魔像、亡靈處刑者 — [darkpixel-kronovi](https://darkpixel-kronovi.itch.io/)（Mecha-stone Golem、Undead Executioner）。可商用，不可再散布。
+
 **魔王團戰的戰場背景** — [ansimuz](https://ansimuz.itch.io/)
 
 `public/raid/bg/` 的十張背景由 Gothicvania Cemetery／Town、Magic Cliffs、Sunnyland Forest、Warped Caves、Super Grotto Escape、Underwater Diving 等素材包合成。授權為 Creative Commons Zero (CC0)，不強制標註；此處仍列出以示感謝。

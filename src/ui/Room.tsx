@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { avatarSrc } from '@/data/jobs'
 import { frameOf } from '@/data/cosmetics'
-import { BOSSES, BOSS_BY_ID, bossWords, raidUrl, type BossDef } from '@/data/bosses'
-import { THEME_NAME } from '@/data/words'
+import { BOSSES, BOSS_BY_ID, CATS, TIERS, bossTopic, bossWords, needChapter, raidUrl, type BossDef } from '@/data/bosses'
+import { LEVELS } from '@/data/levels'
+import { chapterCleared } from '@/core/progress'
 import type { WordStat } from '@/core/wordStat'
 import { MIN_PLAYERS, MAX_PLAYERS } from '@/games/boss-raid/raid'
 import { repo, type RoomBrief, type RoomMember, type RoomState } from '@/net'
@@ -88,8 +89,20 @@ export function familiarity(b: BossDef, stat: WordStat): number {
 }
 
 const pct = (x: number) => `${Math.round(x * 100)}%`
-const themesOf = (b: BossDef) =>
-  b.themes.length ? b.themes.map((t) => THEME_NAME[t] ?? t).join('、') : '全部的字'
+const themesOf = (b: BossDef) => `${bossTopic(b)}，${bossWords(b).length} 個字`
+/** 選魔王的格子上那一行：級別的標題已經寫了哪一層的字，這裡只寫大類和字數 */
+const catOf = (b: BossDef) => `${CATS.find((c) => c.id === b.cat)!.name}・${bossWords(b).length} 個字`
+
+/**
+ * 這隻魔王我打不打得了。稀有以上要把對應那一章全部打過（2026-09-25 Chuck：「這樣才能互相推進」）。
+ * 伺服器 open_raid／join_room 也會擋，這裡只是讓畫面先講清楚。cleared＝null 是老師，全部都能開。
+ */
+export function bossLocked(b: BossDef, cleared: Set<string> | null): number | null {
+  const ch = needChapter(b)
+  if (!ch || !cleared) return null
+  return chapterCleared(ch, LEVELS, cleared) ? null : ch
+}
+const CH = ['', '一', '二', '三']
 
 /** 誰開的。老師那場要一眼認得出來，不然小朋友會跑去跟同學那場。 */
 const hostLabel = (r: { byTeacher: boolean; hostName: string }) =>
@@ -155,24 +168,39 @@ function PinInput({ value, onChange, autoFocus }: {
   )
 }
 
-/** 選魔王的格子。每一格寫牠考哪些主題、你認得幾成。 */
-function BossGrid({ pick, onPick, stat }: {
-  pick: string; onPick: (id: string) => void; stat: WordStat | null
+/** 選魔王的格子。照四級分四段；每一格寫牠考什麼、你認得幾成，還沒解鎖的掛鎖頭。 */
+function BossGrid({ pick, onPick, stat, cleared }: {
+  pick: string; onPick: (id: string) => void; stat: WordStat | null; cleared: Set<string> | null
 }) {
   return (
-    <div className="bossgrid">
-      {BOSSES.map((b) => (
-        <button key={b.id} className={'bosspick' + (pick === b.id ? ' on' : '')}
-          style={{ ['--boss' as string]: b.color }} onClick={() => onPick(b.id)}>
-          <BossFace b={b} size={46} />
-          <span className="txt">
-            <b>{b.name}</b>
-            <small>{themesOf(b)}</small>
-            {stat && <small className="fam">你認得 {pct(familiarity(b, stat))}</small>}
-          </span>
-        </button>
-      ))}
-    </div>
+    <>
+      {TIERS.map((t) => {
+        const list = BOSSES.filter((b) => b.tier === t.id)
+        const lock = bossLocked(list[0], cleared)
+        return (
+          <div key={t.id} className={'bosstier tier-' + t.id}>
+            <h3>
+              {t.name}<small>　{t.words}{t.id === 'myth' ? '，半血會變身' : ''}</small>
+              {lock && <small className="lockmsg">　🔒 第{CH[lock]}章全破才能打</small>}
+            </h3>
+            <div className="bossgrid">
+              {list.map((b) => (
+                <button key={b.id} className={'bosspick' + (pick === b.id ? ' on' : '') + (lock ? ' locked' : '')}
+                  disabled={!!lock}
+                  style={{ ['--boss' as string]: b.color }} onClick={() => onPick(b.id)}>
+                  <BossFace b={b} size={46} />
+                  <span className="txt">
+                    <b>{b.name}</b>
+                    <small>{catOf(b)}</small>
+                    {stat && !lock && <small className="fam">你認得 {pct(familiarity(b, stat))}</small>}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </>
   )
 }
 
@@ -182,9 +210,11 @@ const randomPin = () => String(Math.floor(Math.random() * 10000)).padStart(4, '0
 // 學生：魔王團戰（現在開著哪幾場、我要開一場）
 // -----------------------------------------------------------------------------
 
-export function RoomList({ rooms, stat, onJoin, onOpen, onBack }: {
+export function RoomList({ rooms, stat, cleared, onJoin, onOpen, onBack }: {
   rooms: RoomBrief[]
   stat: WordStat
+  /** 通關過的關卡，決定稀有以上的魔王開了沒 */
+  cleared: Set<string>
   onJoin: (roomId: string, pass?: string) => Promise<string | null>
   onOpen: (bossId: string, pass: string | null) => Promise<string | null>
   onBack: () => void
@@ -232,21 +262,28 @@ export function RoomList({ rooms, stat, onJoin, onOpen, onBack }: {
                   onClick={() => run(() => onJoin(r.id, guess))}>進去</button>
               </span>
             ) : (
-              <button className="btn small"
-                disabled={busy || (!r.mine && (r.status === 'playing' || r.members >= MAX_PLAYERS))}
-                onClick={() => {
-                  if (r.locked && !r.mine) { setAsking(r.id); setGuess(''); return }
-                  run(() => onJoin(r.id))
-                }}>
-                {r.mine ? '進去' : r.status === 'playing' ? '開打了' : r.members >= MAX_PLAYERS ? '滿了' : '加入'}
-              </button>
+              (() => {
+                const b = BOSS_BY_ID.get(r.bossId)
+                const ch = !r.mine && b ? bossLocked(b, cleared) : null
+                return (
+                  <button className="btn small"
+                    disabled={busy || !!ch || (!r.mine && (r.status === 'playing' || r.members >= MAX_PLAYERS))}
+                    onClick={() => {
+                      if (r.locked && !r.mine) { setAsking(r.id); setGuess(''); return }
+                      run(() => onJoin(r.id))
+                    }}>
+                    {r.mine ? '進去' : ch ? `第${CH[ch]}章全破才能打` : r.status === 'playing' ? '開打了'
+                      : r.members >= MAX_PLAYERS ? '滿了' : '加入'}
+                  </button>
+                )
+              })()
             )}
           </RoomRow>
         ))}
       </div>
 
       <h2 className="sec">我要開一場<small>　先選一隻魔王</small></h2>
-      <BossGrid pick={pick} onPick={setPick} stat={stat} />
+      <BossGrid pick={pick} onPick={setPick} stat={stat} cleared={cleared} />
       <div className="row raidopen">
         <button className={'btn small' + (priv ? ' ghost' : '')} onClick={() => setPriv(false)}>🌐 公開房</button>
         <button className={'btn small' + (priv ? '' : ' ghost')} onClick={() => setPriv(true)}>🔒 私人房</button>
@@ -393,7 +430,7 @@ export function TeacherRoom({ classCode }: { classCode: string }) {
 
       {!teacherRoom && (
         <>
-          <BossGrid pick={pick} onPick={setPick} stat={null} />
+          <BossGrid pick={pick} onPick={setPick} stat={null} cleared={null} />
           <div className="row">
             <button className="btn small" disabled={busy}
               onClick={() => void run(async () => {

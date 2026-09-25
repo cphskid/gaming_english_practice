@@ -150,6 +150,87 @@ def build_bg(key, layers):
     os.makedirs(os.path.join(OUT, 'bg'), exist_ok=True)
     out.convert('RGB').save(os.path.join(OUT, 'bg', key + '.png'), optimize=True)
 
+# -----------------------------------------------------------------------------
+# 傳說／神話十隻（2026-09-25）。**免費但禁止散布**：原始 zip 和切好的圖都只放私有 repo
+# cphskid/gaming_english_assets（原檔在 raid-bosses/，切好的在 overlay/public/raid/<魔王>/），
+# 公開 repo 的 .gitignore 擋掉 public/raid/<魔王>/。只有 raid-art.json 的格數與大小留在公開 repo。
+#
+#   python3 tools/build-raid-art.py --private <私有 repo 的 raid-bosses 解壓縮資料夾>
+#
+# 只重切這十隻、更新 raid-art.json 裡牠們那幾行，其他十隻不動（不用 ansimuz 背景包）。
+# 輸出直接寫進 public/raid/，要再複製到私有 repo 的 overlay/public/raid/。
+
+def grid(path, fw, fh, cols=None, rows=None, skip_empty=True):
+    """一張格子圖（一列好幾格、可能好幾列）照閱讀順序切開，空白格丟掉。"""
+    im = Image.open(os.path.join(SRC, path)).convert('RGBA')
+    out = []
+    for r in range(rows or im.height // fh):
+        for c in range(cols or im.width // fw):
+            f = im.crop((c * fw, r * fh, (c + 1) * fw, (r + 1) * fh))
+            if skip_empty and not f.getbbox():
+                continue
+            out.append(f)
+    return out
+
+def pad(frames, w):
+    """admurin 的待機一格 128 寬、其他動作一格 384 寬，人都站在正中間：待機補成 384 寬才對得齊。"""
+    out = []
+    for f in frames:
+        t = Image.new('RGBA', (w, f.height))
+        t.paste(f, ((w - f.width) // 2, 0))
+        out.append(t)
+    return out
+
+def admurin(folder, name, attack, hurt='hurt'):
+    base = f'bosses-{folder}/' + ' '.join(x.capitalize() for x in name.split('_')) + '/' + name + '_'
+    return dict(flip=False,
+                idle=lambda: pad(grid(base + 'idle.png', 128, 128), 384),
+                attack=lambda: grid(base + attack + '.png', 384, 128),
+                hurt=lambda: grid(base + hurt + '.png', 384, 128))
+
+FD = 'flying-demon-2d-pixel-art/Flying Demon 2D Pixel Art/Sprites/without_outline/'
+MAW = 'necromancer-skeleton-boss-pixel-art/Sheets/'
+CR = 'crawller-winged-boss-pixel-art-boss-for-2d-games/SpriteSheets/'
+GO = 'mecha-golem-free/Mecha-stone Golem 0.1/PNG sheet/Character_sheet.png'
+UE = 'undead-executioner/Undead executioner puppet/png/'
+PRIVATE = {
+    # 傳說：admurin 七隻裡挑五隻（沒有倒下動畫，引擎自己淡出）
+    'badger':   admurin('badger', 'badger', 'attack_A'),
+    'rex':      dict(admurin('dino-rex', 'dino_rex', 'attack_A'),
+                     idle=lambda: pad(grid('bosses-dino-rex/Dino Rex/dino_rex_idle.png', 128, 128), 384),
+                     attack=lambda: grid('bosses-dino-rex/Dino Rex/dino_rex_attack_A.png', 384, 128),
+                     hurt=lambda: grid('bosses-dino-rex/Dino Rex/dino_rex_hurt.png', 384, 128)),
+    'frog':     admurin('frogger', 'frogger', 'tongue'),
+    'gorilla':  admurin('gollux', 'gollux', 'attack_A', hurt='hit'),
+    'penguin':  admurin('pengu', 'pengu', 'attack_peck'),
+    # 神話
+    'flydemon': dict(flip=False, idle=lambda: grid(FD + 'IDLE.png', 79, 69), attack=lambda: grid(FD + 'ATTACK.png', 79, 69),
+                     hurt=lambda: grid(FD + 'HURT.png', 79, 69), death=lambda: grid(FD + 'DEATH.png', 79, 69)),
+    'skelwiz':  dict(flip=False, idle=lambda: grid(MAW + 'Idle/Maw-All-Idle-Sheet.png', 128, 128),
+                     attack=lambda: grid(MAW + 'BoneAttack/Maw-All-BoneAttack-Sheet.png', 128, 128),
+                     death=lambda: grid(MAW + 'Death/Maw-All-Death-Sheet.png', 128, 128)),
+    'winged':   dict(flip=False, idle=lambda: grid(CR + 'Crawller-SheetIdle.png', 128, 128),
+                     attack=lambda: grid(CR + 'Crawller-SheetGroundImpact.png', 128, 128),
+                     death=lambda: grid(CR + 'Crawller-SheetDeath.png', 128, 128)),
+    'golem':    dict(flip=False, idle=lambda: grid(GO, 100, 100, cols=10, rows=1),
+                     attack=lambda: grid(GO, 100, 100, cols=10, rows=3)[12:21],
+                     death=lambda: grid(GO, 100, 100)[-14:]),
+    'reaper':   dict(flip=False, idle=lambda: grid(UE + 'idle.png', 100, 100),
+                     attack=lambda: grid(UE + 'attacking.png', 100, 100),
+                     death=lambda: grid(UE + 'death.png', 100, 100)),
+}
+
+if __name__ == '__main__' and '--private' in sys.argv:
+    SRC = sys.argv[sys.argv.index('--private') + 1]
+    path = os.path.join(ROOT, 'src', 'data', 'raid-art.json')
+    meta = json.load(open(path))
+    for k, spec in PRIVATE.items():
+        meta[k] = build_boss(k, spec)
+    with open(path, 'w') as f:
+        json.dump(meta, f, indent=1)
+    print(json.dumps({k: (meta[k]['w'], meta[k]['h'], meta[k]['anims']) for k in PRIVATE}, ensure_ascii=False))
+    sys.exit(0)
+
 if __name__ == '__main__':
     meta = {k: build_boss(k, s) for k, s in BOSSES.items()}
     for k, l in BGS.items():

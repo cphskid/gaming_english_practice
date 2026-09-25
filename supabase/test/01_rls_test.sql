@@ -798,9 +798,29 @@ begin
   perform test_ok(not (v_r ->> 'confirmed')::boolean, '一個說贏一個說輸：不算');
   perform test_ok(public.raid_kill_list() = '{"mimic": 1}'::jsonb, '火焰巨蟲沒有記上去');
 
+  -- 魔王分級（2026-09-25）：稀有以上要把對應那章全部打過
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  perform test_denied($$ select public.open_raid('frost') $$, '第二章沒全破就開稀有魔王');
+  perform test_denied($$ select public.open_raid('golem') $$, '第三章沒全破就開神話魔王');
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  select public.open_raid('golem', null, 'RLS1') into v_t;
+  perform test_ok(v_t is not null, '老師開神話魔王不用破關');
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  perform test_denied(format($$ select public.join_room(%L) $$, v_t), '第三章沒全破就加入老師開的神話魔王');
+  perform test_force(format(
+    'insert into public.level_progress (student_id, level_id, cleared_at)
+     select %L, l.id, now() from public.levels l where l.chapter = 2 on conflict do nothing',
+    public.current_student_id()));
+  select public.open_raid('frost') into v_a;
+  perform test_ok(v_a is not null, '第二章全破了，稀有魔王開得了');
+  perform test_denied($$ select public.open_raid('badger') $$, '第二章全破但第三章還沒，傳說魔王還是開不了');
+  perform public.leave_room(v_a);
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  perform public.close_room(v_t);
+
   -- 沒人在的場自己收掉
   perform test_as('a0000000-0000-0000-0000-000000000011', true);
-  select public.open_raid('lich') into v_a;
+  select public.open_raid('king') into v_a;
   perform test_force(format(
     'update public.room_members set seen_at = now() - interval ''10 minutes'' where room_id = %L', v_a));
   perform test_force(format(
