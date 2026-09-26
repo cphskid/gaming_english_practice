@@ -408,7 +408,9 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     }
 
     ctx.audio.play('volley')
-    hero.strike(e.x, e.y)
+    // 英雄只在自己出手（guard）時衝出去；箭塔打的那一下，他在城堡旁原地揮一下就好
+    if (guard) hero.strike(e.x, e.y)
+    else hero.cheer(e.x)
     const mult = 1 + FOCUS_STEP * Math.min(FOCUS_MAX, shooters - 1)
     const total = Math.round(base * mult)
     const job = JOB_EFFECT[ctx.job] ?? JOB_EFFECT.knight

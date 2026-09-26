@@ -55,6 +55,11 @@ interface Ghost { x: number; y: number; life: number; frame: number; anim: Anim;
 export interface Hero {
   /** 答對了，往 (x, y) 那隻出手。y 是牠腳底的位置。 */
   strike(x: number, y: number): void
+  /**
+   * 答對了，但這一下是箭塔打的：英雄留在原地轉過去揮一下當加油，不衝出去、不丟光球。
+   * 守塔用（0.20.4）：英雄只在自己真的出手時才離開城堡，畫面才跟規則一致。
+   */
+  cheer(x: number): void
   update(dt: number): void
   /** 身體（跟著 y 排序的那一層） */
   draw(c: CanvasRenderingContext2D): void
@@ -109,6 +114,14 @@ export function createHero(job: Job, homeX: number, homeY: number, height: numbe
     play('run')
   }
 
+  function cheer(tx: number) {
+    // 正在衝、正在丟的那一下不打斷
+    if (phase >= 0 || (job === 'mage' && anim === 'attack' && !orbSent)) return
+    dir = tx >= x ? 1 : -1
+    orbSent = true
+    play('attack')
+  }
+
   function update(dt: number) {
     t += dt
     for (const g of ghosts) g.life -= dt
@@ -137,6 +150,9 @@ export function createHero(job: Job, homeX: number, homeY: number, height: numbe
         if (k >= 1) { phase = -1; dir = face; play('idle') }
       }
     }
+
+    // 原地揮完（cheer）就轉回來站好
+    if (job !== 'mage' && phase < 0 && anim === 'attack' && t * FPS.attack >= frames('attack')) { dir = face; play('idle') }
 
     if (job === 'mage' && anim === 'attack') {
       if (!orbSent && frameNow() >= ORB_FRAME) {
@@ -218,7 +234,7 @@ export function createHero(job: Job, homeX: number, homeY: number, height: numbe
   }
 
   return {
-    strike, update, draw, drawFx,
+    strike, cheer, update, draw, drawFx,
     get y() { return y },
   }
 }
