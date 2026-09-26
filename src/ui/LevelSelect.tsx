@@ -39,7 +39,7 @@ export function LevelSelect({
   // 一次只攤開一章，85 關全部攤開在手機上要滑很久。預設攤開「正在打的那一章」：
   // 已經打開、而且還沒全破的最後一章；三章都破了就攤開第三章。
   const [openCh, setOpenCh] = useState<number>(() => {
-    const live = CHAPTERS.filter((c) => isUnlocked(c.levels[0].no, LEVELS, { cleared, teacherOpen }))
+    const live = CHAPTERS.filter((c) => c.no === 1 || chapterCleared(c.no - 1, LEVELS, cleared))
     const cur = live.find((c) => !chapterCleared(c.no, LEVELS, cleared)) ?? live[live.length - 1]
     return cur?.no ?? 1
   })
@@ -64,9 +64,10 @@ export function LevelSelect({
       {rooms.length > 0 && <RoomBanner rooms={rooms} onRoom={onRoom} />}
 
       {CHAPTERS.map((ch, ci) => {
-        const first = ch.levels[0]
-        const open = isUnlocked(first.no, LEVELS, { cleared, teacherOpen })
-          || ch.levels.some((l) => teacherOpen.has(l.id))
+        // 整章打開只看進度。老師另外開的後面章節的某一關，章還是鎖著、只有那一關能打——
+        // 以前只要章裡有一關被老師開，整章就亮起來，看起來像進度出錯（2026-09-26 回報）。
+        const open = ch.no === 1 || chapterCleared(ch.no - 1, LEVELS, cleared)
+        const byTeacher = open ? 0 : ch.levels.filter((l) => teacherOpen.has(l.id)).length
         const done = ch.levels.filter((l) => cleared.has(l.id)).length
         const stars = ch.levels.reduce((n, l) => n + (progress.get(l.id)?.stars ?? 0), 0)
         const shown = openCh === ch.no
@@ -76,7 +77,8 @@ export function LevelSelect({
               <span className="chno">第{'一二三'[ci]}章</span>
               <span className="chnm">{ch.name}</span>
               <span className="chst">
-                {open ? `${done}/${ch.levels.length} 關　★ ${stars}` : '🔒'}
+                {open ? `${done}/${ch.levels.length} 關　★ ${stars}`
+                  : byTeacher ? `🔒 老師開放 ${byTeacher} 關` : '🔒'}
               </span>
               <span className="chcaret">{shown ? '▾' : '▸'}</span>
             </button>
@@ -96,6 +98,7 @@ export function LevelSelect({
                     <button key={l.id} className={'lv' + (l.isBoss ? ' boss' : '')}
                       disabled={!unlocked} onClick={() => onPlay(l)}>
                       {!unlocked && <span className="lock">🔒</span>}
+                      {unlocked && !open && teacherOpen.has(l.id) && <span className="byteacher">老師開放</span>}
                       <div className="no">第 {l.no} 關{l.isBoss ? '・魔王' : ''}</div>
                       <div className="nm">{l.name}</div>
                       <div className="th">

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CHAPTERS } from '@/data/levels'
+import { CHAPTERS, LEVELS } from '@/data/levels'
 import { WORDS_BY_ID } from '@/data/words'
 import { WordStat } from '@/core/wordStat'
 import { SKILL_NAME, type ClassRoom, type Staff } from '@/core/types'
@@ -103,7 +103,13 @@ export function Teacher({
     const code = room.code
     const next = new Set(openRef.current)
     if (next.has(levelId)) next.delete(levelId)
-    else next.add(levelId)
+    else {
+      // 開第二、三章的關會讓還沒升章的小朋友直接跳進國中字，先問一聲，免得捲動時誤點。
+      const lv = LEVELS.find((l) => l.id === levelId)
+      if (lv && lv.chapter > 1
+        && !window.confirm(`要開放第${'一二三'[lv.chapter - 1]}章第 ${lv.no} 關「${lv.name}」嗎？\n還沒打完前面章節的學生也能直接進去打。`)) return
+      next.add(levelId)
+    }
     openRef.current = next
     setOpen(next)
     setOpenError(null)
@@ -261,6 +267,20 @@ export function Teacher({
               <h2>這禮拜開放的關卡</h2>
               <p className="lede left">點一下就額外開放，不受學生自己的進度限制。</p>
               {openError && <p className="error">{openError}</p>}
+              {/* 85 顆按鈕在手機上一捲就容易誤點，開了哪幾關要一眼看得到（2026-09-26 誤開第 61 關）。
+                  點這裡的也是關掉。 */}
+              <div className="opennow">
+                {open.size === 0 ? '目前沒有另外開放的關卡。' : <>
+                  目前開放（點一下關掉）：
+                  <div className="open">
+                    {LEVELS.filter((l) => open.has(l.id)).map((l) => (
+                      <button key={l.id} className="on" onClick={() => toggleOpen(l.id)}>
+                        第{'一二三'[l.chapter - 1]}章　{l.no}. {l.name}　✕
+                      </button>
+                    ))}
+                  </div>
+                </>}
+              </div>
             </div>
             {CHAPTERS.map((ch, ci) => (
               <div key={ch.no}>
