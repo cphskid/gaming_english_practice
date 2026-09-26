@@ -268,10 +268,15 @@ create table if not exists public.level_progress (
 );
 
 create table if not exists public.teacher_open (
-  class_code text not null references public.classes(code) on delete cascade,
+  class_code text not null references public.classes(code) on delete cascade on update cascade,
   level_id   text not null references public.levels(id) on delete cascade,
   primary key (class_code, level_id)
 );
+-- 早期建的表少了 on update cascade，老師只要開放過任何一關，「換一組代碼」就被
+-- 這個外鍵擋下來（0.20.5 修）。已經建好的資料庫在這裡把外鍵換掉。
+alter table public.teacher_open drop constraint if exists teacher_open_class_code_fkey;
+alter table public.teacher_open add constraint teacher_open_class_code_fkey
+  foreign key (class_code) references public.classes(code) on delete cascade on update cascade;
 
 -- 魔王關。守塔的成就要分得出哪幾關是魔王關，而這件事的來源是
 -- src/data/levels.ts（boss: true），由 tools/gen-levels-seed.mjs 灌進來。

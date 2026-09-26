@@ -541,9 +541,13 @@ do $$
 declare v_new text; v_n int;
 begin
   perform test_as('a0000000-0000-0000-0000-000000000001', false, 'teacher1@rlstest.local');
+  -- 老師開放過關卡的班（teacher_open 有列）以前換不了代碼：外鍵沒有 on update cascade
+  perform test_force('insert into public.teacher_open (class_code, level_id) values (''RLS1'', ''td-01'') on conflict do nothing');
   select public.class_regenerate_code('RLS1') into v_new;
   select count(*) into v_n from public.students s where s.class_code = v_new;
   perform test_ok(v_n >= 3, '換代碼之後班上的人還在（' || v_n || ' 個）');
+  perform test_ok(exists (select 1 from public.teacher_open t where t.class_code = v_new),
+                  '換代碼之後老師開放的關卡還在');
   perform test_force(format('update public.classes set code = ''RLS1'' where code = %L', v_new));  -- 換回來收尾
 end $$;
 

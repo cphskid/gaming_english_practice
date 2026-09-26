@@ -27,6 +27,10 @@ export function Teacher({
 }) {
   const [classes, setClasses] = useState<ClassRoom[]>([])
   const [active, setActive] = useState<string | null>(null)
+  // run() 做完動作後要重讀「現在這一班」。換代碼會在動作裡改掉 active，閉包裡的
+  // 還是舊代碼，拿舊代碼去讀會把名單洗成空的，看起來像全班被踢掉。
+  const activeRef = useRef(active)
+  activeRef.current = active
   const [roster, setRoster] = useState<ClassRosterRow[]>([])
   const [stat, setStat] = useState<WordStat | null>(null)
   const [open, setOpen] = useState<Set<string>>(new Set())
@@ -80,11 +84,11 @@ export function Teacher({
       const msg = await what()
       if (typeof msg === 'string') setNote(msg)
       await refreshClasses()
-      if (active) await refreshClass(active)
+      if (activeRef.current) await refreshClass(activeRef.current)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
-  }, [active, refreshClass, refreshClasses])
+  }, [refreshClass, refreshClasses])
 
   /**
    * 開放關卡。按下去**先亮起來**再慢慢存，而且只重讀開放清單。
@@ -206,6 +210,7 @@ export function Teacher({
                 </button>
                 <button className="btn ghost small" onClick={() => void run(async () => {
                   const next = await repo.regenerateClassCode(room.code)
+                  activeRef.current = next
                   setActive(next)
                   return '換成新代碼 ' + next + '，班上的人都還在'
                 })}>
