@@ -35,6 +35,7 @@ import { PeerProfile, Profile } from './Profile'
 import { RoomList, RoomLobby, familiarity, useRoomList, useRoomState } from './Room'
 import { Versus } from './Versus'
 import { FeedbackButton } from './Feedback'
+import { Changelog } from './Changelog'
 
 type Screen =
   | 'login' | 'staff' | 'create' | 'select' | 'shop' | 'character' | 'board'
@@ -68,6 +69,7 @@ interface Playing {
 
 export function App() {
   const [screen, setScreen] = useState<Screen>('login')
+  const [showChangelog, setShowChangelog] = useState(false)
   const [student, setStudent] = useState<Student | null>(null)
   const [character, setCharacter] = useState<Character | null>(null)
   const [progress, setProgress] = useState<Map<string, LevelProgress>>(new Map())
@@ -604,11 +606,14 @@ export function App() {
       )}
 
       {screen !== 'play' && (
-        <div className={'app-version' + (import.meta.env.MODE === 'staging' ? ' staging' : '')}>
+        // 點下去看更新說明；測試站還會列出「待發布」（見 Changelog.tsx）
+        <button className={'app-version' + (import.meta.env.MODE === 'staging' ? ' staging' : '')}
+          onClick={() => setShowChangelog(true)} aria-label="更新說明">
           {/* 測試站（/dev/）接的是測試資料庫，標清楚免得跟正式站搞混 */}
           {import.meta.env.MODE === 'staging' ? '測試區 ' : 'Beta '}v{__APP_VERSION__.replace(/\.0$/, '')}
-        </div>
+        </button>
       )}
+      {showChangelog && <Changelog onClose={() => setShowChangelog(false)} />}
 
       {screen === 'login' && (
         <Login onLogin={login} onRegister={register} onStaff={() => setScreen('staff')} />

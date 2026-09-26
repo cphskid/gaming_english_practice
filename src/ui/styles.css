@@ -728,8 +728,13 @@ h2.sec small{font-size:12px;font-weight:400;color:var(--muted)}
   bottom: calc(4px + env(safe-area-inset-bottom));
   font-size: 11px;
   color: rgba(255, 255, 255, 0.45);
-  pointer-events: none;
   z-index: 5;
+  /* 點下去看更新說明。按鈕預設的框和底色拿掉，看起來還是一行小字 */
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-family: inherit;
+  cursor: pointer;
 }
 .app-version.staging {
   font-size: 13px;
@@ -838,3 +843,15 @@ input.pin{width:7.5em;font-size:20px;letter-spacing:.3em;text-align:center;paddi
 .fb-item{padding:10px;border-radius:8px;background:rgba(0,0,0,.2);display:flex;flex-direction:column;gap:4px;font-size:14px}
 .fb-item .fb-meta{font-size:12px;color:var(--muted);word-break:break-all}
 .fb-item .fb-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+
+/* 更新說明（2026-09-26）。一版一塊，待發布那一段用測試區的橘色框起來 */
+.changelog-box{max-width:420px;text-align:left;max-height:86vh}
+.changelog-box h2{text-align:center}
+.cl-list{overflow-y:auto;display:flex;flex-direction:column;gap:12px;min-height:0}
+.cl-list h3{margin:4px 0 0;font-size:15px;color:var(--gold)}
+.cl-list h3 small{font-weight:400;font-size:12px;color:var(--muted);margin-left:8px}
+.cl-pending{display:flex;flex-direction:column;gap:10px;padding:10px;border:2px solid #d9480f;border-radius:10px}
+.cl-ver{font-size:14px}
+.cl-head b{color:var(--gold);margin-right:4px}
+.cl-head small{color:var(--muted);font-size:12px;margin-left:8px}
+.cl-ver ul{margin:4px 0 0;padding-left:20px;line-height:1.6;color:var(--ink)}
