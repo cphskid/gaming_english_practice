@@ -4,7 +4,7 @@ import type {
   Student, TeacherRow, WordStatEntry,
 } from '@/core/types'
 import type {
-  AchievementRow, AddedTeacher, BadgeCount, Pin, ClassRosterRow, LeaderRow, LevelResult, PublicProfile,
+  AchievementRow, AddedTeacher, BadgeCount, Pin, ClassRosterRow, LeaderRow, LevelResult, PublicProfile, WeeklySlot, WeeklyStar,
   Repository, RoomBrief, RoomMember, RoomState, RaidSeat, RaidSyncResult, RaidResult, SavedResult, VersusMatchInput, Ghost, GhostRow,
   LiveLobby, LiveMatchInfo, LiveSyncResult, FeedbackKind, FeedbackRow, FeedbackStatus,
 } from './repository'
@@ -628,6 +628,24 @@ export class SupabaseRepository implements Repository {
       tierAt: r.tier_at ? ms(r.tier_at) : null,
       value: Number(r.value ?? 0),
       goalAll: Number(r.goal_all ?? 0),
+    }))
+  }
+
+  async classWeeklyStars(classCode?: string): Promise<WeeklyStar[]> {
+    const { data, error } = await this.db.rpc('class_weekly_stars', {
+      p_code: classCode ? classCode.trim().toUpperCase() : null,
+    })
+    fail('讀取本週之星失敗', error)
+    type Row = {
+      slot: WeeklySlot; student_id: string; nickname: string; avatar: string | null
+      equipped: string[] | null; value: number | null; extra: string | null
+      me: boolean | null; viewable: boolean | null
+    }
+    return ((data as Row[] | null) ?? []).map((r) => ({
+      slot: r.slot, studentId: r.student_id, nickname: r.nickname,
+      avatar: r.avatar ?? '', equipped: r.equipped ?? [],
+      value: Number(r.value ?? 0), extra: r.extra ?? '',
+      me: r.me ?? false, viewable: r.viewable ?? false,
     }))
   }
 

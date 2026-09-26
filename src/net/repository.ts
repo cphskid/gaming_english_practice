@@ -212,6 +212,12 @@ export interface Repository {
    */
   classBadgeCounts(classCode?: string): Promise<BadgeCount[]>
 
+  /**
+   * 本週之星：排行榜最上面那一排，每格比不一樣的東西、一個人最多上一格。
+   * **後端算**（class_weekly_stars），規則寫在那支函式上面。
+   */
+  classWeeklyStars(classCode?: string): Promise<WeeklyStar[]>
+
   /** 別在名字旁邊的徽章，最多三個。只能別自己拿到的。 */
   setPinned(ids: string[]): Promise<string[]>
   /** 選稱號。傳空字串＝不掛。回傳實際掛上的稱號文字。 */
@@ -455,6 +461,27 @@ export interface Pin { id: string; tier: number }
 
 /** 全班有幾個人拿到某一格的某一階 */
 export interface BadgeCount { id: string; tier: number; holders: number; classSize: number }
+
+/**
+ * 本週之星的一格。
+ *   most     value＝本週有效答對
+ *   improve  value＝比上週同一段時間多答對幾題，extra＝上週幾題
+ *   rare     value＝全班幾人有，extra＝'徽章id:階'
+ *   raid     value＝本週打贏魔王的總傷害，extra＝贏了幾場
+ *   mystery  extra＝這週比什麼（spell／listen／days），value＝題數或天數
+ */
+export type WeeklySlot = 'most' | 'improve' | 'rare' | 'raid' | 'mystery'
+export interface WeeklyStar {
+  slot: WeeklySlot
+  studentId: string
+  nickname: string
+  avatar: string
+  equipped: string[]
+  value: number
+  extra: string
+  me: boolean
+  viewable: boolean
+}
 
 /** 同學的個人檔案。只有看得到的東西，沒有登入帳號也沒有答題明細。 */
 export interface PublicProfile {

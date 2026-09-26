@@ -3175,10 +3175,140 @@ begin
 end;
 $$;
 
+-- =============================================================================
+-- 本週之星（2026-09-26）：排行榜最上面一排，每格比不一樣的東西，每格只放一個人。
+--
+-- 為什麼要這一排：長期榜（等級、星星）玩最多的人永遠在第一名，後面的追不上。
+-- 本週之星每週一歸零，而且**一個人最多上一格**（照格子順序挑，前面上過的人
+-- 後面就跳過），這樣上榜的路有好幾條、每週都有不同的人被看見。
+--
+--   most     本週答對最多
+--   improve  進步最多：跟自己上週「同一段時間」比，所以週二看也公平
+--   rare     本週拿到最稀有的徽章：全班越少人有（到那一階）越稀有
+--   raid     魔王團戰 MVP：本週打贏的場次，對魔王造成的傷害加總
+--   mystery  神祕格，每週輪一種：拼字最多／聽力最多／天天來（本週來了幾天）
+--
+-- 答對一律算「有效答對」：同一個字、同一個技能、同一天最多 5 次，跟成就同一套，
+-- 狂刷一個簡單的字上不了榜。週的切法用台灣時間，週一 00:00 開始。
+-- =============================================================================
+
+-- 一段時間內每個學生的有效答對與來了幾天。只給底下那支用，學生叫不到。
+create or replace function public.wk_ok(p_code text, p_from timestamptz, p_to timestamptz,
+                                        p_skill text default null)
+returns table (sid uuid, n int, days int)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select x.sid, sum(x.k)::int, count(distinct x.d)::int
+    from (select ae.student_id as sid, (ae.at at time zone 'Asia/Taipei')::date as d,
+                 least(count(*), 5) as k
+            from public.answer_events ae
+            join public.students s on s.id = ae.student_id
+           where s.class_code = p_code and ae.correct
+             and ae.at >= p_from and ae.at < p_to
+             and (p_skill is null or ae.skill = p_skill)
+           group by ae.student_id, ae.word_id, ae.skill, (ae.at at time zone 'Asia/Taipei')::date) x
+   group by x.sid;
+$$;
+revoke all on function public.wk_ok(text, timestamptz, timestamptz, text) from public, anon, authenticated;
+
+-- 回傳欄位加過 me，舊的要先丟掉（create or replace 改不了回傳型別）
+drop function if exists public.class_weekly_stars(text);
+create or replace function public.class_weekly_stars(p_code text default null)
+returns table (slot text, student_id uuid, nickname text, avatar text, equipped jsonb,
+               value int, extra text, me boolean, viewable boolean)
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+#variable_conflict use_column
+declare
+  v_code  text := coalesce(upper(btrim(p_code)), public.current_class_code());
+  v_now   timestamptz := now();
+  v_start timestamptz;
+  v_used  uuid[] := '{}';
+  v_slot  text;
+  v_sid   uuid;
+  v_val   int;
+  v_extra text;
+  v_mys   text;
+begin
+  if v_code is null then return; end if;
+  if v_code is distinct from public.current_class_code() and not public.is_teacher_of(v_code) then
+    raise exception '看不到別班的排行榜';
+  end if;
+  v_start := date_trunc('week', v_now at time zone 'Asia/Taipei') at time zone 'Asia/Taipei';
+  v_mys := (array['spell', 'listen', 'days'])
+             [(extract(week from v_start at time zone 'Asia/Taipei')::int % 3) + 1];
+
+  foreach v_slot in array array['most', 'improve', 'rare', 'raid', 'mystery'] loop
+    v_sid := null; v_val := null; v_extra := null;
+
+    if v_slot = 'most' then
+      select w.sid, w.n into v_sid, v_val
+        from public.wk_ok(v_code, v_start, v_now) w
+        join public.students s on s.id = w.sid
+       where w.n > 0 and not (w.sid = any(v_used))
+       order by w.n desc, s.nickname limit 1;
+
+    elsif v_slot = 'improve' then
+      -- 本週至少答對 10 題才算，不然「上週 0、這週 1」也是進步
+      select w.sid, w.n - coalesce(l.n, 0), coalesce(l.n, 0)::text into v_sid, v_val, v_extra
+        from public.wk_ok(v_code, v_start, v_now) w
+        join public.students s on s.id = w.sid
+        left join public.wk_ok(v_code, v_start - interval '7 days', v_now - interval '7 days') l
+          on l.sid = w.sid
+       where w.n >= 10 and w.n > coalesce(l.n, 0) and not (w.sid = any(v_used))
+       order by w.n - coalesce(l.n, 0) desc, s.nickname limit 1;
+
+    elsif v_slot = 'rare' then
+      select sa.student_id, h.holders, sa.achievement_id || ':' || sa.tier into v_sid, v_val, v_extra
+        from public.student_achievements sa
+        join public.students s on s.id = sa.student_id and s.class_code = v_code
+        cross join lateral (
+          select count(*)::int as holders
+            from public.student_achievements o
+            join public.students os on os.id = o.student_id and os.class_code = v_code
+           where o.achievement_id = sa.achievement_id and o.tier >= sa.tier) h
+       where coalesce(sa.tier_at, sa.unlocked_at) >= v_start
+         and not (sa.student_id = any(v_used))
+       order by h.holders, sa.tier desc, coalesce(sa.tier_at, sa.unlocked_at) limit 1;
+
+    elsif v_slot = 'raid' then
+      select rs.student_id, sum(coalesce(rs.dealt, 0))::int, count(*)::text into v_sid, v_val, v_extra
+        from public.raid_seats rs
+        join public.rooms r on r.id = rs.room_id
+        join public.students s on s.id = rs.student_id and s.class_code = v_code
+       where r.class_code = v_code and rs.won
+         and coalesce(r.started_at, r.created_at) >= v_start
+         and not (rs.student_id = any(v_used))
+       group by rs.student_id, s.nickname
+       order by sum(coalesce(rs.dealt, 0)) desc, s.nickname limit 1;
+
+    else
+      select w.sid, case when v_mys = 'days' then w.days else w.n end, v_mys into v_sid, v_val, v_extra
+        from public.wk_ok(v_code, v_start, v_now,
+                          case when v_mys = 'days' then null else v_mys end) w
+        join public.students s on s.id = w.sid
+       where w.n > 0 and not (w.sid = any(v_used))
+       order by case when v_mys = 'days' then w.days else w.n end desc, w.n desc, s.nickname
+       limit 1;
+    end if;
+
+    if v_sid is not null then
+      v_used := v_used || v_sid;
+      return query
+        select v_slot, s.id, s.nickname, c.avatar, c.equipped, v_val, v_extra,
+               s.id = public.current_student_id(),
+               (s.id = public.current_student_id() or c.public_profile
+                or public.is_teacher_of(s.class_code))
+          from public.students s join public.characters c on c.student_id = s.id
+         where s.id = v_sid;
+    end if;
+  end loop;
+end;
+$$;
+
 grant execute on function
   public.refresh_achievements(),
   public.my_achievements(),
   public.class_badge_counts(text),
+  public.class_weekly_stars(text),
   public.public_profile(uuid),
   public.set_pinned(text[]),
   public.set_title(text),

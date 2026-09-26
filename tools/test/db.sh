@@ -57,6 +57,11 @@ echo "── 成就"
   | grep -E "✓|✗|ERROR|──|全部通過" | sed 's/^psql:[^ ]* NOTICE:  //'
 
 echo
+echo "── 本週之星"
+"$PGBIN/psql" -h "$SOCK" -U postgres -d postgres -f "$ROOT/supabase/test/03_weekly_stars_test.sql" 2>&1 \
+  | grep -E "✓|✗|ERROR|──|全部通過" | sed 's/^psql:[^ ]* NOTICE:  //'
+
+echo
 echo "── 舊頭像搬家（Tiny Swords 的 Avatars_XX → 職業送的第一張）"
 # 做兩個戴舊頭像的角色（騎士、法師各一），再跑一次 schema.sql 就該被搬走
 run -c "insert into public.students (id, login_id, pw_hash, nickname) values

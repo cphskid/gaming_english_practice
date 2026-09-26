@@ -43,7 +43,7 @@ export function Badge({
   )
 }
 
-const hueOf = (d: AchDef) => CATEGORIES.find((c) => c.key === d.category)!.hue
+export const hueOf = (d: AchDef) => CATEGORIES.find((c) => c.key === d.category)!.hue
 
 /**
  * 名牌：徽章＋名字＋階級（「萬題·金」）。**只放圖示看不出是什麼**——這是第二版

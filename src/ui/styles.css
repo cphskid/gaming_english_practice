@@ -456,6 +456,30 @@ h2.sec small{font-size:12px;font-weight:400;color:var(--muted)}
 .rank .sc b{font-size:15px;color:var(--gold)}
 .rank .sc small{font-size:12px;color:var(--muted)}
 
+/* 本週之星：一排可以左右滑的小卡。手機上約看得到兩張半，露一半是在說「還有」。
+   卡片寬度固定，名字太長就截掉，不然五張高低不齊。 */
+.wk{width:100%;max-width:520px}
+.wk-head{font-weight:800;font-size:15px;margin:0 2px 6px;color:var(--gold)}
+.wk-head small{font-weight:400;font-size:12px;color:var(--muted);margin-left:8px}
+.wk-strip{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none}
+.wk-strip::-webkit-scrollbar{display:none}
+.wk-card{flex:none;width:136px;scroll-snap-align:start;display:flex;flex-direction:column;
+  align-items:center;gap:4px;padding:8px 6px 10px;text-align:center;
+  background:var(--panel);border:3px solid var(--line);border-radius:14px}
+.wk-card.me{border-color:var(--gold);background:var(--panel2)}
+.wk-card.link{cursor:pointer}
+.wk-card.empty{justify-content:center;opacity:.6;border-style:dashed;min-height:132px}
+.wk-card .mugbox{width:44px;height:44px;border-radius:10px;isolation:isolate}
+/* 皇冠框的皇冠會往上凸，標題底下留空間給它 */
+.wk-name{font-size:12px;font-weight:800;color:var(--muted);white-space:nowrap;margin-bottom:16px}
+.wk-card.empty .wk-name{margin-bottom:4px}
+.wk-who{font-size:15px;font-weight:800;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wk-who small{font-weight:400;font-size:11px;color:var(--gold)}
+.wk-val{font-size:12px;color:var(--gold);line-height:1.35}
+.wk-val .badge{display:block;margin:0 auto 3px}
+.wk-val small{display:block;color:var(--muted)}
+
 /*
   手機橫拿（高度只剩 390px 左右）。上面那一條每省 10px，戰場就多 10px，
   所以這裡把用不到的字先收起來：關卡名稱在選關時就看過了，

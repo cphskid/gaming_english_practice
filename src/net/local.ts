@@ -13,7 +13,7 @@ import type {
   TeacherRow, WordStatEntry,
 } from '@/core/types'
 import type {
-  AchievementRow, AddedTeacher, BadgeCount, ClassRosterRow, LeaderRow, LevelResult, PublicProfile,
+  AchievementRow, AddedTeacher, BadgeCount, ClassRosterRow, LeaderRow, LevelResult, PublicProfile, WeeklySlot, WeeklyStar,
   Repository, RoomBrief, RoomMember, RoomState, RaidSeat, RaidSyncResult, RaidResult, SavedResult, VersusMatchInput, Ghost, GhostRow,
   LiveLobby, LiveMatchInfo, LiveSyncResult, LivePerson, FeedbackKind, FeedbackRow, FeedbackStatus,
 } from './repository'
@@ -764,6 +764,77 @@ export class LocalRepository implements Repository {
       }
       write(k.character(id), next)
     }
+    return out
+  }
+
+  /**
+   * 本地版的本週之星，規則照 schema.sql 的 class_weekly_stars 抄。
+   * 本地版沒有記魔王團戰是哪一週打的，所以少了「魔王 MVP」那一格。
+   */
+  async classWeeklyStars(classCode?: string): Promise<WeeklyStar[]> {
+    const me = await this.currentStudent()
+    const code = (classCode ?? me?.classCode ?? '').trim().toUpperCase()
+    if (!code) return []
+    const roster = read<string[]>(k.roster(code), [])
+    const now = Date.now()
+    const TW = 8 * 3600_000, DAY = 86400_000
+    const tw = new Date(now + TW)
+    const start = Math.floor((now + TW) / DAY) * DAY - ((tw.getUTCDay() + 6) % 7) * DAY - TW
+    // ISO 週數（跟 Postgres 的 extract(week) 一樣），神祕格照它輪
+    const th = new Date(start + TW + 3 * DAY)
+    const jan4 = new Date(Date.UTC(th.getUTCFullYear(), 0, 4))
+    const week = 1 + Math.round((th.getTime() - jan4.getTime()) / (7 * DAY)
+      - ((jan4.getUTCDay() + 6) % 7 - 3) / 7)
+    const mys = (['spell', 'listen', 'days'] as const)[week % 3]
+    // 有效答對：同字同技能同一天最多 5 次
+    const ok = (sid: string, from: number, to: number, skill?: string) => {
+      const n = new Map<string, number>()
+      for (const e of read<AnswerEvent[]>(k.events(sid), [])) {
+        if (!e.correct || e.at < from || e.at >= to || (skill && e.skill !== skill)) continue
+        const key = `${e.wordId}|${e.skill}|${Math.floor((e.at + TW) / DAY)}`
+        n.set(key, Math.min(5, (n.get(key) ?? 0) + 1))
+      }
+      return {
+        n: [...n.values()].reduce((a, b) => a + b, 0),
+        days: new Set([...n.keys()].map((x) => x.split('|')[2])).size,
+      }
+    }
+    const nick = (sid: string) => read<Student | null>(k.student(sid), null)?.nickname ?? '?'
+    const byNick = (a: { sid: string }, b: { sid: string }) => nick(a.sid).localeCompare(nick(b.sid))
+    const used = new Set<string>()
+    const out: WeeklyStar[] = []
+    const put = (slot: WeeklySlot, cands: { sid: string; value: number; extra: string; rank: number }[]) => {
+      const best = cands.filter((c) => !used.has(c.sid))
+        .sort((a, b) => b.rank - a.rank || byNick(a, b))[0]
+      if (!best) return
+      used.add(best.sid)
+      const c = read<Character | null>(k.character(best.sid), null)
+      out.push({
+        slot, studentId: best.sid, nickname: nick(best.sid), avatar: c?.avatar ?? '',
+        equipped: c?.equipped ?? [], value: best.value, extra: best.extra, me: best.sid === me?.id,
+        viewable: best.sid === me?.id || (c?.publicProfile ?? true),
+      })
+    }
+    const week1 = roster.map((sid) => ({ sid, ...ok(sid, start, now) }))
+    put('most', week1.filter((w) => w.n > 0).map((w) => ({ sid: w.sid, value: w.n, extra: '', rank: w.n })))
+    put('improve', week1.flatMap((w) => {
+      const last = ok(w.sid, start - 7 * DAY, now - 7 * DAY).n
+      return w.n >= 10 && w.n > last ? [{ sid: w.sid, value: w.n - last, extra: String(last), rank: w.n - last }] : []
+    }))
+    const achs = new Map(roster.map((sid) => [sid, read<LocalAch[]>(k.achievements(sid), [])]))
+    const holders = (id: string, tier: number) =>
+      [...achs.values()].filter((l) => l.some((a) => a.id === id && (a.tier ?? 1) >= tier)).length
+    put('rare', [...achs.entries()].flatMap(([sid, list]) => list
+      .filter((a) => (a.tierAt ?? a.at) >= start)
+      .map((a) => {
+        const h = holders(a.id, a.tier ?? 1)
+        return { sid, value: h, extra: `${a.id}:${a.tier ?? 1}`, rank: -h * 10 + (a.tier ?? 1) }
+      })))
+    put('mystery', roster.flatMap((sid) => {
+      const w = ok(sid, start, now, mys === 'days' ? undefined : mys)
+      const v = mys === 'days' ? w.days : w.n
+      return w.n > 0 ? [{ sid, value: v, extra: mys, rank: v * 100000 + w.n }] : []
+    }))
     return out
   }
 
