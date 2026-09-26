@@ -47,6 +47,7 @@ const { LEVELS, JOB_EFFECT, TOWERS, CRYSTAL, FOCUS_STEP, FOCUS_MAX, HERO } = awa
 
 /** 英雄守城要不要算進去。遊戲裡一直都在，關掉只是為了看它讓難度差多少。 */
 let heroOn = !process.argv.includes('--no-hero')
+if (process.env.HERO_REACH) HERO.reach = Number(process.env.HERO_REACH)
 
 // --- 引擎裡的常數（engine.ts 頂端）-----------------------------------------
 const ENTER_X = 40
@@ -170,7 +171,14 @@ function simulate(level, jobKey, { rate, acc, seed }) {
   }
 
   /** engine.ts 的 volley()，一行一行對過 */
-  const hx = layout.castle.x - 12, hy = layout.castle.y + 52
+  // 英雄守城門：engine.ts 的 GATE／heroReaches／towerCovers
+  const gx = paths.reduce((n, p) => n + p[p.length - 1].x, 0) / paths.length
+  const gy = paths.reduce((n, p) => n + p[p.length - 1].y, 0) / paths.length - 22
+  const heroReaches = (e) => Math.hypot(gx - e.x, gy - (e.y - 22)) <= HERO.reach
+  const towerCovers = (e) => towers.some((tw) => {
+    const s = layout.slots[tw.slot]
+    return Math.hypot(s.x - e.x, s.y - 20 - (e.y - 22)) <= TOWERS.archery.range
+  })
   const volley = (e) => {
     let base = 0, hits = 0
     for (const tw of towers) {
@@ -179,7 +187,7 @@ function simulate(level, jobKey, { rate, acc, seed }) {
       hits++; base += TOWERS.archery.damage
     }
     // 英雄守城：engine.ts 的 heroReaches()，只補箭塔罩不到的空隙
-    if (heroOn && !hits && Math.hypot(hx - e.x, hy - 30 - (e.y - 22)) <= HERO.reach) { hits++; base += HERO.damage }
+    if (heroOn && !hits && heroReaches(e)) { hits++; base += HERO.damage }
     if (!hits) return
     const mult = 1 + FOCUS_STEP * Math.min(FOCUS_MAX, hits - 1)
     const total = Math.round(base * mult)
@@ -241,7 +249,11 @@ function simulate(level, jobKey, { rate, acc, seed }) {
       idle += DT
       const ready = enemies.filter((e) => e.entered)
       if (ready.length && (ready.length >= 2 || idle >= SOLO_GRACE)) {
-        target = ready[(rand() * ready.length) | 0]
+        // 快進城、箭塔打不到的先問（engine.ts 的 pickQuestion）
+        const danger = heroOn ? ready.filter((e) => heroReaches(e) && !towerCovers(e)) : []
+        target = danger.length
+          ? danger.reduce((a, b) => (Math.hypot(gx - a.x, gy - a.y) <= Math.hypot(gx - b.x, gy - b.y) ? a : b))
+          : ready[(rand() * ready.length) | 0]
         idle = 0
         asked++
       }
