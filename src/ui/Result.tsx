@@ -67,21 +67,27 @@ function Unlocked({ ids }: { ids: string[] }) {
   const list = ids.map(parseUnlock)
     .map((u) => ({ ...u, def: ACH_BY_ID.get(u.id) }))
     .filter((u) => !!u.def)
-  const [stamp, setStamp] = useState(true)
+  /**
+   * 大章一次蓋一個，點一下換下一個，最後一個點掉才收起來。
+   * 以前寫「還有 6 個，點一下看」卻是點一下就整個收掉，下面那排又在畫面外，
+   * 小朋友以為按了沒反應（2026-09-26 🌙 回報）。
+   */
+  const [stampAt, setStampAt] = useState(0)
   if (!list.length) return null
-  // 大章蓋階級最高的那一個；同階就蓋第一個
-  const top = [...list].sort((a, b) => b.tier - a.tier)[0]
+  // 階級高的先蓋；同階照原本順序
+  const order = [...list].sort((a, b) => b.tier - a.tier)
+  const top = order[Math.min(stampAt, order.length - 1)]
   const hue = (id: string) => CATEGORIES.find((c) => c.key === ACH_BY_ID.get(id)!.category)!.hue
   const verb = (u: typeof top) => (u.def!.tiers && u.tier > 1 ? `升到${TIER_NAMES[u.tier - 1]}階` : '解開')
   return (
     <>
-      {stamp && (
-        <div className="stamp-back" onClick={() => setStamp(false)} role="dialog" aria-modal="true">
-          <div className={'stamp' + (top.def!.tiers ? ' t' + top.tier : '')}>
+      {stampAt < order.length && (
+        <div className="stamp-back" onClick={() => setStampAt((i) => i + 1)} role="dialog" aria-modal="true">
+          <div key={stampAt} className={'stamp' + (top.def!.tiers ? ' t' + top.tier : '')}>
             <Badge def={top.def!} got tier={top.tier} size={120} hue={hue(top.id)} />
             <b>{badgeLabel(top.def!, top.def!.tiers ? top.tier : 0)}</b>
             <span>{verb(top)}！</span>
-            {list.length > 1 && <small>還有 {list.length - 1} 個，點一下看</small>}
+            <small>{stampAt < order.length - 1 ? `還有 ${order.length - 1 - stampAt} 個，點一下看下一個` : '點一下收起來'}</small>
           </div>
         </div>
       )}
