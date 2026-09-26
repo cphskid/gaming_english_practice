@@ -35,7 +35,7 @@ export function FeedbackButton({ screen, levelId }: { screen: string; levelId?: 
   const [open, setOpen] = useState(false)
   return (
     <>
-      <button className="feedback-fab" onClick={() => setOpen(true)} aria-label="回報問題">💬 回報</button>
+      <button className="feedback-fab" onClick={() => setOpen(true)} aria-label="回報問題">💬 問題回報</button>
       {open && <FeedbackForm screen={screen} levelId={levelId} onClose={() => setOpen(false)} />}
     </>
   )
@@ -80,7 +80,7 @@ function FeedbackForm({ screen, levelId, onClose }: {
           </>
         ) : (
           <>
-            <h2>回報問題</h2>
+            <h2>問題回報</h2>
             <div className="feedback-kinds">
               {KINDS.map((k) => (
                 <button key={k.id} className={'btn small' + (kind === k.id ? '' : ' ghost')}
