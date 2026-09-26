@@ -217,8 +217,25 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
    */
   const HERO_HOME = { x: layout.castle.x - 12, y: layout.castle.y + 52 }
   const hero = createHero(ctx.job, HERO_HOME.x, HERO_HOME.y, 58, -1)
-  /** 這隻怪在不在英雄守的範圍裡。量法跟箭塔一樣：從英雄胸口到怪身體。 */
-  const heroReaches = (e: Enemy) => Math.hypot(HERO_HOME.x - e.x, HERO_HOME.y - 30 - (e.y - 22)) <= HERO.reach
+  /**
+   * 英雄守的是**城門**（每條路的終點取平均），不是他腳下。
+   *
+   * 0.20.0～0.22.0 是從英雄胸口量：他站在城堡右下角，路卻是從城堡左邊偏上進城，
+   * 範圍收到 90 之後第一章十四關只有少數幾條路經過圈內，大部分關卡英雄永遠不出手
+   * （回報 #9、#10）。改從城門量，每一條路的最後一段都在圈裡。
+   */
+  const GATE = (() => {
+    const ends = layout.paths.map((p) => p[p.length - 1])
+    return { x: ends.reduce((n, q) => n + q.x, 0) / ends.length, y: ends.reduce((n, q) => n + q.y, 0) / ends.length - 22 }
+  })()
+  /** 這隻怪在不在英雄守的範圍裡：從城門到怪身體 */
+  const heroReaches = (e: Enemy) => Math.hypot(GATE.x - e.x, GATE.y - (e.y - 22)) <= HERO.reach
+  /** 有沒有任何一座箭塔打得到牠 */
+  const towerCovers = (e: Enemy) => S.towers.some((t) => {
+    const spec = TOWERS[t.kind]
+    const s = SLOTS[t.slot]
+    return spec.damage > 0 && Math.hypot(s.x - e.x, s.y - 20 - (e.y - 22)) <= spec.range
+  })
 
   /** 怪現在剩幾成速度。寒霜陷阱生效中就是三成慢。 */
   const slowFactor = () => (S.buffs.some((b) => b.id === 'slow-30') ? 0.7 : 1)
@@ -339,7 +356,12 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       return syncQuiz()
     }
     S.idle = 0
-    S.target = ready[(Math.random() * ready.length) | 0]
+    // 快進城、箭塔又打不到的怪先問：答對了英雄才有機會出手。不然題目常常問遠方的怪，
+    // 小朋友眼看門口那隻走進去、英雄卻沒動，看起來像英雄壞掉。只換問哪一隻，不加傷害。
+    const danger = ready.filter((e) => heroReaches(e) && !towerCovers(e))
+    S.target = danger.length
+      ? danger.reduce((a, b) => (Math.hypot(GATE.x - a.x, GATE.y - a.y) <= Math.hypot(GATE.x - b.x, GATE.y - b.y) ? a : b))
+      : ready[(Math.random() * ready.length) | 0]
     S.asked++
     S.askedAt = performance.now()
     syncQuiz()
@@ -879,7 +901,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     // 英雄守的那一圈，讓人知道城堡門口有人顧，箭塔可以蓋前面一點
     c2d.save()
     c2d.setLineDash([4, 6]); c2d.strokeStyle = 'rgba(159,208,255,.55)'; c2d.lineWidth = 2
-    c2d.beginPath(); c2d.arc(HERO_HOME.x, HERO_HOME.y - 30, HERO.reach, 0, 7); c2d.stroke()
+    c2d.beginPath(); c2d.arc(GATE.x, GATE.y, HERO.reach, 0, 7); c2d.stroke()
     c2d.fillStyle = 'rgba(159,208,255,.06)'; c2d.fill()
     c2d.restore()
   }
