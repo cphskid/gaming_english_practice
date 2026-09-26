@@ -34,7 +34,9 @@ const INTRO = 3.4
 /** 剩這麼多秒音樂變快 */
 const RUSH_AT = 30
 /** 路的範圍：一人一條，從上到下排 */
-const LANES = { mid: 392, maxGap: 62, span: 250 }
+// 整片路往上收（原本 mid 392／span 250），因為答題木牌搬到下面了（BOARD.y 478）：
+// 六個人時最下面那條路在 460，兵站和兵不會被木牌蓋住。
+const LANES = { mid: 350, maxGap: 62, span: 220 }
 /** 城堡的位置（畫面上）。規則裡的 homeX 是小兵停下來打城的地方。 */
 const CASTLE_X = 1010
 /** 隊友腳下的色圈，一人一色（我是綠色） */
@@ -251,7 +253,8 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
     const top = bossFoot() - boss.art.h * boss.scale * 0.8
     return { x: R.bossX + [-10, 40, 10][i], y: top + [30, 90, 150][i] }
   }
-  const bossFoot = () => LANES.mid + (n > 1 ? ((n - 1) * gap) / 2 : 0) + 30
+  /** 魔王腳底：站在最下面那條路再低一點，但不准踩進木牌 */
+  const bossFoot = () => Math.min(BOARD.y - 6, LANES.mid + (n > 1 ? ((n - 1) * gap) / 2 : 0) + 30)
 
   /**
    * 場上點得到的東西：最前面（離城最近）的 TAPPABLE 隻小兵，不夠的用魔王本人補。
