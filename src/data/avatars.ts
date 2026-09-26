@@ -26,9 +26,9 @@ export interface AvatarDef {
 }
 
 export const AVATAR_TIERS: Record<AvatarTier, { name: string; price: number; unlockLevel: number; tint: string }> = {
-  common: { name: '普通', price: 300, unlockLevel: 1, tint: '#6f9b4f' },
-  rare: { name: '稀有', price: 800, unlockLevel: 4, tint: '#3f7fc4' },
-  legend: { name: '傳說', price: 1500, unlockLevel: 8, tint: '#c98a1f' },
+  common: { name: '普通', price: 500, unlockLevel: 1, tint: '#6f9b4f' },
+  rare: { name: '稀有', price: 1500, unlockLevel: 4, tint: '#3f7fc4' },
+  legend: { name: '傳說', price: 3000, unlockLevel: 8, tint: '#c98a1f' },
 }
 
 export const AVATAR_LIST: AvatarDef[] = [

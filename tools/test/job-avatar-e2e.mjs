@@ -77,7 +77,7 @@ try {
   console.log('── 商店買頭像')
   await page.evaluate(() => {
     const key = Object.keys(localStorage).find((k) => k.startsWith('gep.v1.character.'))
-    const c = JSON.parse(localStorage.getItem(key)); c.coins = 3000; c.exp = 2000
+    const c = JSON.parse(localStorage.getItem(key)); c.coins = 3000; c.exp = 12000
     localStorage.setItem(key, JSON.stringify(c))
   })
   await page.reload({ waitUntil: 'networkidle' })
@@ -92,7 +92,7 @@ try {
   await page.locator('.item', { hasText: '忍者（女）' }).locator('button.btn').click()
   await page.waitForSelector('.note')
   const after = Number((await page.locator('.coins').innerText()).replace(/\D/g, ''))
-  before - after === 300 ? ok(`買了忍者頭像，金幣 ${before} → ${after}`) : fail(`金幣扣錯：${before} → ${after}`)
+  before - after === 500 ? ok(`買了忍者頭像，金幣 ${before} → ${after}`) : fail(`金幣扣錯：${before} → ${after}`)
   await page.locator('.item', { hasText: '忍者（女）' }).locator('.i-go').click()
   await page.waitForSelector('.hero')
   await page.locator('.av-shelf .av[aria-label="忍者（女）"]').click()

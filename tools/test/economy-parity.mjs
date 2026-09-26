@@ -103,5 +103,20 @@ const ok = gotCoins === expectCoins && exp === expectExp
 console.log(`題數 ${events.length}`)
 console.log(`金幣  前端 ${expectCoins}  後端 ${gotCoins}  ${gotCoins === expectCoins ? '✓' : '✗'}`)
 console.log(`經驗  前端 ${expectExp}  後端 ${exp}  ${exp === expectExp ? '✓' : '✗'}`)
-if (!ok) { console.error('前後端算式漂移了'); process.exit(1) }
+
+// 等級公式也對一遍（progress.ts 的 levelFromExp ↔ schema.sql 的 level_of），
+// 門檻前後各一格最容易差一級，所以每一級的門檻 -1／0／+1 都測
+const progOut = join(tmp, 'progress.cjs')
+await build({
+  entryPoints: [join(ROOT, 'src/core/progress.ts')],
+  outfile: progOut, bundle: true, format: 'cjs', platform: 'node', logLevel: 'error',
+})
+const { levelFromExp, expForLevel } = createRequire(import.meta.url)(progOut)
+const exps = [0, 1, 7, 100000]
+for (let L = 2; L <= 40; L++) exps.push(expForLevel(L) - 1, expForLevel(L), expForLevel(L) + 1)
+const dbLv = psql(`select string_agg(public.level_of(e)::text, ',' order by i)
+  from unnest(array[${exps.join(',')}]) with ordinality as t(e, i);`).split(',').map(Number)
+const lvBad = exps.filter((e, i) => levelFromExp(e) !== dbLv[i])
+console.log(`等級  測 ${exps.length} 個經驗值  ${lvBad.length ? '✗ ' + lvBad.join(',') : '✓'}`)
+if (!ok || lvBad.length) { console.error('前後端算式漂移了'); process.exit(1) }
 console.log('兩邊一致')

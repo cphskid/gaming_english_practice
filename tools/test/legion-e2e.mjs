@@ -44,7 +44,7 @@ try {
   await poke(() => {
     const key = Object.keys(localStorage).find((k) => k.startsWith('gep.v1.character.'))
     const c = JSON.parse(localStorage.getItem(key))
-    c.coins = 2000; c.exp = 1300
+    c.coins = 5000; c.exp = 6000
     localStorage.setItem(key, JSON.stringify(c))
   })
   await page.reload({ waitUntil: 'networkidle' })
@@ -65,7 +65,7 @@ try {
   await page.locator('.lg-item', { hasText: '哥布林軍團' }).locator('button.btn').click()
   await page.waitForSelector('.note, .error')
   const c1 = Number((await page.locator('.coins').innerText()).replace(/\D/g, ''))
-  c1 === 1700 ? ok('哥布林軍團 300 金買到了') : fail('金幣不對：' + c1)
+  c1 === 3500 ? ok('哥布林軍團 1500 金買到了') : fail('金幣不對：' + c1)
 
   console.log('── 拿到「頂階降臨」之後豬軍團才開賣')
   await poke(() => {
@@ -80,7 +80,7 @@ try {
   await page.locator('.lg-item', { hasText: '豬軍團' }).locator('button.btn').click()
   await page.waitForSelector('.note, .error')
   const c2 = Number((await page.locator('.coins').innerText()).replace(/\D/g, ''))
-  c2 === 1100 ? ok('豬軍團 600 金買到了') : fail('金幣不對：' + c2 + ' ' + await page.locator('.error').innerText().catch(() => ''))
+  c2 === 500 ? ok('豬軍團 3000 金買到了') : fail('金幣不對：' + c2 + ' ' + await page.locator('.error').innerText().catch(() => ''))
 
   console.log('── 我的角色：換上豬軍團，顏色變灰')
   await page.locator('.lg-item', { hasText: '豬軍團' }).locator('.i-go').click()

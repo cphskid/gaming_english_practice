@@ -34,16 +34,17 @@ export interface TierDef {
 }
 
 /**
- * 四層架子。**價格是暫定的**（參考最貴的彩虹框 400 金），
- * 上線後用真實答題紀錄算「一般學生幾天買得起」再調。
+ * 四層架子。價格 2026-09-26 跟等級曲線一起調高（原本 300／600／1000，積極的學生
+ * 第四天就全買齊）。模擬：每週練三次、每次答對 60 題的學生，普通約兩週、
+ * 稀有約一個月、傳說約一學期（被 Lv10 擋住）。神話級 10000 等素材進來再加。
  */
 export const TIERS: Record<LegionTier, TierDef> = {
   default: { name: '預設', unlockLevel: 1, price: 0, tint: '#8a9a7a' },
-  common: { name: '普通', unlockLevel: 3, price: 300, tint: '#5d9a4a' },
+  common: { name: '普通', unlockLevel: 3, price: 1500, tint: '#5d9a4a' },
   // 稀有級綁「頂階降臨」（對戰推出過頂階兵）：豬軍團在對戰最有感，拿到的人正好最會用它
-  rare: { name: '稀有', unlockLevel: 6, price: 600, needAchievement: 'top-tier', tint: '#4f7fd0' },
+  rare: { name: '稀有', unlockLevel: 6, price: 3000, needAchievement: 'top-tier', tint: '#4f7fd0' },
   // 傳說級先放元素大師（免費版）。要綁哪個成就還沒定，之後再挑。
-  legendary: { name: '傳說', unlockLevel: 10, price: 1000, badgeLater: true, tint: '#c98a1c' },
+  legendary: { name: '傳說', unlockLevel: 10, price: 6500, badgeLater: true, tint: '#c98a1c' },
 }
 
 export const TIER_ORDER: LegionTier[] = ['default', 'common', 'rare', 'legendary']

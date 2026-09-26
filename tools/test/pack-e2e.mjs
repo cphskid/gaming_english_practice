@@ -55,7 +55,7 @@ try {
   await page.evaluate(() => {
     const key = Object.keys(localStorage).find((k) => k.startsWith('gep.v1.character.'))
     const c = JSON.parse(localStorage.getItem(key))
-    c.coins = 500; c.exp = 400
+    c.coins = 800; c.exp = 540
     localStorage.setItem(key, JSON.stringify(c))
   })
   await page.reload({ waitUntil: 'networkidle' })

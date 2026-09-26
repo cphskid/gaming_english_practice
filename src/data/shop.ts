@@ -64,10 +64,10 @@ export const ITEMS: ItemDef[] = [
   })),
 
   // 頭像外框：排行榜和上面那一條都看得到
-  { id: 'frame-gold', name: '金邊框', icon: '', desc: '頭像加一圈金邊', price: 120, kind: 'cosmetic', slot: 'frame', unlockLevel: 1 },
-  { id: 'frame-ribbon', name: '緞帶框', icon: '', desc: '頭像下面掛一條緞帶', price: 180, kind: 'cosmetic', slot: 'frame', unlockLevel: 3 },
-  { id: 'frame-crown', name: '皇冠框', icon: '', desc: '金框加一頂小皇冠', price: 260, kind: 'cosmetic', slot: 'frame', unlockLevel: 5 },
-  { id: 'frame-rainbow', name: '彩虹框', icon: '', desc: '會跑的彩虹邊，最難買到的那個', price: 400, kind: 'cosmetic', slot: 'frame', unlockLevel: 7 },
+  { id: 'frame-gold', name: '金邊框', icon: '', desc: '頭像加一圈金邊', price: 300, kind: 'cosmetic', slot: 'frame', unlockLevel: 1 },
+  { id: 'frame-ribbon', name: '緞帶框', icon: '', desc: '頭像下面掛一條緞帶', price: 500, kind: 'cosmetic', slot: 'frame', unlockLevel: 3 },
+  { id: 'frame-crown', name: '皇冠框', icon: '', desc: '金框加一頂小皇冠', price: 800, kind: 'cosmetic', slot: 'frame', unlockLevel: 5 },
+  { id: 'frame-rainbow', name: '彩虹框', icon: '', desc: '會跑的彩虹邊，最難買到的那個', price: 1200, kind: 'cosmetic', slot: 'frame', unlockLevel: 7 },
 
   // 成就限定的六個外框。**商店買不到**，價格欄只是因為資料表要求大於零，
   // 真正的把關在 buy_item（achievement_only 的東西一律擋）。

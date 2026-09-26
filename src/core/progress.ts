@@ -1,13 +1,25 @@
 import type { GameOutcome, LevelProgress } from './types'
 
-/** 等級只負責解鎖，不縮放傷害——傷害由單字難度決定。 */
-const EXP_PER_LEVEL = 120
+/**
+ * 等級只負責解鎖，不縮放傷害——傷害由單字難度決定。
+ *
+ * 升到第 L 級累計要 60×(L−1)² 經驗，越後面越難升（2026-09-26 Chuck 認可）。
+ * 以前每級固定 120，積極的學生第 4 天就 Lv10，解鎖失去意義。
+ * 公式跟 schema.sql 的 level_of 一樣，**改一邊要改另一邊**。
+ */
+const EXP_UNIT = 60
+
+/** 升到第 level 級累計要多少經驗 */
+export function expForLevel(level: number): number {
+  return EXP_UNIT * (level - 1) ** 2
+}
 
 export function levelFromExp(exp: number): number {
-  return Math.floor(exp / EXP_PER_LEVEL) + 1
+  return Math.floor(Math.sqrt(Math.max(0, Math.floor(exp / EXP_UNIT)))) + 1
 }
 export function expIntoLevel(exp: number): { into: number; need: number } {
-  return { into: exp % EXP_PER_LEVEL, need: EXP_PER_LEVEL }
+  const lv = levelFromExp(exp)
+  return { into: exp - expForLevel(lv), need: expForLevel(lv + 1) - expForLevel(lv) }
 }
 
 /**

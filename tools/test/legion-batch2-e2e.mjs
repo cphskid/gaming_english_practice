@@ -44,7 +44,7 @@ try {
   await poke(() => {
     const key = Object.keys(localStorage).find((k) => k.startsWith('gep.v1.character.'))
     const c = JSON.parse(localStorage.getItem(key))
-    c.coins = 5000; c.exp = 20000
+    c.coins = 20000; c.exp = 20000
     localStorage.setItem(key, JSON.stringify(c))
   })
   await page.reload({ waitUntil: 'networkidle' })
@@ -52,7 +52,7 @@ try {
   console.log('── 商店：四套都在架上、買得到')
   await page.getByRole('button', { name: '商店' }).click()
   await page.waitForSelector('.lg-shelf')
-  let coins = 5000
+  let coins = 20000
   for (const p of PACKS) {
     const item = page.locator('.lg-item', { hasText: p.name })
     if (!(await item.count())) { fail(p.name + ' 沒上架'); continue }

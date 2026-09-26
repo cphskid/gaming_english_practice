@@ -417,7 +417,12 @@ begin
 
   -- 等級門檻。剛註冊的人 exp=0 是一級，買不起要三級的東西
   perform test_ok(public.level_of(0) = 1, '0 經驗是 1 級');
-  perform test_ok(public.level_of(120) = 2, '120 經驗是 2 級');
+  perform test_ok(public.level_of(59) = 1, '59 經驗還是 1 級');
+  perform test_ok(public.level_of(60) = 2, '60 經驗是 2 級');
+  perform test_ok(public.level_of(239) = 2, '239 經驗還是 2 級');
+  perform test_ok(public.level_of(240) = 3, '240 經驗是 3 級');
+  perform test_ok(public.level_of(4860) = 10, '4860 經驗剛好 10 級');
+  perform test_ok(public.level_of(4859) = 9, '4859 經驗還是 9 級');
   perform test_denied($q$ select public.buy_item('crystal-40') $q$, '等級不夠還想買');
 
   -- 買得起的：錢要扣對，東西要進背包
@@ -432,10 +437,10 @@ begin
 
   -- 補一點錢進去（用 security definer 的輔助函式，學生自己是改不動的），
   -- 才測得到後面穿脫裝飾品那幾條
-  perform test_force(format('update public.characters set coins = 900 where student_id = %L', v_id));
+  perform test_force(format('update public.characters set coins = 2100 where student_id = %L', v_id));
   -- 陣營五色 2026-09-24 起是送的：不能買（買了會白花錢），不用買就穿得上
   perform test_denied($q$ select public.buy_item('color-red') $q$, '買送的東西');
-  perform test_ok((select coins from public.characters where student_id = v_id) = 900, '沒有被扣錢');
+  perform test_ok((select coins from public.characters where student_id = v_id) = 2100, '沒有被扣錢');
 
   -- 消耗品用一次就沒了，第二次要被擋
   perform public.consume_item('slow-30');
@@ -462,7 +467,7 @@ begin
   perform test_denied($q$ select public.equip_item('legion-goblin', true) $q$, '軍團要買了才穿得上');
   perform test_force(format('update public.characters set exp = 240 where student_id = %L', v_id));
   perform public.buy_item('legion-goblin');
-  perform test_ok((select coins from public.characters where student_id = v_id) = 600, '軍團扣 300');
+  perform test_ok((select coins from public.characters where student_id = v_id) = 600, '軍團扣 1500');
   perform public.equip_item('legion-goblin', true);
   perform test_ok((select equipped from public.characters where student_id = v_id) ? 'legion-goblin', '軍團穿上了');
 
@@ -486,7 +491,7 @@ begin
   perform public.set_avatar('av-healer-f');
   perform test_ok((select avatar from public.characters where student_id = v_id) = 'av-healer-f', '法師可以戴法師送的');
   -- 商店頭像：買了哪個職業都能戴，換職業也不會被換掉
-  perform test_force(format('update public.characters set coins = coins + 300 where student_id = %L', v_id));
+  perform test_force(format('update public.characters set coins = coins + 500 where student_id = %L', v_id));
   perform public.buy_item('av-ninja-f');
   perform public.set_avatar('av-ninja-f');
   perform public.set_job('knight');

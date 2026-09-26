@@ -294,7 +294,7 @@ select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'five-colors'),
                '脫下軍團、穿黑色打一場＝五色軍團');
 
 \echo '── 軍團包：稀有級要先拿到「頂階降臨」才買得到'
-select test_force($$ update public.characters set coins = 5000, exp = 1200
+select test_force($$ update public.characters set coins = 5000, exp = 1500
                      where student_id in ('b1000000-0000-0000-0000-000000000001',
                                           'b1000000-0000-0000-0000-000000000002') $$);
 select test_ok(test_has('b1000000-0000-0000-0000-000000000001', 'top-tier'), '小明推過三階兵');

@@ -54,7 +54,7 @@ try {
   await page.evaluate(() => {
     const key = Object.keys(localStorage).find((k) => k.startsWith('gep.v1.character.'))
     const c = JSON.parse(localStorage.getItem(key))
-    c.coins = 900; c.exp = 900
+    c.coins = 900; c.exp = 3000
     c.items = { ...c.items, 'slow-30': 2, 'heal-5': 2, 'crystal-40': 2 }
     localStorage.setItem(key, JSON.stringify(c))
   })

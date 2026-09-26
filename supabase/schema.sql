@@ -1118,8 +1118,12 @@ $$;
 
 -- 等級只負責解鎖，公式跟 src/core/progress.ts 的 levelFromExp 一樣。
 -- **改一邊要改另一邊**，跟金幣算式一樣的老問題，所以對帳測試把它一起測了。
+-- 升到第 L 級累計要 60×(L−1)² 經驗，越後面越難升（2026-09-26，以前每級固定 120）。
+-- 用 numeric 開根號，剛好卡在門檻上（例如 4860 = Lv10）不會因為浮點誤差少一級。
 create or replace function public.level_of(p_exp int)
-returns int language sql immutable as $$ select (p_exp / 120) + 1 $$;
+returns int language sql immutable as $$
+  select floor(sqrt((greatest(coalesce(p_exp, 0), 0) / 60)::numeric))::int + 1
+$$;
 
 /*
   頭像（2026-09-25 換成職業各四張＋商店賣，見 src/data/avatars.ts）。
