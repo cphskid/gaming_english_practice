@@ -14,8 +14,8 @@ export type Skill = 'recognize' | 'spell' | 'listen'
 
 export const SKILL_NAME: Record<Skill, string> = {
   recognize: '認字',
-  spell: '拼寫',
-  listen: '聽力',
+  spell: '拼字',
+  listen: '聽音',
 }
 
 // ---------------------------------------------------------------------------

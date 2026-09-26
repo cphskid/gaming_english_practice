@@ -129,7 +129,7 @@ const SLOTS: { slot: WeeklySlot; icon: string; name: string }[] = [
   { slot: 'raid', icon: '🐉', name: '魔王 MVP' },
   { slot: 'mystery', icon: '❓', name: '神祕格' },
 ]
-const MYSTERY: Record<string, string> = { spell: '拼字最多', listen: '聽力最多', days: '天天來' }
+const MYSTERY: Record<string, string> = { spell: '拼字最多', listen: '聽音最多', days: '天天來' }
 
 function WeeklyStars({ stars, onOpen }: { stars: WeeklyStar[]; onOpen: (id: string) => void }) {
   return (
