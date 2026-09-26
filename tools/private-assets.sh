@@ -38,5 +38,9 @@ const rmiss = Object.entries(raid).flatMap(([k, v]) =>
   [...Object.keys(v.anims), "face"].map((a) => "public/raid/" + k + "/" + a + ".png"))
   .filter((p) => !fs.existsSync(p))
 if (rmiss.length) { console.error("缺魔王圖：" + rmiss.join(" ")); process.exit(1) }
+// 介紹網頁（public/about/）的影片與截圖也在私有 repo
+if (fs.existsSync("public/about/index.html") && !fs.existsSync("public/about/intro.mp4")) {
+  console.error("缺介紹影片：public/about/intro.mp4"); process.exit(1)
+}
 console.log("私有素材放回原位，守塔圖 " + Object.keys(idx).length + " 張、魔王 " + Object.keys(raid).length + " 隻都在")
 '

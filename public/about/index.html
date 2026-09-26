@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>守護異世界｜給家長的介紹</title>
+<meta name="description" content="守護異世界 World Guardians：用讀字、聽字、拼字闖關的英文單字冒險遊戲，對應國中小課綱字彙。">
+<meta property="og:title" content="守護異世界 World Guardians">
+<meta property="og:description" content="用語言魔力來冒險吧！讀字、聽字、拼字，85 關、國中小 2000 字。">
+<meta property="og:image" content="intro-poster.jpg">
+<style>
+@font-face{font-family:"WG Title Latin";src:url(../title/title-latin.woff2) format("woff2");font-display:swap}
+@font-face{font-family:"WG Title CJK";src:url(../title/title-cjk.woff2) format("woff2");font-display:swap}
+:root{
+  --bg:#101826; --panel:#1a2536; --panel2:#223047; --line:#2e3e58;
+  --text:#eef2f8; --muted:#a9b6c9; --gold:#ffd66b; --gold2:#f0b43c;
+  --read:#f0a64a; --listen:#5fb4ff; --spell:#b98bff;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:16px/1.65 system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}
+img,video{display:block;max-width:100%}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+section{padding:44px 0}
+h2{font-size:24px;line-height:1.3;margin:0 0 6px}
+.kicker{color:var(--gold);font-size:13px;font-weight:700;letter-spacing:.12em;margin:0 0 6px}
+.lead{color:var(--muted);margin:0 0 20px}
+.shot{border-radius:12px;border:1px solid var(--line);overflow:hidden;background:#0b111b}
+
+/* ---- 開場 ---- */
+.hero{position:relative;padding:56px 0 36px;text-align:center;overflow:hidden;
+  background:linear-gradient(#0a1a4acc,#0a1a4a55 40%,var(--bg) 96%),url(../title/floating-city.jpg) 58% 20%/cover #0a1a4a}
+.hero .en{font-family:"WG Title Latin",serif;font-size:clamp(34px,10vw,54px);line-height:1.1;color:#eaf4ff;
+  text-shadow:0 2px 0 #0a1a4a,0 0 18px #7fc4ff88;margin:0}
+.hero h1{font-family:"WG Title CJK","Noto Serif TC",serif;font-weight:400;font-size:clamp(30px,9vw,46px);letter-spacing:.3em;
+  margin:6px 0 0 .3em;color:var(--gold);text-shadow:0 2px 6px #000a}
+.hero .sub{font-family:"WG Title CJK",sans-serif;font-size:18px;margin:4px 0 18px;text-shadow:0 1px 4px #000c}
+.hero .pitch{max-width:30em;margin:0 auto 22px;font-size:17px;text-shadow:0 1px 4px #000c}
+.video{position:relative;border-radius:14px;overflow:hidden;border:2px solid #ffffff30;box-shadow:0 10px 30px #0008;background:#000}
+.video video{width:100%;aspect-ratio:16/9}
+.hint{color:var(--muted);font-size:13px;margin-top:8px}
+
+/* ---- 三種練法 ---- */
+.skills{display:grid;gap:14px}
+.skill{display:grid;gap:10px;background:var(--panel);
+  border:1px solid var(--line);border-top:5px solid var(--c);border-radius:14px;padding:12px}
+.skill h3{margin:0;font-size:20px;color:var(--c)}
+.skill p{margin:2px 0 0;color:var(--muted);font-size:15px}
+.skill .tag{display:inline-block;font-size:12px;font-weight:700;color:#10182a;background:var(--c);border-radius:99px;padding:1px 9px;margin-bottom:4px}
+
+/* ---- 課綱 ---- */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 14px}
+.stat b{display:block;font-size:40px;line-height:1.05;color:var(--gold);font-variant-numeric:tabular-nums}
+.stat b small{font-size:18px;margin-left:2px}
+.stat span{color:var(--muted);font-size:14px}
+.chapters{display:flex;gap:8px;margin-top:14px}
+.ch{flex:1;border-radius:10px;padding:10px 10px;font-size:14px;font-weight:700;line-height:1.3}
+.ch small{display:block;font-weight:400;opacity:.85}
+.ch1{background:linear-gradient(90deg,#3a7d3a,#5a4630)}
+.ch2{background:linear-gradient(90deg,#4d78a8,#5a4630)}
+.ch3{background:linear-gradient(90deg,#8a6a2c,#5a4630)}
+.note{margin-top:14px;font-size:14px;color:var(--muted);background:var(--panel2);border-radius:10px;padding:10px 12px}
+
+/* ---- 每個孩子 ---- */
+.points{display:grid;gap:12px;margin-bottom:20px}
+.pt{display:flex;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.pt .ic{flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:22px;background:var(--panel2)}
+.pt h3{margin:0;font-size:17px}
+.pt p{margin:2px 0 0;color:var(--muted);font-size:15px}
+.phones{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.phones figure{margin:0}
+.phones img{border-radius:14px;border:1px solid var(--line)}
+.phones figcaption{text-align:center;color:var(--muted);font-size:13px;margin-top:6px}
+
+/* ---- 常問 ---- */
+details{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:10px}
+summary{cursor:pointer;padding:14px 16px;font-weight:700;list-style:none;display:flex;justify-content:space-between;gap:10px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"＋";color:var(--gold)}
+details[open] summary::after{content:"－"}
+details p{margin:0;padding:0 16px 14px;color:var(--muted)}
+
+/* ---- 孩子專區 ---- */
+.kids{background:linear-gradient(#5bc0ff,#8fe07a 70%,#f7d774);color:#18253a;margin-top:12px;border-radius:28px 28px 0 0}
+.kids .kicker{color:#7a3b00}
+.kids h2{font-size:30px;color:#16243d}
+.kids .lead{color:#23385a}
+.cards{display:grid;gap:14px}
+.card{background:#fffdf5;border-radius:18px;overflow:hidden;box-shadow:0 6px 0 #0002,0 10px 24px #0002;border:3px solid #fff}
+.card img{width:100%}
+.card div{padding:10px 14px 12px}
+.card h3{margin:0;font-size:20px;color:#1c2d4d}
+.card p{margin:2px 0 0;color:#3a4a66;font-size:15px}
+.go{display:block;margin:28px auto 8px;max-width:360px;text-align:center;text-decoration:none;font-size:24px;font-weight:900;
+  color:#3b2200;background:linear-gradient(#ffe38a,#ffb938);border:3px solid #fff;border-radius:99px;padding:16px 20px;
+  box-shadow:0 6px 0 #c77c14,0 12px 24px #0003;animation:breathe 2.4s ease-in-out infinite}
+@keyframes breathe{50%{transform:scale(1.04)}}
+@media (prefers-reduced-motion:reduce){.go{animation:none}}
+footer{text-align:center;font-size:12px;color:#23385a;padding:18px 16px 36px;background:#f7d774}
+footer a{color:inherit}
+
+@media (min-width:640px){
+  .skill{grid-template-columns:48% 1fr;align-items:center;gap:16px}
+  .stats{grid-template-columns:repeat(4,1fr)}
+  .cards{grid-template-columns:1fr 1fr}
+  .phones{grid-template-columns:repeat(4,1fr)}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="en">World Guardians</p>
+    <h1>守護異世界</h1>
+    <p class="sub">用語言魔力來冒險吧！</p>
+    <p class="pitch">給孩子的英文單字冒險遊戲。<br>每天玩一點，把課綱單字變成打怪的魔力。</p>
+    <div class="video">
+      <video controls playsinline preload="metadata" poster="intro-poster.jpg">
+        <source src="intro.mp4" type="video/mp4">
+      </video>
+    </div>
+    <p class="hint">55 秒介紹影片・有音樂，沒有旁白</p>
+  </div>
+</header>
+
+<main>
+  <section>
+    <div class="wrap">
+      <p class="kicker">三種練法</p>
+      <h2>看得懂、聽得出、拼得出</h2>
+      <p class="lead">同一個字用三種方式練，每一題都是在打怪。</p>
+      <div class="skills">
+        <div class="skill" style="--c:var(--read)">
+          <img class="shot" src="img/read.jpg" alt="讀字：看中文，從三塊木板中點出對的英文" loading="lazy">
+          <div><span class="tag">讀字</span><h3>看中文，找英文</h3><p>從幾個英文字裡點出對的那一個。</p></div>
+        </div>
+        <div class="skill" style="--c:var(--listen)">
+          <img class="shot" src="img/listen.jpg" alt="聽字：聽發音，點出聽到的字" loading="lazy">
+          <div><span class="tag">聽字</span><h3>聽發音，找出來</h3><p>只聽聲音，練耳朵和字形的連結。</p></div>
+        </div>
+        <div class="skill" style="--c:var(--spell)">
+          <img class="shot" src="img/spell.jpg" alt="拼字：用字母磚依序拼出單字" loading="lazy">
+          <div><span class="tag">拼字</span><h3>一個字母一個字母拼</h3><p>真的拼出來，不是選擇題。</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <p class="kicker">對應課綱字彙</p>
+      <h2>從國小 300 字，走到國中 2000 字</h2>
+      <p class="lead">按課綱的生活主題分關，由淺到深。</p>
+      <div class="stats">
+        <div class="stat"><b>300</b><span>國小課綱字彙</span></div>
+        <div class="stat"><b>2000</b><span>延伸到國中會考範圍</span></div>
+        <div class="stat"><b>85<small>關</small></b><span>分三章，一路變難</span></div>
+        <div class="stat"><b>20<small>隻</small></b><span>魔王，四個等級</span></div>
+      </div>
+      <div class="chapters">
+        <div class="ch ch1">第一章<small>草地城堡・14 關</small></div>
+        <div class="ch ch2">第二章<small>雪地神殿・38 關</small></div>
+        <div class="ch ch3">第三章<small>草原木堡・33 關</small></div>
+      </div>
+      <p class="note">重玩關卡時，會優先出孩子常答錯的字。老師看得到每個人的進度，和全班最常錯的字。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <p class="kicker">排行榜與成就的設計</p>
+      <h2>讓每個孩子都玩得下去</h2>
+      <p class="lead">不是只給最強的孩子舞台。</p>
+      <div class="points">
+        <div class="pt"><div class="ic">✅</div><div><h3>只有答對才會變強</h3><p>金幣和經驗只從答對來，同一個字一直刷，獎勵會越來越少。買不到分數。</p></div></div>
+        <div class="pt"><div class="ic">⭐</div><div><h3>本週之星，每週一重來</h3><p>比「這週答對最多」「進步最多」等不同項目，每人最多上一格。上週落後，這週一樣有機會。</p></div></div>
+        <div class="pt"><div class="ic">📅</div><div><h3>算來了幾天，不算連續</h3><p>習慣徽章看的是「這週來了幾天」，請假斷一天不會歸零。</p></div></div>
+        <div class="pt"><div class="ic">🏅</div><div><h3>人人拿得到的徽章</h3><p>徽章分銅、銀、金、白金、鑽石五階，先拿銅牌再慢慢升。獎品是外框和稱號，只好看不變強。</p></div></div>
+      </div>
+      <div class="phones">
+        <figure><img src="img/weekly.jpg" alt="本週之星排行榜畫面" loading="lazy"><figcaption>本週之星</figcaption></figure>
+        <figure><img src="img/badges.jpg" alt="徽章牆畫面" loading="lazy"><figcaption>徽章牆</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <p class="kicker">家長常問</p>
+      <h2>整體介紹</h2>
+      <p class="lead">點開看細節。</p>
+      <details><summary>要花錢嗎？</summary><p>不用，完全免費。遊戲裡的金幣只能靠答對賺，沒有任何付費項目。</p></details>
+      <details><summary>要用 email 註冊嗎？</summary><p>不用。孩子用老師給的班級邀請碼，自己取帳號、密碼和暱稱就能開始。</p></details>
+      <details><summary>忘記密碼怎麼辦？</summary><p>請班上老師重設就好。</p></details>
+      <details><summary>老師看得到什麼？</summary><p>每個孩子的關卡進度、答對情況，還有全班最常錯的字，方便上課複習。</p></details>
+      <details><summary>在哪裡玩？</summary><p>手機、平板、電腦的瀏覽器都可以，不用安裝 App。手機建議橫拿玩。</p></details>
+      <details><summary>會不會只是在玩遊戲？</summary><p>遊戲裡每一個動作都要答題：蓋塔、派兵、打魔王都靠答對。答錯只是少打一下，不會被罵，也不會被淘汰。</p></details>
+    </div>
+  </section>
+
+  <section class="kids">
+    <div class="wrap">
+      <p class="kicker">小勇者看這裡！</p>
+      <h2>準備好守護異世界了嗎？</h2>
+      <p class="lead">英文單字就是你的魔力，答對就能出招！</p>
+      <div class="cards">
+        <div class="card"><img src="img/td.jpg" alt="守塔畫面" loading="lazy"><div><h3>🏰 守塔闖關</h3><p>點對單字，所有箭塔一起發射，守住城堡！</p></div></div>
+        <div class="card"><img src="img/versus.jpg" alt="兵推對戰畫面" loading="lazy"><div><h3>⚔️ 兵推對戰</h3><p>打電腦、挑戰同學的分身，或跟同學即時對打。</p></div></div>
+        <div class="card"><img src="img/raid.jpg" alt="魔王團戰畫面" loading="lazy"><div><h3>👹 魔王團戰</h3><p>跟同學一起打魔王！神話魔王打到半血還會變身。</p></div></div>
+        <div class="card"><img src="img/legions.jpg" alt="各種軍團" loading="lazy"><div><h3>🛡️ 職業與軍團</h3><p>當騎士還是法師？收集豬軍團、海盜、怪物小隊。</p></div></div>
+      </div>
+      <a class="go" href="../">⚡ 開始冒險</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  守護異世界 World Guardians・遊戲素材與音樂授權見 <a href="https://github.com/cphskid/gaming_english_practice/blob/claude/project-thread-BetaRun/CREDITS.md">CREDITS</a>
+</footer>
+</body>
+</html>

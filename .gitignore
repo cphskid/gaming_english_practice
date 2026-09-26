@@ -88,3 +88,7 @@ dist/
 /public/raid/skelwiz/
 /public/raid/winged/
 /public/raid/flydemon/
+# 介紹網頁的影片與截圖（畫面含上面那些禁散布的圖，放私有 repo 的 overlay/public/about/，2026-09-26）
+/public/about/intro.mp4
+/public/about/intro-poster.jpg
+/public/about/img/

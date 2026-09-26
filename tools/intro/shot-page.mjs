@@ -1,0 +1,11 @@
+import { chromium } from 'playwright'
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' })
+const p = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 })
+p.on('pageerror', e => console.log('ERR', e.message))
+p.on('response', r => { if (r.status() >= 400) console.log(r.status(), r.url()) })
+await p.goto('http://localhost:5190/about/index.html', { waitUntil: 'networkidle' })
+await p.evaluate(async () => { for (let y = 0; y < document.body.scrollHeight; y += 400) { scrollTo(0, y); await new Promise(r => setTimeout(r, 60)) } scrollTo(0,0) })
+await p.waitForTimeout(500)
+await p.screenshot({ path: '/tmp/claude-0/intro/shots/page-full.png', fullPage: true })
+console.log('h', await p.evaluate(() => document.body.scrollHeight), 'overflowX', await p.evaluate(() => document.documentElement.scrollWidth))
+await b.close()
