@@ -1101,20 +1101,30 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   // ---------------------------------------------------------------- 輸入
+  /**
+   * 點到哪一隻。字牌（上面寫字的那塊）優先：字牌有 plates.ts 推開，不會疊。
+   * 身體會疊——路線交叉的關（例如第 8 關）怪擠在交叉口，以前是「迴圈先碰到哪隻算哪隻」，
+   * 小朋友明明點在對的那隻身上卻算到旁邊那隻（2026-09-26 🌙 回報「交叉口會亂掉」）。
+   * 所以身體疊在一起時，裡面有題目那隻就算點到牠。
+   */
   function pickHit(x: number, y: number): Enemy | null {
-    let exact: Enemy | null = null
+    let plate: Enemy | null = null
+    const bodies: Enemy[] = []
     let near: Enemy | null = null
     let nd = 46
     for (const e of S.enemies) {
       if (!e.entered) continue // 還沒完全進場的怪不能被點
       const py = plateY(e)
       const inPlate = x >= e.px - e.pw / 2 - 4 && x <= e.px + e.pw / 2 + 4 && y >= py - 4 && y <= py + PLATE_H + 4
+      if (inPlate) { plate = e; break }
       const inBody = x >= e.x - 30 && x <= e.x + 30 && y >= e.y - 48 && y <= e.y + 6
-      if (inPlate || inBody) { exact = e; break }
+      if (inBody) { bodies.push(e); continue }
       const d = Math.min(Math.hypot(e.x - x, e.y - 22 - y), Math.hypot(e.px - x, py + PLATE_H / 2 - y))
       if (d < nd) { nd = d; near = e }
     }
-    return exact ?? near
+    if (plate) return plate
+    if (bodies.length) return bodies.find((e) => e === S.target) ?? bodies[0]
+    return near
   }
 
   function onPointerDown(ev: PointerEvent) {
