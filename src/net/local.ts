@@ -15,7 +15,7 @@ import type {
 import type {
   AchievementRow, AddedTeacher, BadgeCount, ClassRosterRow, LeaderRow, LevelResult, PublicProfile,
   Repository, RoomBrief, RoomMember, RoomState, RaidSeat, RaidSyncResult, RaidResult, SavedResult, VersusMatchInput, Ghost, GhostRow,
-  LiveLobby, LiveMatchInfo, LiveSyncResult, LivePerson,
+  LiveLobby, LiveMatchInfo, LiveSyncResult, LivePerson, FeedbackKind, FeedbackRow, FeedbackStatus,
 } from './repository'
 import { packMoves, unpackMoves, type PackedMove } from '@/core/opponent'
 import { evaluateAchievements, tierOf, type AchValue, type VersusRecord } from '@/core/achievements'
@@ -87,6 +87,7 @@ const k = {
   itemUses: (id: string) => `${NS}.itemuses.${id}`,
   staff: `${NS}.staff`,
   live: `${NS}.live`,
+  feedback: `${NS}.feedback`,
 }
 
 function read<T>(key: string, fallback: T): T {
@@ -1127,6 +1128,31 @@ export class LocalRepository implements Repository {
   async setTeacherActive(): Promise<void> {
     // 本地版只有一個人，沒有要停用誰
   }
+
+  // ---------------------------------------------------------------- 回報問題
+  // 本地版沒有別人會看，存著只是讓畫面走得通、測得到。
+
+  async submitFeedback(kind: FeedbackKind, message: string, screen: string,
+    context: Record<string, unknown>): Promise<void> {
+    const all = read<FeedbackRow[]>(k.feedback, [])
+    const text = message.trim()
+    if (!text) throw new Error('請寫一下發生什麼事')
+    all.unshift({
+      id: (all[0]?.id ?? 0) + 1, createdAt: new Date().toISOString(), who: '本機', role: 'student',
+      classCode: null, kind, message: text.slice(0, 500), screen, context, status: 'new', note: null,
+    })
+    write(k.feedback, all.slice(0, 200))
+  }
+
+  async listFeedback(status?: FeedbackStatus): Promise<FeedbackRow[]> {
+    return read<FeedbackRow[]>(k.feedback, []).filter((f) => !status || f.status === status)
+  }
+
+  async triageFeedback(id: number, status: FeedbackStatus, note: string): Promise<void> {
+    write(k.feedback, read<FeedbackRow[]>(k.feedback, []).map((f) =>
+      (f.id === id ? { ...f, status, note: note.trim() || f.note } : f)))
+  }
+
 }
 
 /**

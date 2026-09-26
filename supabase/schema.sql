@@ -3791,3 +3791,144 @@ grant execute on function
   public.raid_result(uuid, boolean, int, int, uuid),
   public.raid_kill_list(uuid)
 to authenticated;
+
+
+-- =============================================================================
+-- 回報問題（2026-09-26）
+--
+-- 學生、老師在畫面角落按「回報」寫一句話，系統自動附上在哪個畫面、哪一關、
+-- 版號、手機型號、最近的錯誤訊息。Claude 定期來讀、分成 bug／需求／看不懂三堆，
+-- 分不出來的留給 Chuck。
+--
+-- 只准透過函式碰這張表（上面 revoke all on all tables 已經收掉了）。
+-- 一個人一小時最多 10 則，免得小朋友按著好玩把表灌爆。
+-- =============================================================================
+
+create table if not exists public.feedback (
+  id          bigint generated always as identity primary key,
+  created_at  timestamptz not null default now(),
+  user_id     uuid,
+  -- 學生才有；老師回報是 null
+  student_id  uuid references public.students(id) on delete set null,
+  class_code  text,
+  who         text not null,            -- 回報時的暱稱或老師名字，之後改名也看得懂
+  role        text not null check (role in ('student', 'teacher', 'admin')),
+  kind        text not null check (kind in ('bug', 'confusing', 'idea')),
+  message     text not null check (char_length(message) between 1 and 500),
+  screen      text,
+  context     jsonb not null default '{}'::jsonb,
+  -- 分類結果：new 還沒看；bug／request／unclear（留給 Chuck）；
+  -- fixed 修好了、dup 重複、wontfix 不處理
+  status      text not null default 'new'
+              check (status in ('new', 'bug', 'request', 'unclear', 'fixed', 'dup', 'wontfix')),
+  triage_note text,
+  triaged_at  timestamptz
+);
+create index if not exists feedback_status_idx on public.feedback (status, created_at);
+create index if not exists feedback_user_idx on public.feedback (user_id, created_at);
+alter table public.feedback enable row level security;
+
+-- 可以讀回饋、改分類的帳號。管理員本來就可以；這張表是給排程用的專用帳號：
+-- 只看得到回饋，碰不到學生密碼、金幣、班級設定。
+create table if not exists public.feedback_readers (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  note    text
+);
+alter table public.feedback_readers enable row level security;
+
+create or replace function public.can_triage_feedback()
+returns boolean language sql stable security definer set search_path = public, pg_temp as $$
+  select public.is_admin() or exists (
+    select 1 from public.feedback_readers r where r.user_id = auth.uid()
+  );
+$$;
+
+create or replace function public.submit_feedback(
+  p_kind text, p_message text, p_screen text, p_context jsonb)
+returns bigint language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_student uuid := public.current_student_id();
+        v_code text;
+        v_who text;
+        v_role text;
+        v_msg text := btrim(coalesce(p_message, ''));
+        v_id bigint;
+begin
+  if auth.uid() is null then raise exception '請先登入再回報'; end if;
+  if v_msg = '' then raise exception '請寫一下發生什麼事'; end if;
+  if char_length(v_msg) > 500 then raise exception '寫太長了，500 字以內'; end if;
+  if p_kind not in ('bug', 'confusing', 'idea') then raise exception '分類不對'; end if;
+  if (select count(*) from public.feedback f
+       where f.user_id = auth.uid() and f.created_at > now() - interval '1 hour') >= 10 then
+    raise exception '一小時最多回報 10 則，晚一點再試';
+  end if;
+
+  if v_student is not null then
+    select s.class_code, s.nickname into v_code, v_who from public.students s where s.id = v_student;
+    v_role := 'student';
+  else
+    select t.display_name, case when t.is_admin then 'admin' else 'teacher' end
+      into v_who, v_role
+      from public.teachers t where t.user_id = auth.uid();
+    if v_role is null then raise exception '請先登入再回報'; end if;
+  end if;
+
+  insert into public.feedback (user_id, student_id, class_code, who, role, kind, message, screen, context)
+  values (auth.uid(), v_student, v_code, coalesce(v_who, '?'), v_role, p_kind, v_msg,
+          left(p_screen, 40),
+          -- context 是前端送的，只是參考；限大小免得塞一大包進來
+          case when pg_column_size(p_context) <= 4000 then coalesce(p_context, '{}'::jsonb)
+               else '{}'::jsonb end)
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+-- 讀回饋。p_status 給 null 就是全部，新的在前面。
+create or replace function public.list_feedback(p_status text default null, p_limit int default 200)
+returns setof public.feedback language plpgsql stable security definer set search_path = public, pg_temp as $$
+begin
+  if not public.can_triage_feedback() then raise exception '只有管理員可以看回報'; end if;
+  return query
+    select * from public.feedback f
+     where p_status is null or f.status = p_status
+     order by f.created_at desc
+     limit least(greatest(coalesce(p_limit, 200), 1), 1000);
+end;
+$$;
+
+create or replace function public.triage_feedback(p_id bigint, p_status text, p_note text)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if not public.can_triage_feedback() then raise exception '只有管理員可以改分類'; end if;
+  if p_status not in ('new', 'bug', 'request', 'unclear', 'fixed', 'dup', 'wontfix') then
+    raise exception '分類不對';
+  end if;
+  update public.feedback
+     set status = p_status,
+         triage_note = coalesce(nullif(btrim(p_note), ''), triage_note),
+         triaged_at = now()
+   where id = p_id;
+  if not found then raise exception '找不到這則回報'; end if;
+end;
+$$;
+
+-- 自己回報過的（學生老師看得到自己的回報處理到哪了）
+create or replace function public.my_feedback()
+returns table (id bigint, created_at timestamptz, kind text, message text, status text)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select f.id, f.created_at, f.kind, f.message, f.status
+    from public.feedback f
+   where f.user_id = auth.uid()
+   order by f.created_at desc limit 20;
+$$;
+
+revoke all on function public.can_triage_feedback(), public.submit_feedback(text, text, text, jsonb),
+  public.list_feedback(text, int), public.triage_feedback(bigint, text, text), public.my_feedback()
+  from public, anon;
+grant execute on function
+  public.can_triage_feedback(),
+  public.submit_feedback(text, text, text, jsonb),
+  public.list_feedback(text, int),
+  public.triage_feedback(bigint, text, text),
+  public.my_feedback()
+to authenticated;

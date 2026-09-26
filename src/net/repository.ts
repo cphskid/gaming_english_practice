@@ -258,6 +258,31 @@ export interface Repository {
   listTeachers(): Promise<TeacherRow[]>
   listInvites(): Promise<{ email: string; used: boolean }[]>
   setTeacherActive(userId: string, active: boolean): Promise<void>
+
+  // ---------------------------------------------------------------- 回報問題
+  /** 學生或老師回報一則問題。班級、暱稱、身分由伺服器補，前端只送內容與畫面資訊。 */
+  submitFeedback(kind: FeedbackKind, message: string, screen: string, context: Record<string, unknown>): Promise<void>
+  /** 管理員：讀回報。status 不給就是全部。 */
+  listFeedback(status?: FeedbackStatus): Promise<FeedbackRow[]>
+  /** 管理員：改分類 */
+  triageFeedback(id: number, status: FeedbackStatus, note: string): Promise<void>
+}
+
+export type FeedbackKind = 'bug' | 'confusing' | 'idea'
+/** new 還沒看；bug／request／unclear（留給 Chuck）；fixed、dup、wontfix 是處理完的 */
+export type FeedbackStatus = 'new' | 'bug' | 'request' | 'unclear' | 'fixed' | 'dup' | 'wontfix'
+export interface FeedbackRow {
+  id: number
+  createdAt: string
+  who: string
+  role: 'student' | 'teacher' | 'admin'
+  classCode: string | null
+  kind: FeedbackKind
+  message: string
+  screen: string | null
+  context: Record<string, unknown>
+  status: FeedbackStatus
+  note: string | null
 }
 
 export interface ClassRosterRow {

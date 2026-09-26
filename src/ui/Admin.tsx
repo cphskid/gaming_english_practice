@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { AdminClassRow, TeacherRow } from '@/core/types'
 import { repo } from '@/net'
+import type { FeedbackRow, FeedbackStatus } from '@/net/repository'
 
 /**
  * 管理員後台。管的是老師與班級，不是學生。
@@ -62,6 +63,8 @@ export function Admin({ onBack }: { onBack: () => void }) {
       {note && <p className="note">{note}</p>}
 
       <div className="teacher">
+        <FeedbackInbox />
+
         <div>
           <h2>加一位老師</h2>
           <p className="lede left">
@@ -172,5 +175,74 @@ export function Admin({ onBack }: { onBack: () => void }) {
         </div>
       </div>
     </div>
+  )
+}
+
+const STATUS: { id: FeedbackStatus; label: string }[] = [
+  { id: 'new', label: '還沒看' },
+  { id: 'bug', label: 'Bug 要修' },
+  { id: 'request', label: '需求' },
+  { id: 'unclear', label: '要 Chuck 決定' },
+  { id: 'fixed', label: '修好了' },
+  { id: 'dup', label: '重複' },
+  { id: 'wontfix', label: '不處理' },
+]
+const KIND_LABEL = { bug: '🐞 壞掉了', confusing: '❓ 看不懂', idea: '💡 想法' }
+
+/**
+ * 學生老師按「回報」送來的東西。Claude 排程會定期來分類，
+ * 這裡是給管理員自己看、自己改分類用的。
+ */
+function FeedbackInbox() {
+  const [filter, setFilter] = useState<FeedbackStatus | ''>('')
+  const [rows, setRows] = useState<FeedbackRow[]>([])
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    try { setRows(await repo.listFeedback(filter || undefined)); setError(null) }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+  }, [filter])
+  useEffect(() => { void load() }, [load])
+
+  const fresh = rows.filter((r) => r.status === 'new' || r.status === 'unclear').length
+
+  return (
+    <>
+      <div>
+        <h2>回報{fresh > 0 && `（${fresh} 則待處理）`}</h2>
+        <select value={filter} onChange={(e) => setFilter(e.target.value as FeedbackStatus | '')}>
+          <option value="">全部</option>
+          {STATUS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+      </div>
+      {error && <p className="error">{error}</p>}
+      <div className="fb-list">
+        {rows.length === 0 && <p className="lede">沒有回報。</p>}
+        {rows.slice(0, 50).map((r) => (
+          <div className="fb-item" key={r.id}>
+            <div className="fb-row">
+              <b>{KIND_LABEL[r.kind]}</b>
+              <span>{r.who}{r.classCode && `・${r.classCode}`}</span>
+              <span className="spacer" />
+              <select value={r.status} onChange={(e) => void (async () => {
+                try {
+                  await repo.triageFeedback(r.id, e.target.value as FeedbackStatus, '')
+                  await load()
+                } catch (err) { setError(err instanceof Error ? err.message : String(err)) }
+              })()}>
+                {STATUS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+            </div>
+            <div>{r.message}</div>
+            {r.note && <div className="fb-meta">處理說明：{r.note}</div>}
+            <div className="fb-meta">
+              {new Date(r.createdAt).toLocaleString('zh-TW')}・{r.screen}
+              {typeof r.context.level === 'string' && `・${r.context.level}`}
+              {typeof r.context.ver === 'string' && `・v${r.context.ver}`}
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   )
 }

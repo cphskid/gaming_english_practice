@@ -6,7 +6,7 @@ import type {
 import type {
   AchievementRow, AddedTeacher, BadgeCount, Pin, ClassRosterRow, LeaderRow, LevelResult, PublicProfile,
   Repository, RoomBrief, RoomMember, RoomState, RaidSeat, RaidSyncResult, RaidResult, SavedResult, VersusMatchInput, Ghost, GhostRow,
-  LiveLobby, LiveMatchInfo, LiveSyncResult,
+  LiveLobby, LiveMatchInfo, LiveSyncResult, FeedbackKind, FeedbackRow, FeedbackStatus,
 } from './repository'
 import { packMoves, unpackMoves } from '@/core/opponent'
 
@@ -898,6 +898,37 @@ export class SupabaseRepository implements Repository {
     })
     fail('設定失敗', error)
   }
+
+  // ---------------------------------------------------------------- 回報問題
+
+  async submitFeedback(kind: FeedbackKind, message: string, screen: string,
+    context: Record<string, unknown>): Promise<void> {
+    const { error } = await this.db.rpc('submit_feedback', {
+      p_kind: kind, p_message: message, p_screen: screen, p_context: context,
+    })
+    fail('送不出去', error)
+  }
+
+  async listFeedback(status?: FeedbackStatus): Promise<FeedbackRow[]> {
+    const { data, error } = await this.db.rpc('list_feedback', { p_status: status ?? null })
+    fail('讀不到回報', error)
+    type Row = {
+      id: number; created_at: string; who: string; role: FeedbackRow['role']; class_code: string | null
+      kind: FeedbackKind; message: string; screen: string | null; context: Record<string, unknown> | null
+      status: FeedbackStatus; triage_note: string | null
+    }
+    return ((data as Row[] | null) ?? []).map((r) => ({
+      id: r.id, createdAt: r.created_at, who: r.who, role: r.role, classCode: r.class_code,
+      kind: r.kind, message: r.message, screen: r.screen, context: r.context ?? {},
+      status: r.status, note: r.triage_note,
+    }))
+  }
+
+  async triageFeedback(id: number, status: FeedbackStatus, note: string): Promise<void> {
+    const { error } = await this.db.rpc('triage_feedback', { p_id: id, p_status: status, p_note: note })
+    fail('改不了分類', error)
+  }
+
 }
 
 function toEvent(r: EventRow): AnswerEvent {

@@ -34,6 +34,7 @@ import { Leaderboard } from './Leaderboard'
 import { PeerProfile, Profile } from './Profile'
 import { RoomList, RoomLobby, familiarity, useRoomList, useRoomState } from './Room'
 import { Versus } from './Versus'
+import { FeedbackButton } from './Feedback'
 
 type Screen =
   | 'login' | 'staff' | 'create' | 'select' | 'shop' | 'character' | 'board'
@@ -574,6 +575,11 @@ export function App() {
         版號：學生回報問題時，請他念角落這一行，就知道是哪一版出的事。
         玩的時候不顯示，免得擋到戰場。改版號只改 package.json。
       */}
+      {/* 回報問題：登入後才有（要知道是誰回報的），玩的時候不顯示免得擋到戰場 */}
+      {screen !== 'play' && (student || staff) && (
+        <FeedbackButton screen={screen} levelId={playing?.level?.id} />
+      )}
+
       {screen !== 'play' && (
         <div className="app-version">Beta v{__APP_VERSION__.replace(/\.0$/, '')}</div>
       )}

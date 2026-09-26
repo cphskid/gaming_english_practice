@@ -837,6 +837,48 @@ begin
   perform public.close_room(v_t);
 end $blk$;
 
+\echo '── 回報問題'
+do $blk$
+declare v_id bigint; v_n int; v_row public.feedback;
+begin
+  -- 學生回報：系統自己補班級、暱稱、身分
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  select public.submit_feedback('bug', '  第三關點了沒反應 ', 'select', '{"ver":"0.14.0"}') into v_id;
+  perform test_ok(v_id is not null, '學生可以回報');
+  perform test_ok((select count(*) from public.my_feedback()) >= 1, '學生看得到自己的回報');
+  perform test_denied($$ select * from public.list_feedback() $$, '學生讀不到全部回報');
+  perform test_denied(format($$ select public.triage_feedback(%s, 'fixed', null) $$, v_id), '學生不能改分類');
+  perform test_denied($$ select * from public.feedback $$, '學生直接讀表');
+  perform test_denied($$ select public.submit_feedback('bug', '   ', null, null) $$, '空白回報');
+  perform test_denied($$ select public.submit_feedback('hack', 'x', null, null) $$, '亂填分類');
+  perform test_denied(format($$ select public.submit_feedback('bug', %L, null, null) $$, repeat('啊', 501)), '超過 500 字');
+  for v_n in 1..9 loop perform public.submit_feedback('idea', '再一則 ' || v_n, null, null); end loop;
+  perform test_denied($$ select public.submit_feedback('idea', '第 11 則', null, null) $$, '一小時超過 10 則');
+
+  -- 不是學生也不是老師的帳號不能回報
+  perform test_as('a0000000-0000-0000-0000-000000000003', false, 'nobody@rlstest.local');
+  perform test_denied($$ select public.submit_feedback('bug', 'x', null, null) $$, '路人回報');
+  perform test_denied($$ select * from public.list_feedback() $$, '路人讀回報');
+
+  -- 管理員看得到、改得了分類
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  select * into v_row from public.list_feedback() f where f.id = v_id;
+  perform test_ok(v_row.role = 'student' and v_row.class_code = 'RLS1' and v_row.message = '第三關點了沒反應',
+                  '管理員看得到回報，班級與身分是伺服器補的');
+  perform public.triage_feedback(v_id, 'bug', '老師開放關卡按鈕沒反應');
+  perform test_ok((select status from public.list_feedback('bug') f where f.id = v_id) = 'bug', '管理員改分類');
+
+  -- 排程用的專用帳號：只讀得到回報，不是管理員
+  perform test_force($$ insert into public.feedback_readers (user_id, note)
+                        values ('a0000000-0000-0000-0000-000000000003', '測試') on conflict do nothing $$);
+  perform test_as('a0000000-0000-0000-0000-000000000003', false, 'nobody@rlstest.local');
+  perform test_ok((select count(*) from public.list_feedback()) >= 10, '專用帳號讀得到回報');
+  perform public.triage_feedback(v_id, 'unclear', '留給 Chuck');
+  perform test_ok(not public.is_admin(), '專用帳號不是管理員');
+  perform test_denied($$ select * from public.admin_list_teachers() $$, '專用帳號不能看老師名單');
+  perform test_force($$ delete from public.feedback_readers where user_id = 'a0000000-0000-0000-0000-000000000003' $$);
+end $blk$;
+
 reset role;
 \echo ''
 \echo '全部通過'
