@@ -888,6 +888,55 @@ begin
   perform test_force($$ delete from public.feedback_readers where user_id = 'a0000000-0000-0000-0000-000000000003' $$);
 end $blk$;
 
+\echo '── 暱稱禁用字'
+do $blk$
+declare v_ming uuid; v_n text;
+begin
+  -- 正規化：全形、大小寫、空白符號、數字代字母都要抓得到
+  perform test_ok(public.nickname_problem('小明') is null, '正常暱稱沒事');
+  perform test_ok(public.nickname_problem('幹') is not null, '中文髒話');
+  perform test_ok(public.nickname_problem('我是 幹 王') is not null, '中間夾空白');
+  perform test_ok(public.nickname_problem('F.u.C.k') is not null, '英文加點、大小寫');
+  perform test_ok(public.nickname_problem('ｆｕｃｋ') is not null, '全形英文');
+  perform test_ok(public.nickname_problem('sh1t') is not null, '數字代字母');
+  perform test_ok(public.nickname_problem('b!tch') is not null, '驚嘆號代 i');
+  perform test_ok(public.nickname_problem('ass') is not null, '整個名字就是短字');
+  perform test_ok(public.nickname_problem('class') is null, '短字當子字串不誤殺（class）');
+  perform test_ok(public.nickname_problem('peacock') is null, '短字當子字串不誤殺（peacock）');
+  perform test_ok(public.nickname_problem('Ming88') is null, 'g8 不誤殺拼音加數字');
+  perform test_ok(public.nickname_problem(repeat('啊', 17)) = '暱稱要 1 到 16 個字', '太長還是太長');
+
+  -- 註冊、自己改、老師加人都走同一道檢查
+  perform test_as('a0000000-0000-0000-0000-000000000031', true);
+  perform test_denied($$ select public.register_student('rlsbad', 'melon12', '靠北啦', 'RLS1') $$, '註冊時不雅暱稱');
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  perform test_denied($$ select public.student_set_nickname('SHIT') $$, '自己改成不雅暱稱');
+  perform test_as('a0000000-0000-0000-0000-000000000001', false, 'teacher1@rlstest.local');
+  perform test_denied($$ select public.teacher_add_student('RLS1', 'rlsbad2', 'melon12', '智障') $$, '老師加人也擋');
+
+  -- 老師幫自己班的人改名，別班的老師不行
+  select id into v_ming from test_peek_student('rlsming');
+  v_n := public.teacher_set_student_nickname(v_ming, ' 小明明 ');
+  perform test_ok(v_n = '小明明' and (select nickname from test_peek_student('rlsming')) = '小明明', '老師幫學生改暱稱');
+  perform test_denied(format($$ select public.teacher_set_student_nickname(%L, '幹') $$, v_ming), '老師也改不成不雅暱稱');
+  perform test_denied(format($$ select public.teacher_set_student_nickname(%L, '小華') $$, v_ming), '老師改成同班重複的');
+  perform test_as('a0000000-0000-0000-0000-000000000002', false, 'teacher2@rlstest.local');
+  perform test_denied(format($$ select public.teacher_set_student_nickname(%L, '別班改的') $$, v_ming), '別班老師改名');
+  perform test_denied($$ select * from public.admin_list_banned_words() $$, '老師看禁用字清單');
+  perform test_denied($$ select public.admin_add_banned_word('abc') $$, '老師加禁用字');
+  perform test_denied($$ select * from public.banned_words $$, '直接讀禁用字表');
+
+  -- 管理員加一個字，舊暱稱會被列出來；刪掉就放行
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  perform test_ok((select count(*) from public.admin_list_banned_words()) > 50, '管理員看得到內建清單');
+  perform test_ok(public.admin_add_banned_word(' 明 明 ') = '明明', '加字會先正規化');
+  perform test_ok(exists (select 1 from public.admin_flagged_nicknames() f where f.student_id = v_ming), '已經在用的暱稱被列出來');
+  perform public.teacher_set_student_nickname(v_ming, '小明');
+  perform test_ok(not exists (select 1 from public.admin_flagged_nicknames() f where f.student_id = v_ming), '管理員改完就不在清單上');
+  perform public.admin_remove_banned_word('明明');
+  perform test_ok(public.nickname_problem('小明明') is null, '刪掉的字放行');
+end $blk$;
+
 reset role;
 \echo ''
 \echo '全部通過'

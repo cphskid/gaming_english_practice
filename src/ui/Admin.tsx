@@ -65,6 +65,8 @@ export function Admin({ onBack }: { onBack: () => void }) {
       <div className="teacher">
         <FeedbackInbox />
 
+        <NicknameGuard />
+
         <div>
           <h2>加一位老師</h2>
           <p className="lede left">
@@ -175,6 +177,104 @@ export function Admin({ onBack }: { onBack: () => void }) {
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * 暱稱禁用字。註冊、改暱稱時伺服器會拿這份清單比對；比對前會去掉空白符號、
+ * 全形轉半形、大小寫當成一樣，所以這裡存的字看起來都是「擠在一起、小寫」的樣子。
+ * 新加的字不會把已經在用的名字變不見，所以下面把「現在會被擋的暱稱」列出來讓你改。
+ */
+function NicknameGuard() {
+  const [words, setWords] = useState<{ word: string; whole: boolean }[]>([])
+  const [flagged, setFlagged] = useState<Awaited<ReturnType<typeof repo.listFlaggedNicknames>>>([])
+  const [word, setWord] = useState('')
+  const [whole, setWhole] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+
+  const refresh = useCallback(async () => {
+    const [w, f] = await Promise.all([repo.listBannedWords(), repo.listFlaggedNicknames()])
+    setWords(w)
+    setFlagged(f)
+  }, [])
+  useEffect(() => { void refresh().catch((e) => setError(e instanceof Error ? e.message : String(e))) }, [refresh])
+
+  const run = async (what: () => Promise<string | void>) => {
+    setError(null); setNote(null)
+    try {
+      const msg = await what()
+      if (typeof msg === 'string') setNote(msg)
+      await refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  return (
+    <>
+      <div>
+        <h2>暱稱禁用字（{words.length}）</h2>
+        <p className="lede left">
+          註冊和改暱稱時會擋掉含這些字的名字，空白、符號、全形、大小寫都繞不過去。
+          勾「整個名字才擋」的字只擋剛好叫這個名字的人，給 ass 這種短字用，不然 class 也會被擋。
+        </p>
+      </div>
+      {error && <p className="error">{error}</p>}
+      {note && <p className="note">{note}</p>}
+      {flagged.length > 0 && (
+        <div className="roster">
+          <p className="lede left">這些人的暱稱現在會被擋，幫他們換一個：</p>
+          {flagged.map((f) => (
+            <div className="r" key={f.studentId}>
+              <span className="n">{f.nickname}</span>
+              <span className="s">{f.className || f.classCode || '沒有班級'}</span>
+              <button className="btn ghost small" onClick={() => {
+                const nick = prompt(`幫「${f.nickname}」換一個暱稱`)
+                if (nick) void run(async () => {
+                  const next = await repo.setStudentNickname(f.studentId, nick)
+                  return `${f.nickname} 改名叫 ${next} 了`
+                })
+              }}>改暱稱</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <form className="row" onSubmit={(e) => {
+        e.preventDefault()
+        if (!word.trim()) return
+        void run(async () => {
+          const saved = await repo.addBannedWord(word, whole)
+          setWord(''); setWhole(false)
+          return `加進去了：${saved}`
+        })
+      }}>
+        <input value={word} placeholder="要擋的字" onChange={(e) => setWord(e.target.value)} />
+        <label className="small">
+          <input type="checkbox" checked={whole} onChange={(e) => setWhole(e.target.checked)} /> 整個名字才擋
+        </label>
+        <button className="btn small" type="submit" disabled={!word.trim()}>加入</button>
+        <button className="btn ghost small" type="button" onClick={() => setOpen(!open)}>
+          {open ? '收起清單' : '看清單'}
+        </button>
+      </form>
+      {open && (
+        <div className="chips">
+          {words.map((w) => (
+            <button key={w.word} title="點一下刪掉"
+              onClick={() => {
+                if (confirm(`把「${w.word}」從禁用字拿掉？`)) void run(async () => {
+                  await repo.removeBannedWord(w.word)
+                  return `拿掉了：${w.word}`
+                })
+              }}>
+              {w.word}{w.whole ? '（整個）' : ''} ✕
+            </button>
+          ))}
+        </div>
+      )}
+    </>
   )
 }
 

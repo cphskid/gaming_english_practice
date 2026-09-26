@@ -1153,6 +1153,14 @@ export class LocalRepository implements Repository {
     write(k.password(studentId_), scramble(password.toLowerCase()))
   }
 
+  async setStudentNickname(studentId_: string, nickname: string): Promise<string> {
+    const s = read<Student | null>(k.student(studentId_), null)
+    if (!s) throw new Error('找不到這個學生')
+    const next = nickname.trim()
+    write(k.student(studentId_), { ...s, nickname: next })
+    return next
+  }
+
   async claimFirstAdmin(): Promise<void> {
     write(k.staff, { ...this.staffRecord(), isAdmin: true })
   }
@@ -1178,6 +1186,12 @@ export class LocalRepository implements Repository {
   async setClassOwner(): Promise<void> {
     // 本地版只有一個人，沒有別的老師可以換
   }
+
+  // 禁用字只在伺服器上比對，本地版不擋
+  async listBannedWords(): Promise<{ word: string; whole: boolean }[]> { return [] }
+  async addBannedWord(word: string): Promise<string> { return word }
+  async removeBannedWord(): Promise<void> {}
+  async listFlaggedNicknames() { return [] }
 
   async hasAdmin(): Promise<boolean> {
     return read<Staff | null>(k.staff, null)?.isAdmin ?? false

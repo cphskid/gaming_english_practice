@@ -225,7 +225,7 @@ export function Teacher({
               <h2>班上同學（{roster.length}）</h2>
               <p className="lede left">
                 小朋友忘記密碼的時候在這裡重設。重設會順便解鎖，因為忘記密碼的人
-                通常已經試到被鎖住了。
+                通常已經試到被鎖住了。暱稱取得不好也可以在這裡直接幫他改。
               </p>
             </div>
             <div className="roster">
@@ -241,6 +241,13 @@ export function Teacher({
                       return `${r.nickname} 的新密碼是 ${pw}`
                     })
                   }}>重設密碼</button>
+                  <button className="btn ghost small" onClick={() => {
+                    const nick = prompt(`幫「${r.nickname}」換一個暱稱`, r.nickname)
+                    if (nick && nick.trim() !== r.nickname) void run(async () => {
+                      const next = await repo.setStudentNickname(r.studentId, nick)
+                      return `${r.nickname} 改名叫 ${next} 了`
+                    })
+                  }}>改暱稱</button>
                   <button className="btn ghost small" onClick={() => {
                     if (confirm(`把「${r.nickname}」從這一班移除？他的紀錄會一起消失。`)) {
                       void run(() => repo.removeStudent(r.studentId))

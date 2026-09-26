@@ -113,6 +113,8 @@ export interface Repository {
   removeStudent(studentId: string): Promise<void>
   /** 忘記密碼。順便解鎖，因為忘記的人通常已經試到被鎖住了。 */
   resetStudentPassword(studentId: string, password: string): Promise<void>
+  /** 老師幫學生改暱稱（亂取的名字）。不受一週一次限制，也不佔學生自己那一次。 */
+  setStudentNickname(studentId: string, nickname: string): Promise<string>
 
   /** 老師額外開放的關卡 */
   loadTeacherOpen(classCode: string): Promise<string[]>
@@ -187,6 +189,15 @@ export interface Repository {
    * 學生是掛在班級代碼上的，不是掛在老師身上。
    */
   setClassOwner(code: string, userId: string): Promise<void>
+  /**
+   * 暱稱禁用字。比對前伺服器會去掉空白符號、全形轉半形，所以存的是正規化過的樣子。
+   * whole＝只擋「整個暱稱就是這個字」，給 ass 這種當子字串會誤殺 class 的短字用。
+   */
+  listBannedWords(): Promise<{ word: string; whole: boolean }[]>
+  addBannedWord(word: string, whole: boolean): Promise<string>
+  removeBannedWord(word: string): Promise<void>
+  /** 已經在用、但現在會被禁用字擋下來的暱稱 */
+  listFlaggedNicknames(): Promise<{ studentId: string; nickname: string; classCode: string | null; className: string | null }[]>
   /** 這套系統有沒有管理員。沒有的話老師後台要讓人認領，不然誰都進不去。 */
   hasAdmin(): Promise<boolean>
 

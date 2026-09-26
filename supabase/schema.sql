@@ -679,7 +679,9 @@ begin
   if v_login !~ '^[a-z0-9_]{3,16}$' then
     raise exception '帳號要 3 到 16 個字，只能用英文字母、數字和底線';
   end if;
-  if v_nick = '' or length(v_nick) > 16 then raise exception '暱稱要 1 到 16 個字'; end if;
+  if public.nickname_problem(v_nick) is not null then
+    raise exception '%', public.nickname_problem(v_nick);
+  end if;
 
   v_bad := public.password_problem(p_password, v_login);
   if v_bad is not null then raise exception '%', v_bad; end if;
@@ -784,7 +786,9 @@ declare
   v_code text; v_last timestamptz;
 begin
   if v_id is null then raise exception '請先登入'; end if;
-  if v_nick = '' or length(v_nick) > 16 then raise exception '暱稱要 1 到 16 個字'; end if;
+  if public.nickname_problem(v_nick) is not null then
+    raise exception '%', public.nickname_problem(v_nick);
+  end if;
 
   select s.class_code, s.nickname_changed_at into v_code, v_last
     from public.students s where s.id = v_id;
@@ -1412,7 +1416,9 @@ begin
   if v_login !~ '^[a-z0-9_]{3,16}$' then
     raise exception '帳號要 3 到 16 個字，只能用英文字母、數字和底線';
   end if;
-  if v_nick = '' or length(v_nick) > 16 then raise exception '暱稱要 1 到 16 個字'; end if;
+  if public.nickname_problem(v_nick) is not null then
+    raise exception '%', public.nickname_problem(v_nick);
+  end if;
   v_bad := public.password_problem(p_password, v_login);
   if v_bad is not null then raise exception '%', v_bad; end if;
   if exists (select 1 from public.students s where s.login_id = v_login) then
@@ -4070,4 +4076,166 @@ grant execute on function
   public.list_feedback(text, int),
   public.triage_feedback(bigint, text, text),
   public.my_feedback()
+to authenticated;
+
+-- =============================================================================
+-- 暱稱禁用字（2026-09-26）
+--
+-- 暱稱會出現在同班每個人的排行榜上，試玩班開給陌生人以後一定有人亂取。
+-- 三層：註冊與改暱稱時伺服器比對禁用字 → 清單放資料庫、管理員自己加減 →
+-- 擋不到的由老師或管理員直接幫他改名（teacher_set_student_nickname）。
+--
+-- 比對前先 nick_norm()：全形轉半形、大小寫一樣、去掉空白與符號，
+-- 所以「幹 」「F.u.c.k」「ｆｕｃｋ」都會變成同一個樣子。另外再看一次把
+-- 0 1 3 4 5 @ $ 換回字母的版本（sh1t、b!tch 這種）。
+--
+-- whole＝true 的字只擋「整個暱稱就是這個字」：ass、cock、rape 這種短字
+-- 當子字串會誤殺 class、peacock、grape。
+--
+-- 被擋到只說「這個暱稱不能用」，不說是哪個字，不然就是在教他怎麼繞。
+-- =============================================================================
+create table if not exists public.banned_words (
+  word     text primary key,
+  whole    boolean not null default false,
+  added_at timestamptz not null default now()
+);
+alter table public.banned_words enable row level security;
+-- 不開任何 policy：清單本身只有管理員透過 RPC 讀得到。
+
+create or replace function public.nick_norm(p text)
+returns text language sql immutable set search_path = public, pg_temp as $$
+  select regexp_replace(lower(normalize(coalesce(p, ''), NFKC)),
+                        '[[:space:][:punct:]·・。、〜～…—☆★♡♥‧]', '', 'g');
+$$;
+
+create or replace function public.nickname_problem(p_nickname text)
+returns text language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare
+  v_nick text := btrim(coalesce(p_nickname, ''));
+  v_a text; v_b text;
+begin
+  if v_nick = '' or length(v_nick) > 16 then return '暱稱要 1 到 16 個字'; end if;
+  v_a := public.nick_norm(v_nick);
+  v_b := public.nick_norm(translate(lower(normalize(v_nick, NFKC)), '013457@$!|', 'oieastasii'));
+  if exists (
+    select 1 from public.banned_words b
+     where (b.whole and b.word in (v_a, v_b))
+        or (not b.whole and (strpos(v_a, b.word) > 0 or strpos(v_b, b.word) > 0))
+  ) then
+    return '這個暱稱不能用，換一個';
+  end if;
+  return null;
+end;
+$$;
+
+-- 第一次建表才放進內建清單。之後管理員刪掉的字，重跑 schema.sql 不會跑回來。
+do $$
+begin
+  if not exists (select 1 from public.banned_words) then
+    insert into public.banned_words (word, whole)
+    select public.nick_norm(w), false from unnest(array[
+      -- 台灣常見
+      '幹', '干你', '靠北', '靠杯', '靠腰', '靠夭', '操你', '操他', '肏', '屌', '屄', '婊',
+      '雞掰', '機掰', '雞巴', '鸡巴', '鷄巴', 'ㄐㄅ', 'ㄍㄢ',
+      '他媽', '他妈', '你媽', '你妈', '妳媽', '媽的', '妈的', '恁娘', '恁老師', '恁爸',
+      '三小', '殺小', '啥小', '屁眼', '吃屎', '去死', '白癡', '白痴', '智障', '腦殘', '脑残',
+      '弱智', '低能', '垃圾', '廢物', '废物', '賤', '贱',
+      -- 對岸常見
+      '傻逼', '傻b', '煞筆', '沙比', '尼玛', '草泥馬', '草泥马', '艹',
+      -- 色情
+      '淫', '色情', '性交', '做愛', '做爱', '裸體', '裸体', '強姦', '强奸', '陰莖', '陰道', '奶子',
+      -- 英文
+      'fuck', 'fuk', 'fck', 'shit', 'bitch', 'cunt', 'dick', 'pussy', 'penis', 'vagina',
+      'porn', 'sex', 'nigger', 'nigga', 'faggot', 'whore', 'slut', 'asshole', 'bastard',
+      'damn', 'wtf', 'stfu', 'piss', 'nazi', 'hitler'
+    ]) as w
+    on conflict do nothing;
+    insert into public.banned_words (word, whole)
+    select public.nick_norm(w), true from unnest(array[
+      'ass', 'cock', 'rape', 'cum', 'anal', 'sb', 'fag', 'kkk', 'g8'
+    ]) as w
+    on conflict do nothing;
+  end if;
+end $$;
+
+create or replace function public.admin_list_banned_words()
+returns table (word text, whole boolean)
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+begin
+  if not public.is_admin() then raise exception '只有管理員可以看'; end if;
+  return query select b.word, b.whole from public.banned_words b order by b.whole, b.word;
+end;
+$$;
+
+create or replace function public.admin_add_banned_word(p_word text, p_whole boolean default false)
+returns text language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_word text := public.nick_norm(p_word);
+begin
+  if not public.is_admin() then raise exception '只有管理員可以改'; end if;
+  if v_word = '' then raise exception '去掉空白和符號之後沒有字了'; end if;
+  insert into public.banned_words (word, whole) values (v_word, coalesce(p_whole, false))
+  on conflict (word) do update set whole = excluded.whole;
+  return v_word;
+end;
+$$;
+
+create or replace function public.admin_remove_banned_word(p_word text)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if not public.is_admin() then raise exception '只有管理員可以改'; end if;
+  delete from public.banned_words where word = public.nick_norm(p_word);
+end;
+$$;
+
+-- 已經在用、現在會被擋的暱稱（清單加了新字之後，舊的名字不會自己消失）。
+create or replace function public.admin_flagged_nicknames()
+returns table (student_id uuid, nickname text, class_code text, class_name text)
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+begin
+  if not public.is_admin() then raise exception '只有管理員可以看'; end if;
+  return query
+    select s.id, s.nickname, s.class_code, c.name
+      from public.students s left join public.classes c on c.code = s.class_code
+     where public.nickname_problem(s.nickname) is not null
+     order by s.class_code, s.nickname;
+end;
+$$;
+
+-- 老師幫自己班的學生改暱稱，管理員改任何人的。不受一週一次限制，也不佔掉學生自己那一次。
+create or replace function public.teacher_set_student_nickname(p_student uuid, p_nickname text)
+returns text language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_nick text := btrim(coalesce(p_nickname, ''));
+  v_code text; v_found boolean;
+begin
+  select true, s.class_code into v_found, v_code from public.students s where s.id = p_student;
+  if v_found is null then raise exception '找不到這個學生'; end if;
+  if not (public.is_admin() or (v_code is not null and public.is_teacher_of(v_code))) then
+    raise exception '這不是你的班';
+  end if;
+  if public.nickname_problem(v_nick) is not null then
+    raise exception '%', public.nickname_problem(v_nick);
+  end if;
+  if v_code is not null and exists (
+    select 1 from public.students s
+     where s.class_code = v_code and s.nickname = v_nick and s.id <> p_student
+  ) then raise exception '這一班已經有人叫這個暱稱了'; end if;
+  update public.students set nickname = v_nick where id = p_student;
+  return v_nick;
+end;
+$$;
+
+revoke all on function public.nick_norm(text), public.nickname_problem(text),
+  public.admin_list_banned_words(), public.admin_add_banned_word(text, boolean),
+  public.admin_remove_banned_word(text), public.admin_flagged_nicknames(),
+  public.teacher_set_student_nickname(uuid, text)
+  from public, anon;
+-- nickname_problem 給大家叫：只回一句話，跟直接去註冊試是一樣的資訊量。
+grant execute on function
+  public.nickname_problem(text),
+  public.admin_list_banned_words(),
+  public.admin_add_banned_word(text, boolean),
+  public.admin_remove_banned_word(text),
+  public.admin_flagged_nicknames(),
+  public.teacher_set_student_nickname(uuid, text)
 to authenticated;

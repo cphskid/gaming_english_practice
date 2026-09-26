@@ -835,6 +835,14 @@ export class SupabaseRepository implements Repository {
     fail('重設密碼失敗', error)
   }
 
+  async setStudentNickname(studentId: string, nickname: string): Promise<string> {
+    const { data, error } = await this.db.rpc('teacher_set_student_nickname', {
+      p_student: studentId, p_nickname: nickname.trim(),
+    })
+    fail('改暱稱失敗', error)
+    return String(data)
+  }
+
   async claimFirstAdmin(): Promise<void> {
     const { error } = await this.db.rpc('claim_first_admin')
     fail('認領管理員失敗', error)
@@ -881,6 +889,30 @@ export class SupabaseRepository implements Repository {
       p_code: code.trim().toUpperCase(), p_owner: userId,
     })
     fail('換老師失敗', error)
+  }
+
+  async listBannedWords(): Promise<{ word: string; whole: boolean }[]> {
+    const { data, error } = await this.db.rpc('admin_list_banned_words')
+    fail('讀取禁用字失敗', error)
+    return ((data ?? []) as { word: string; whole: boolean }[]).map((r) => ({ word: r.word, whole: r.whole }))
+  }
+
+  async addBannedWord(word: string, whole: boolean): Promise<string> {
+    const { data, error } = await this.db.rpc('admin_add_banned_word', { p_word: word, p_whole: whole })
+    fail('加禁用字失敗', error)
+    return String(data)
+  }
+
+  async removeBannedWord(word: string): Promise<void> {
+    const { error } = await this.db.rpc('admin_remove_banned_word', { p_word: word })
+    fail('刪禁用字失敗', error)
+  }
+
+  async listFlaggedNicknames() {
+    const { data, error } = await this.db.rpc('admin_flagged_nicknames')
+    fail('讀取暱稱失敗', error)
+    return ((data ?? []) as { student_id: string; nickname: string; class_code: string | null; class_name: string | null }[])
+      .map((r) => ({ studentId: r.student_id, nickname: r.nickname, classCode: r.class_code, className: r.class_name }))
   }
 
   async hasAdmin(): Promise<boolean> {

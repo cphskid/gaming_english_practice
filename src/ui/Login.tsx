@@ -16,13 +16,19 @@ export function Login({
     => Promise<string | null>
   onStaff: () => void
 }) {
+  // 介紹網頁的「開始冒險」會帶 ?join=試玩班代碼 過來：直接打開「第一次來」、代碼先填好，
+  // 陌生人不用知道什麼是班級代碼。只認英數，其他的當沒帶。
+  const [joinCode] = useState(() => {
+    const raw = new URLSearchParams(location.search).get('join') ?? ''
+    return /^[A-Za-z0-9]{3,12}$/.test(raw) ? raw.toUpperCase() : ''
+  })
   // 先給一個標題畫面，點一下才出登入框。不然背景一大半會被表單蓋住，看起來不像遊戲。
-  const [opened, setOpened] = useState(false)
-  const [tab, setTab] = useState<'login' | 'register'>('login')
+  const [opened, setOpened] = useState(joinCode !== '')
+  const [tab, setTab] = useState<'login' | 'register'>(joinCode ? 'register' : 'login')
   const [loginId, setLoginId] = useState('')
   const [password, setPassword] = useState('')
   const [nickname, setNickname] = useState('')
-  const [code, setCode] = useState('')
+  const [code, setCode] = useState(joinCode)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -137,7 +143,8 @@ export function Login({
       <p className="lede">
         {tab === 'login'
           ? '忘記密碼了嗎？請老師幫你重設一個。'
-          : '帳號是登入用的，暱稱是大家看得到的名字，兩個可以不一樣。不會用到真實姓名，也不用填 email。'}
+          : (joinCode && code === joinCode ? '班級代碼已經幫你填好了。' : '')
+          + '帳號是登入用的，暱稱是大家看得到的名字，兩個可以不一樣。不會用到真實姓名，也不用填 email。'}
       </p>
 
       <button className="teacher-link" onClick={onStaff}>我是老師 ›</button>
