@@ -119,7 +119,7 @@ function run(which, scenario, layout, speed, seedWords) {
   const mk = (path, dist) => {
     const w = seedWords[wi++ % seedWords.length]
     live.push({ path, dist, x: -300, y: 0, pw: plateWidth(w),
-                px: 0, ptx: 0, tier: 0, laid: false, hold: 0,
+                px: 0, ptx: 0, ox: 0, ty: 0, tier: 0, laid: false, hold: 0,
                 prevPx: null, prevX: null, prevTier: 0, prevDir: 0 })
   }
 
