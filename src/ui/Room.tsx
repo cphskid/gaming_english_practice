@@ -245,8 +245,6 @@ export function RoomList({ rooms, stat, cleared, onJoin, onOpen, onBack }: {
         每個人守一座城，城被攻破就先答對題目修好，再繼續出兵。
       </p>
 
-      {error && <p className="error">{error}</p>}
-
       <h2 className="sec">現在開著的<small>　按一下就進去</small></h2>
       {rooms.some((r) => r.fresh) && (
         <p className="lede left small">✨＝還沒跟你一起打完過魔王的同學。跟新隊友打完，「廣結善緣」徽章會升階。</p>
@@ -284,19 +282,25 @@ export function RoomList({ rooms, stat, cleared, onJoin, onOpen, onBack }: {
 
       <h2 className="sec">我要開一場<small>　先選一隻魔王</small></h2>
       <BossGrid pick={pick} onPick={setPick} stat={stat} cleared={cleared} />
-      <div className="row raidopen">
-        <button className={'btn small' + (priv ? ' ghost' : '')} onClick={() => setPriv(false)}>🌐 公開房</button>
-        <button className={'btn small' + (priv ? '' : ' ghost')} onClick={() => setPriv(true)}>🔒 私人房</button>
-        {priv && <PinInput value={pin} onChange={setPin} />}
-      </div>
-      <p className="lede left small">
-        {priv ? '私人房要打密碼才進得來，把密碼告訴你要找的同學。' : '公開房同班的人都進得來。'}
-      </p>
-      <div className="row">
-        <button className="btn" disabled={busy || (priv && pin.length !== 4)}
-          onClick={() => run(() => onOpen(pick, priv ? pin : null))}>
-          開一場打{BOSS_BY_ID.get(pick)?.name}
-        </button>
+      {/*
+        開場的按鈕黏在畫面底部。魔王分四級之後格子有二十個，按鈕被擠到很下面，
+        電腦橫的畫面一屏看不到——小朋友點了魔王以為就會開，點了「沒反應」
+        （2026-09-26 🌙 回報三次）。錯誤訊息也放這裡，放最上面一樣看不到。
+      */}
+      <div className="raid-openbar">
+        {error && <p className="error">{error}</p>}
+        <div className="row raidopen">
+          <button className={'btn small' + (priv ? ' ghost' : '')} onClick={() => setPriv(false)}>🌐 公開房</button>
+          <button className={'btn small' + (priv ? '' : ' ghost')} onClick={() => setPriv(true)}>🔒 私人房</button>
+          {priv && <PinInput value={pin} onChange={setPin} />}
+          <button className="btn" disabled={busy || (priv && pin.length !== 4)}
+            onClick={() => run(() => onOpen(pick, priv ? pin : null))}>
+            開一場打{BOSS_BY_ID.get(pick)?.name}
+          </button>
+        </div>
+        <p className="lede small">
+          {priv ? '私人房要打密碼才進得來，把密碼告訴你要找的同學。' : '公開房同班的人都進得來。'}
+        </p>
       </div>
     </div>
   )
