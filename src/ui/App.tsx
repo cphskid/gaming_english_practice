@@ -625,12 +625,8 @@ export function App() {
             try { setStaff(await repo.staffLogin(em, pw)); setScreen('teacher'); return null }
             catch (e) { return e instanceof Error ? e.message : String(e) }
           }}
-          onSignUp={async (em, pw, dn) => {
-            try { setStaff(await repo.staffSignUp(em, pw, dn)); setScreen('teacher'); return null }
-            catch (e) { return e instanceof Error ? e.message : String(e) }
-          }}
-          onClaimFirstAdmin={async () => {
-            try { await repo.claimFirstAdmin(); return null }
+          onSignUp={async (em, pw, dn, adult) => {
+            try { setStaff(await repo.staffSignUp(em, pw, dn, adult)); setScreen('teacher'); return null }
             catch (e) { return e instanceof Error ? e.message : String(e) }
           }}
           onBack={() => setScreen('login')}

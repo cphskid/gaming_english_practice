@@ -1,26 +1,27 @@
 import { useState } from 'react'
 
 /**
- * 老師與管理員的登入。**用真的 email**，跟學生完全分開。
+ * 開班的人（老師或家長）與管理員的登入。**用真的 email**，跟學生完全分開。
  *
- * 理由：老師需要自己救得回密碼（寄重設信），而學生的密碼是由老師重設的。
- * 人數也差很多——老師幾個人，學生一整班，後者走 email 註冊會被寄信額度擋死。
+ * 開班的人可以自己註冊、馬上能用，不用等管理員也不收確認信。
+ * 不審核是因為開班帳號只管得到自己的班；防濫用靠「年滿 18 歲」的勾選、
+ * 班數與人數上限，以及管理員看得到名單、可以停用（見 register_teacher）。
  *
- * 註冊要管理員先把 email 加進名單。第一個註冊的人可以認領成管理員，
- * 之後那個按鈕就沒用了。
+ * 「我是第一個使用者」（認領管理員）只放在老師後台，系統還沒有管理員時才出現，
+ * 不放這裡：家長會好奇按下去，然後看到一句看不懂的拒絕。
  */
 export function StaffAuth({
-  onLogin, onSignUp, onClaimFirstAdmin, onBack,
+  onLogin, onSignUp, onBack,
 }: {
   onLogin: (email: string, password: string) => Promise<string | null>
-  onSignUp: (email: string, password: string, displayName: string) => Promise<string | null>
-  onClaimFirstAdmin: () => Promise<string | null>
+  onSignUp: (email: string, password: string, displayName: string, adult: boolean) => Promise<string | null>
   onBack: () => void
 }) {
   const [tab, setTab] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
+  const [adult, setAdult] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -35,6 +36,7 @@ export function StaffAuth({
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) return 'email 看起來不太對，再檢查一下'
     if (password.length < 8) return '密碼至少要 8 個字（現在 ' + password.length + ' 個）'
     if (tab === 'signup' && !name.trim()) return '填一下你的稱呼，學生會看到'
+    if (tab === 'signup' && !adult) return '請勾選「我是老師或家長，年滿 18 歲」'
     return null
   }
 
@@ -46,22 +48,15 @@ export function StaffAuth({
     setBusy(true); setError(null); setNote(null)
     const msg = tab === 'login'
       ? await onLogin(email, password)
-      : await onSignUp(email, password, name)
+      : await onSignUp(email, password, name, adult)
     setBusy(false)
     if (msg) setError(msg)
   }
 
-  async function claim() {
-    setBusy(true); setError(null); setNote(null)
-    const msg = await onClaimFirstAdmin()
-    setBusy(false)
-    if (msg) setError(msg)
-    else setNote('你現在是管理員了。')
-  }
 
   return (
     <div className="screen">
-      <h1>老師登入</h1>
+      <h1>老師／家長登入</h1>
 
       <div className="tabs">
         <button className={tab === 'login' ? 'on' : ''}
@@ -87,9 +82,15 @@ export function StaffAuth({
         {tab === 'signup' && (
           <div>
             <label htmlFor="dn">你的稱呼</label>
-            <input id="dn" value={name} autoComplete="off" maxLength={20}
-              onChange={(e) => setName(e.target.value)} placeholder="例如 王老師" />
+            <input id="dn" value={name} autoComplete="off" maxLength={16}
+              onChange={(e) => setName(e.target.value)} placeholder="例如 王老師、小明媽媽" />
           </div>
+        )}
+        {tab === 'signup' && (
+          <label className="switch">
+            <input type="checkbox" checked={adult} onChange={(e) => setAdult(e.target.checked)} />
+            我是老師或家長，年滿 18 歲
+          </label>
         )}
 
         {error && <p className="error">{error}</p>}
@@ -101,20 +102,13 @@ export function StaffAuth({
       </form>
 
       <p className="lede">
-        第一次用的人點上面的「第一次使用」自己建帳號。
-        你的 email 要先在管理員的名單上才建得起來。
+        老師或家長都可以開班：點上面的「第一次使用」建帳號，馬上就能開班、拿到班級代碼給孩子。
+        一個帳號最多開 3 個班、每班 40 人，不夠用請按「問題回報」告訴我們。
       </p>
 
       <div className="row">
         <button className="btn ghost small" onClick={onBack}>回學生登入</button>
-        <button className="btn ghost small" onClick={() => void claim()} disabled={busy}>
-          我是第一個使用者
-        </button>
       </div>
-      <p className="lede small">
-        「我是第一個使用者」要<strong>先建好帳號並登入之後</strong>再按，它會把目前登入的
-        帳號設成最高管理員。系統一旦有了管理員，之後再按都會被拒絕。
-      </p>
     </div>
   )
 }

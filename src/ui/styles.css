@@ -296,6 +296,9 @@ button{font-family:inherit}
   background:var(--panel2);border:2px solid var(--line);border-radius:10px;padding:9px 13px}
 .roster .r .n{font-weight:800;min-width:6em}
 .roster .r .n small{color:var(--gold);font-weight:700}
+.roster .r .n .email{display:block;color:var(--muted);font-weight:400;font-size:12px;word-break:break-all}
+.tag-new{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:9px;background:var(--gold);
+  color:#1a1a1a;font-size:12px;font-weight:800;vertical-align:1px}
 .roster .r .s{flex:1;color:var(--muted);font-size:13px}
 /* 管理員那頁的「這一班交給誰」。手機上點得到，所以留 44px */
 .roster .r select{min-height:40px;padding:7px 10px;border-radius:9px;
@@ -564,7 +567,7 @@ h2.sec small{font-size:12px;font-weight:400;color:var(--muted)}
 @media (max-height:520px){ .tw-foe{font-size:12px;max-width:8.5em} }
 
 /* 設定裡的開關。.form label 本來是小灰字（欄位標題），開關要看得清楚所以蓋掉。 */
-.switch{display:flex;align-items:center;gap:10px;font-size:16px;color:var(--ink);cursor:pointer;
+.switch,.form label.switch{display:flex;align-items:center;gap:10px;font-size:16px;color:var(--ink);cursor:pointer;
   padding:4px 0;min-height:44px}
 .switch input{width:22px;height:22px;flex:none;accent-color:var(--gold);margin:0}
 .hint{margin:2px 0 0;font-size:12.5px;line-height:1.5;color:var(--muted)}

@@ -4,15 +4,19 @@ import { repo } from '@/net'
 import type { FeedbackRow, FeedbackStatus } from '@/net/repository'
 
 /**
- * 管理員後台。管的是老師與班級，不是學生。
+ * 管理員後台。管的是開班帳號（老師或家長）與班級，不是學生。
  *
- * 老師的帳號**由管理員直接開**，不走「加進名單→自己註冊」那條路：
- * Supabase 註冊會寄一封確認信，而這個專案的寄信額度是一小時兩封，
- * 幾位老師同一個下午一起註冊就會有人卡在收不到信。
- * email 在這裡只是登入用的名字，老師的權限本來就是管理員給的。
- *
- * 少了這道關卡的話，開放學生自由註冊之後，任何人拿 email 註冊都能開班當老師。
+ * 老師和家長可以自己註冊，不用經過管理員（見 register_teacher）；
+ * 管理員這裡看得到誰新註冊、開了幾班，看起來不對就停用，也能調個別帳號的上限。
+ * 「幫人開帳號」還留著，給不方便自己註冊的老師用。
  */
+const WEEK = 7 * 24 * 3600 * 1000
+
+/** 自己註冊、而且是最近 7 天的帳號：管理員要看一眼的那些。 */
+function isFresh(t: TeacherRow): boolean {
+  return !!t.selfSignup && !!t.createdAt && Date.now() - Date.parse(t.createdAt) < WEEK
+}
+
 export function Admin({ onBack }: { onBack: () => void }) {
   const [teachers, setTeachers] = useState<TeacherRow[]>([])
   const [invites, setInvites] = useState<{ email: string; used: boolean }[]>([])
@@ -50,6 +54,7 @@ export function Admin({ onBack }: { onBack: () => void }) {
   const formOk = emailOk && password.length >= 8 && name.trim().length > 0
   // 停用中的老師不能接班——接了等於這個班沒人帶，畫面上卻看起來正常。
   const active = teachers.filter((t) => t.active)
+  const fresh = teachers.filter(isFresh).length
 
   return (
     <div className="screen wide">
@@ -68,9 +73,10 @@ export function Admin({ onBack }: { onBack: () => void }) {
         <NicknameGuard />
 
         <div>
-          <h2>加一位老師</h2>
+          <h2>幫人開帳號</h2>
           <p className="lede left">
-            帳號直接幫他開好，把 email 和密碼給他就能登入，不用等確認信。
+            老師和家長現在可以自己在「我是老師／家長」註冊，通常不用你開。
+            真的要幫人開的話，帳號直接開好，把 email 和密碼給他就能登入，不用等確認信。
             他如果已經自己註冊過（卡在進不去），這裡填一樣的 email 就會把他設成老師，
             密碼還是他自己原本那組。
           </p>
@@ -95,24 +101,47 @@ export function Admin({ onBack }: { onBack: () => void }) {
         </form>
 
         <div>
-          <h2>老師（{teachers.length}）</h2>
+          <h2>開班帳號（{teachers.length}）{fresh > 0 && `　${fresh} 個新的`}</h2>
+          <p className="lede left">
+            老師和家長自己註冊的，最近 7 天內會標「新」。看起來不對（例如小朋友自己開的）就按停用，
+            停用之後開不了班也看不到班上資料。一般帳號最多 3 個班、每班 40 人，按「上限」可以調。
+          </p>
         </div>
         <div className="roster">
           {teachers.map((t) => (
             <div className="r" key={t.userId}>
               <span className="n">
-                {t.displayName}{t.isAdmin && <small>　管理員</small>}
+                {t.displayName}
+                {isFresh(t) && <span className="tag-new">新</span>}
+                {t.isAdmin && <small>　管理員</small>}
+                {t.email && <small className="email">{t.email}</small>}
               </span>
               <span className="s">
-                {t.classes} 個班　{t.students} 位同學　{t.active ? '啟用中' : '已停用'}
+                {t.classes} 個班 ・ {t.students} 位同學 ・ {t.active ? '啟用中' : '已停用'}
+                {!t.isAdmin && t.maxClasses !== undefined &&
+                  ` ・ 上限 ${t.maxClasses} 班／每班 ${t.maxStudents} 人`}
               </span>
               {!t.isAdmin && (
-                <button className="btn ghost small" onClick={() => void run(async () => {
-                  await repo.setTeacherActive(t.userId, !t.active)
-                  return t.active ? `${t.displayName} 已停用` : `${t.displayName} 已恢復`
-                })}>
-                  {t.active ? '停用' : '恢復'}
-                </button>
+                <span className="row">
+                  <button className="btn ghost small" onClick={() => {
+                    const ans = window.prompt(
+                      `${t.displayName} 的上限，格式「班數/每班人數」`,
+                      `${t.maxClasses ?? 3}/${t.maxStudents ?? 40}`)
+                    const m = ans?.match(/^\s*(\d+)\s*[\/／]\s*(\d+)\s*$/)
+                    if (!ans) return
+                    if (!m) { setError('格式要像 3/40：前面是班數，後面是每班人數'); return }
+                    void run(async () => {
+                      await repo.setTeacherLimits(t.userId, Number(m[1]), Number(m[2]))
+                      return `${t.displayName} 改成最多 ${m[1]} 個班、每班 ${m[2]} 人`
+                    })
+                  }}>上限</button>
+                  <button className="btn ghost small" onClick={() => void run(async () => {
+                    await repo.setTeacherActive(t.userId, !t.active)
+                    return t.active ? `${t.displayName} 已停用` : `${t.displayName} 已恢復`
+                  })}>
+                    {t.active ? '停用' : '恢復'}
+                  </button>
+                </span>
               )}
             </div>
           ))}
@@ -160,8 +189,8 @@ export function Admin({ onBack }: { onBack: () => void }) {
         <div>
           <h2>名單上還沒註冊的</h2>
           <p className="lede left">
-            以前加進名單、還沒自己去註冊的人。他們照舊可以自己註冊，
-            但那條路會收到一封確認信。
+            以前加進名單、還沒自己去註冊的人。他們現在直接在「我是老師／家長」註冊就好，
+            不會收到確認信。
           </p>
         </div>
         <div className="roster">

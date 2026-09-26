@@ -93,7 +93,8 @@ export interface Repository {
 
   // -------------------------------------------------------------- 老師
   /** 老師與管理員用真的 email 登入，跟學生走不同的路。 */
-  staffSignUp(email: string, password: string, displayName: string): Promise<Staff>
+  /** 老師或家長自己註冊開班帳號。adult＝勾了「我是老師或家長，年滿 18 歲」。 */
+  staffSignUp(email: string, password: string, displayName: string, adult: boolean): Promise<Staff>
   staffLogin(email: string, password: string): Promise<Staff>
   currentStaff(): Promise<Staff | null>
   staffLogout(): Promise<void>
@@ -273,6 +274,8 @@ export interface Repository {
   setClassLiveListen(code: string, on: boolean): Promise<boolean>
 
   listTeachers(): Promise<TeacherRow[]>
+  /** 管理員調整某個開班帳號最多幾個班、每班最多幾個人。 */
+  setTeacherLimits(userId: string, maxClasses: number, maxStudents: number): Promise<void>
   listInvites(): Promise<{ email: string; used: boolean }[]>
   setTeacherActive(userId: string, active: boolean): Promise<void>
 

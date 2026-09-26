@@ -82,7 +82,7 @@ export function Login({
         <div className="title-bg" aria-hidden="true" />
         {title}
         <button className="start-btn" onClick={() => setOpened(true)}>點一下開始冒險</button>
-        <button className="teacher-link" onClick={onStaff}>我是老師 ›</button>
+        <button className="teacher-link" onClick={onStaff}>我是老師／家長 ›</button>
       </div>
     )
   }
@@ -147,7 +147,7 @@ export function Login({
           + '帳號是登入用的，暱稱是大家看得到的名字，兩個可以不一樣。不會用到真實姓名，也不用填 email。'}
       </p>
 
-      <button className="teacher-link" onClick={onStaff}>我是老師 ›</button>
+      <button className="teacher-link" onClick={onStaff}>我是老師／家長 ›</button>
     </div>
   )
 }

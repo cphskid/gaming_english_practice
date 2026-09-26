@@ -69,6 +69,14 @@ create table if not exists public.teachers (
   active       boolean not null default true,
   created_at   timestamptz not null default now()
 );
+-- 開班帳號可以是老師也可以是家長，自己註冊就能用（register_teacher），不用等管理員。
+-- 不審核的代價由上限來擋：一般帳號最多幾個班、每班最多幾個人，管理員可以個別調高。
+-- 管理員自己不受上限限制（試玩班就是管理員開的）。
+alter table public.teachers add column if not exists self_signup   boolean not null default false;
+alter table public.teachers add column if not exists max_classes   int     not null default 3;
+alter table public.teachers add column if not exists max_students  int     not null default 40;
+-- 用哪一台裝置（匿名身分）註冊的，拿來擋同一台一直開新帳號。
+alter table public.teachers add column if not exists signup_device uuid;
 
 -- 管理員指定「這個 email 可以成為老師」。老師自己註冊、自己設密碼，
 -- 管理員不用經手別人的密碼，也不用等老師申請再核准。
@@ -658,6 +666,23 @@ $$;
 -- 註冊。班級代碼就是邀請碼：沒有一組有效而且開放加入的代碼就註冊不了，
 -- 所以網址流出去也不會變成一個任何人都能進的公開網站。
 -- -----------------------------------------------------------------------------
+-- 班上人數滿了嗎？滿了回一句給人看的話，沒滿回 null。
+-- 上限跟著帶班的人走（teachers.max_students），管理員帶的班不設上限。
+create or replace function public.class_full_problem(p_code text)
+returns text language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare v_max int; v_admin boolean;
+begin
+  select t.max_students, t.is_admin into v_max, v_admin
+    from public.classes c join public.teachers t on t.user_id = c.owner
+   where c.code = upper(btrim(coalesce(p_code, '')));
+  if v_max is null or v_admin then return null; end if;
+  if (select count(*) from public.students s where s.class_code = upper(btrim(p_code))) >= v_max then
+    return format('這一班已經滿 %s 人了，請跟開班的老師或家長說', v_max);
+  end if;
+  return null;
+end;
+$$;
+
 create or replace function public.register_student(
   p_login_id   text,
   p_password   text,
@@ -689,6 +714,8 @@ begin
   select c.open into v_open from public.classes c where c.code = v_code;
   if v_open is null then raise exception '找不到這組班級代碼'; end if;
   if not v_open then raise exception '這一班目前沒有開放加入，請老師打開'; end if;
+  v_bad := public.class_full_problem(v_code);
+  if v_bad is not null then raise exception '%', v_bad; end if;
 
   if exists (select 1 from public.students s where s.login_id = v_login) then
     raise exception '這個帳號已經有人用了，換一個';
@@ -818,6 +845,11 @@ begin
   select c.open into v_open from public.classes c where c.code = v_code;
   if v_open is null then raise exception '找不到這組班級代碼'; end if;
   if not v_open then raise exception '這一班目前沒有開放加入'; end if;
+  -- 已經在這一班就不用再算人數
+  if not exists (select 1 from public.students s where s.id = v_id and s.class_code = v_code)
+     and public.class_full_problem(v_code) is not null then
+    raise exception '%', public.class_full_problem(v_code);
+  end if;
 
   select s.nickname into v_nick from public.students s where s.id = v_id;
   if exists (select 1 from public.students s
@@ -1378,6 +1410,14 @@ begin
   if exists (select 1 from public.classes c where c.code = v_code and c.owner <> auth.uid()) then
     raise exception '這個班級代碼已經有人用了';
   end if;
+  -- 開新班（不是幫自己的班改名）才算上限。
+  if not public.is_admin()
+     and not exists (select 1 from public.classes c where c.code = v_code)
+     and (select count(*) from public.classes c where c.owner = auth.uid())
+         >= (select t.max_classes from public.teachers t where t.user_id = auth.uid()) then
+    raise exception '你最多可以開 % 個班，已經開滿了。需要更多請按「問題回報」告訴我們',
+      (select t.max_classes from public.teachers t where t.user_id = auth.uid());
+  end if;
 
   insert into public.classes as c (code, name, owner) values (v_code, coalesce(p_name,''), auth.uid())
     on conflict (code) do update set name = excluded.name;
@@ -1420,6 +1460,8 @@ begin
     raise exception '%', public.nickname_problem(v_nick);
   end if;
   v_bad := public.password_problem(p_password, v_login);
+  if v_bad is not null then raise exception '%', v_bad; end if;
+  v_bad := public.class_full_problem(v_code);
   if v_bad is not null then raise exception '%', v_bad; end if;
   if exists (select 1 from public.students s where s.login_id = v_login) then
     raise exception '這個帳號已經有人用了';
@@ -1583,20 +1625,141 @@ begin
 end;
 $$;
 
--- 管理員看到的老師名單：每位老師、開了幾班、班上共幾個學生。
+-- 管理員看到的開班帳號名單：每位老師／家長、開了幾班、班上共幾個學生、上限多少。
+-- 自己註冊的新帳號排前面，管理員一眼看得到最近多了誰。
+drop function if exists public.admin_list_teachers();
 create or replace function public.admin_list_teachers()
 returns table (user_id uuid, display_name text, is_admin boolean, active boolean,
-               classes bigint, students bigint, created_at timestamptz)
+               classes bigint, students bigint, created_at timestamptz,
+               email text, self_signup boolean, max_classes int, max_students int)
 language sql stable security definer set search_path = public, pg_temp as $$
   select t.user_id, t.display_name, t.is_admin, t.active,
          (select count(*) from public.classes c where c.owner = t.user_id),
          (select count(*) from public.students s
             join public.classes c on c.code = s.class_code where c.owner = t.user_id),
-         t.created_at
+         t.created_at, u.email::text, t.self_signup, t.max_classes, t.max_students
     from public.teachers t
+    left join auth.users u on u.id = t.user_id
    where public.is_admin()
-   order by t.is_admin desc, t.created_at;
+   order by t.is_admin desc, t.created_at desc;
 $$;
+
+-- 管理員調整某個開班帳號的上限。
+create or replace function public.admin_set_teacher_limits(
+  p_user uuid, p_max_classes int, p_max_students int)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if not public.is_admin() then raise exception '只有管理員可以做這件事'; end if;
+  if p_max_classes not between 1 and 50 then raise exception '班級數要在 1 到 50 之間'; end if;
+  if p_max_students not between 1 and 200 then raise exception '每班人數要在 1 到 200 之間'; end if;
+  update public.teachers set max_classes = p_max_classes, max_students = p_max_students
+   where user_id = p_user;
+end;
+$$;
+
+-- 老師或家長自己註冊開班帳號，馬上能用，不用等管理員，也不寄確認信
+-- （Supabase 寄信額度一小時只有兩封）。
+--
+-- 為什麼可以不審核：開班帳號只管得到自己開的班，看不到也改不到別班的學生。
+-- 所以就算是小朋友自己開了一班，頂多是一群同學在裡面玩。
+-- 防的是濫用：要勾「年滿 18 歲的老師或家長」、同一台裝置最多註冊 3 個、
+-- 全站一小時最多 30 個，班數與人數有上限，管理員看得到名單、可以一鍵停用。
+--
+-- 要先有匿名身分（開遊戲就有）才叫得動，這樣才數得出同一台裝置註冊了幾個。
+create or replace function public.register_teacher(
+  p_email text, p_password text, p_display_name text, p_adult boolean)
+returns jsonb language plpgsql security definer set search_path = public, extensions, pg_temp as $fn$
+declare
+  v_email  text := lower(btrim(coalesce(p_email, '')));
+  v_name   text := btrim(coalesce(p_display_name, ''));
+  v_device uuid := auth.uid();
+  v_have   uuid;
+  v_hash   text;
+begin
+  if v_device is null then raise exception '請重新整理頁面再試一次'; end if;
+  if not coalesce(p_adult, false) then
+    raise exception '要是老師或家長（年滿 18 歲）才能建立開班帳號';
+  end if;
+  if v_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
+    raise exception 'email 格式不對';
+  end if;
+  if length(coalesce(p_password, '')) < 8 then
+    raise exception '密碼至少要 8 個字';
+  end if;
+  -- 稱呼學生會看到，跟暱稱用同一套不雅字檢查。
+  if public.nickname_problem(v_name) is not null then
+    raise exception '%', replace(public.nickname_problem(v_name), '暱稱', '稱呼');
+  end if;
+
+  -- 同一個 email 已經有帳號了
+  select u.id, u.encrypted_password into v_have, v_hash from auth.users u
+   where lower(u.email) = v_email and coalesce(u.is_anonymous, false) = false;
+  if v_have is not null then
+    if exists (select 1 from public.teachers t where t.user_id = v_have) then
+      raise exception '這個 email 已經註冊過了，請直接登入';
+    end if;
+    -- 以前照舊畫面註冊、卻因為不在名單上卡住的人。密碼對得上就直接開通，
+    -- 對不上就不能讓別人拿這個 email 搶走帳號。
+    if v_hash is null or extensions.crypt(p_password, v_hash) <> v_hash then
+      raise exception '這個 email 已經註冊過了，請直接登入';
+    end if;
+  end if;
+
+  if (select count(*) from public.teachers t where t.signup_device = v_device) >= 3 then
+    raise exception '這台裝置已經建立太多開班帳號了';
+  end if;
+  if (select count(*) from public.teachers t
+       where t.self_signup and t.created_at > now() - interval '1 hour') >= 30 then
+    raise exception '現在註冊的人太多了，請過一會兒再試';
+  end if;
+
+  if v_have is null then
+    v_have := public.create_email_login(v_email, p_password, v_name);
+  end if;
+  insert into public.teachers (user_id, display_name, self_signup, signup_device)
+  values (v_have, v_name, true, v_device);
+  return jsonb_build_object('email', v_email);
+end;
+$fn$;
+
+-- 直接把一個 email 登入帳號寫進 auth.users，不寄確認信。
+-- 管理員開老師帳號（admin_create_teacher）跟老師／家長自己註冊（register_teacher）共用。
+--
+-- **手寫 auth.users 有一個坑**：GoTrue 會把 confirmation_token 這一類欄位讀進
+-- 不可為空的字串，欄位是 NULL 的話登入直接回 500 Database error querying schema。
+-- 所以下面每一個 token 欄位都要填空字串，不能留 NULL。
+-- 另外 confirmed_at 是自動算出來的欄位，不能寫。
+create or replace function public.create_email_login(p_email text, p_password text, p_display_name text)
+returns uuid language plpgsql security definer set search_path = public, pg_temp as $fn$
+declare v_uid uuid := gen_random_uuid();
+begin
+  insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, recovery_token, email_change_token_new, email_change,
+    email_change_token_current, phone_change, phone_change_token, reauthentication_token,
+    is_sso_user, is_anonymous
+  ) values (
+    '00000000-0000-0000-0000-000000000000', v_uid, 'authenticated', 'authenticated',
+    p_email, extensions.crypt(p_password, extensions.gen_salt('bf')), now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    jsonb_build_object('display_name', p_display_name), now(), now(),
+    '', '', '', '', '', '', '', '',
+    false, false
+  );
+
+  -- 沒有這一列的話帳號建起來了卻登入不了：GoTrue 是照 identities 找帳號的。
+  insert into auth.identities (
+    id, provider_id, user_id, identity_data, provider,
+    last_sign_in_at, created_at, updated_at
+  ) values (
+    gen_random_uuid(), v_uid::text, v_uid,
+    jsonb_build_object('sub', v_uid::text, 'email', p_email), 'email',
+    null, now(), now()
+  );
+  return v_uid;
+end;
+$fn$;
 
 -- 管理員加一位老師：帳號直接開好（不寄確認信），已經有帳號的就直接設成老師。
 --
@@ -1604,21 +1767,15 @@ $$;
 -- 額度是**一小時兩封**，也沒有接外部寄信服務。幾位老師同一個下午一起註冊
 -- 就會有人卡在收不到信，而且卡住的人完全不知道自己在等什麼。
 --
--- 所以這裡直接把 auth.users 那一列寫好，email_confirmed_at 先填上，
--- 對方拿到帳號密碼就能登入。email 在這套系統裡只是登入用的名字，
--- 老師的權限本來就是靠管理員給的，不是靠驗 email 驗出來的。
---
--- **手寫 auth.users 有一個坑**：GoTrue 會把 confirmation_token 這一類欄位讀進
--- 不可為空的字串，欄位是 NULL 的話登入直接回 500 Database error querying schema。
--- 所以下面每一個 token 欄位都要填空字串，不能留 NULL。
--- 另外 confirmed_at 是自動算出來的欄位，不能寫。
+-- 所以這裡直接把 auth.users 那一列寫好（create_email_login），email_confirmed_at 先填上，
+-- 對方拿到帳號密碼就能登入。email 在這套系統裡只是登入用的名字。
 create or replace function public.admin_create_teacher(
   p_email text, p_password text, p_display_name text default null)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
 declare
   v_email text := lower(btrim(coalesce(p_email, '')));
   v_name  text := nullif(btrim(coalesce(p_display_name, '')), '');
-  v_uid   uuid := gen_random_uuid();
+  v_uid   uuid;
   v_have  uuid;
 begin
   if not public.is_admin() then raise exception '只有管理員可以做這件事'; end if;
@@ -1649,31 +1806,7 @@ begin
     return jsonb_build_object('email', v_email, 'created', false, 'existing', true);
   end if;
 
-  insert into auth.users (
-    instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
-    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
-    confirmation_token, recovery_token, email_change_token_new, email_change,
-    email_change_token_current, phone_change, phone_change_token, reauthentication_token,
-    is_sso_user, is_anonymous
-  ) values (
-    '00000000-0000-0000-0000-000000000000', v_uid, 'authenticated', 'authenticated',
-    v_email, extensions.crypt(p_password, extensions.gen_salt('bf')), now(),
-    '{"provider":"email","providers":["email"]}'::jsonb,
-    jsonb_build_object('display_name', coalesce(v_name, '老師')), now(), now(),
-    '', '', '', '', '', '', '', '',
-    false, false
-  );
-
-  -- 沒有這一列的話帳號建起來了卻登入不了：GoTrue 是照 identities 找帳號的。
-  insert into auth.identities (
-    id, provider_id, user_id, identity_data, provider,
-    last_sign_in_at, created_at, updated_at
-  ) values (
-    gen_random_uuid(), v_uid::text, v_uid,
-    jsonb_build_object('sub', v_uid::text, 'email', v_email), 'email',
-    null, now(), now()
-  );
-
+  v_uid := public.create_email_login(v_email, p_password, coalesce(v_name, '老師'));
   insert into public.teachers (user_id, display_name) values (v_uid, coalesce(v_name, '老師'));
   -- 名單是「誰可以自己註冊」用的，這條路沒走名單，但把它補上去，
   -- 免得同一個 email 之後又被加進名單變成兩套說法。
@@ -2394,6 +2527,8 @@ to authenticated;
 grant execute on function
   public.create_class(text, text),
   public.claim_teacher(text),
+  -- 自己註冊開班帳號：用開遊戲時的匿名身分叫，函式裡面自己擋濫用。
+  public.register_teacher(text, text, text, boolean),
   public.teacher_set_open(text, text[]),
   public.teacher_add_student(text, text, text, text),
   public.teacher_remove_student(uuid),
@@ -2414,6 +2549,7 @@ grant execute on function
   public.admin_invite_teacher(text),
   public.admin_set_teacher_active(uuid, boolean),
   public.admin_list_teachers(),
+  public.admin_set_teacher_limits(uuid, int, int),
   public.admin_list_invites(),
   public.admin_create_teacher(text, text, text),
   public.admin_list_classes(),
@@ -4239,3 +4375,8 @@ grant execute on function
   public.admin_flagged_nicknames(),
   public.teacher_set_student_nickname(uuid, text)
 to authenticated;
+
+-- 內部用：直接寫 auth.users 的那支絕對不能讓人從外面叫（等於誰都能開任意帳號）。
+revoke all on function public.create_email_login(text, text, text),
+  public.class_full_problem(text)
+  from public, anon, authenticated;

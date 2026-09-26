@@ -504,7 +504,7 @@ export class SupabaseRepository implements Repository {
     const r = data as { display_name: string; is_admin: boolean; active: boolean } | null
     if (!r) {
       await this.db.auth.signOut()
-      throw new Error('這個 email 還不是老師，請先請管理員把它加進名單')
+      throw new Error('這個 email 還沒有開班帳號，請按「第一次使用」建立')
     }
     if (!r.active) {
       await this.db.auth.signOut()
@@ -513,18 +513,18 @@ export class SupabaseRepository implements Repository {
     return { userId, email, displayName: r.display_name, isAdmin: r.is_admin }
   }
 
-  async staffSignUp(email: string, password: string, displayName: string): Promise<Staff> {
-    const { data, error } = await this.db.auth.signUp({ email: email.trim(), password })
+  /**
+   * 老師或家長自己註冊。不走 auth.signUp：那條會寄確認信，而寄信額度一小時只有兩封。
+   * 改由 register_teacher 直接把帳號寫好，再用 email 密碼登入。
+   * register_teacher 要靠開遊戲時的匿名身分數「同一台裝置開了幾個」，所以先確保有身分。
+   */
+  async staffSignUp(email: string, password: string, displayName: string, adult: boolean): Promise<Staff> {
+    await this.ensureSession()
+    const { error } = await this.db.rpc('register_teacher', {
+      p_email: email.trim(), p_password: password, p_display_name: displayName.trim(), p_adult: adult,
+    })
     fail('註冊失敗', error)
-    const user = data.user
-    if (!user) throw new Error('註冊失敗：伺服器沒有回傳帳號')
-    if (!data.session) {
-      throw new Error('帳號建好了，請到信箱收確認信，點完連結再回來登入')
-    }
-    // 名單上有這個 email 才變得成老師；系統還沒有任何老師時，第一個人就是管理員。
-    const { error: claimErr } = await this.db.rpc('claim_teacher', { p_display_name: displayName })
-    fail('這個 email 還不能當老師', claimErr)
-    return this.staffOf(user.id, user.email ?? email)
+    return this.staffLogin(email, password)
   }
 
   async staffLogin(email: string, password: string): Promise<Staff> {
@@ -926,12 +926,22 @@ export class SupabaseRepository implements Repository {
     fail('讀取老師名單失敗', error)
     type Row = {
       user_id: string; display_name: string; is_admin: boolean; active: boolean
-      classes: number; students: number
+      classes: number; students: number; created_at: string
+      email: string | null; self_signup: boolean; max_classes: number; max_students: number
     }
     return ((data as Row[] | null) ?? []).map((r) => ({
       userId: r.user_id, displayName: r.display_name, isAdmin: r.is_admin,
       active: r.active, classes: Number(r.classes), students: Number(r.students),
+      email: r.email ?? undefined, selfSignup: r.self_signup, createdAt: r.created_at,
+      maxClasses: r.max_classes, maxStudents: r.max_students,
     }))
+  }
+
+  async setTeacherLimits(userId: string, maxClasses: number, maxStudents: number): Promise<void> {
+    const { error } = await this.db.rpc('admin_set_teacher_limits', {
+      p_user: userId, p_max_classes: maxClasses, p_max_students: maxStudents,
+    })
+    fail('調整上限失敗', error)
   }
 
   async listInvites(): Promise<{ email: string; used: boolean }[]> {

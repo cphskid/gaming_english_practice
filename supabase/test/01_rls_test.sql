@@ -58,7 +58,7 @@ begin execute p_sql; end $$;
 
 -- 清乾淨再來
 delete from public.teacher_invites where email like '%@rlstest.local';
-delete from public.classes where code in ('RLS1','RLS2','RLS3');
+delete from public.classes where code in ('RLS1','RLS2','RLS3','MOM1','MOM2','MOM3','MOM4');
 delete from public.students where login_id like 'rls%';
 delete from public.teachers where user_id::text like 'a0000000%';
 delete from auth.users where id::text like 'a0000000%';
@@ -935,6 +935,84 @@ begin
   perform test_ok(not exists (select 1 from public.admin_flagged_nicknames() f where f.student_id = v_ming), '管理員改完就不在清單上');
   perform public.admin_remove_banned_word('明明');
   perform test_ok(public.nickname_problem('小明明') is null, '刪掉的字放行');
+end $blk$;
+
+\echo '── 老師／家長自己註冊開班帳號'
+do $blk$
+declare v_uid uuid; v_n int;
+begin
+  -- 開遊戲時的匿名身分（30、34 是想開班的大人，31、32 是小孩）
+  perform test_force($$ insert into auth.users (id, is_anonymous) values
+    ('a0000000-0000-0000-0000-000000000030', true), ('a0000000-0000-0000-0000-000000000031', true),
+    ('a0000000-0000-0000-0000-000000000032', true), ('a0000000-0000-0000-0000-000000000034', true) $$);
+  perform test_as('a0000000-0000-0000-0000-000000000030', true);
+  perform test_denied($$ select public.register_teacher('mom@rlstest.local', 'longenough1', '小明媽媽', false) $$,
+                      '沒勾年滿 18 歲');
+  perform test_denied($$ select public.register_teacher('mom@rlstest.local', 'short1', '小明媽媽', true) $$,
+                      '密碼太短');
+  perform test_denied($$ select public.register_teacher('mom@rlstest.local', 'longenough1', '幹', true) $$,
+                      '稱呼用不雅字');
+  perform test_denied($$ select public.register_teacher('newbie@rlstest.local', 'longenough1', '搶帳號', true) $$,
+                      '拿別人已經是老師的 email 註冊');
+  perform test_denied($$ select public.create_email_login('x@rlstest.local', 'longenough1', 'x') $$,
+                      '從外面直接叫寫 auth.users 的那支');
+  perform public.register_teacher(' Mom@RLStest.local ', 'longenough1', '小明媽媽', true);
+
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  select t.user_id into v_uid from public.admin_list_teachers() t where t.email = 'mom@rlstest.local';
+  perform test_ok(v_uid is not null, '註冊好了，管理員名單上看得到 email');
+  perform test_ok((select t.self_signup and t.max_classes = 3 and t.max_students = 40
+                     from public.admin_list_teachers() t where t.user_id = v_uid),
+                  '標成自己註冊，預設 3 班、每班 40 人');
+  perform test_ok(test_peek_identities(v_uid) = 1, '有 identities 那一列（登入得了）');
+
+  -- 班數上限
+  perform test_as(v_uid::text, false, 'mom@rlstest.local');
+  perform public.create_class('MOM1', '家裡');
+  perform public.create_class('MOM2', '');
+  perform public.create_class('MOM3', '');
+  perform test_denied($$ select public.create_class('MOM4', '') $$, '開第四班');
+  perform public.create_class('MOM1', '家裡改名');
+  perform test_ok(true, '幫自己的班改名不算新開');
+
+  -- 每班人數上限（管理員調成 1 人比較好測）
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  perform public.admin_set_teacher_limits(v_uid, 3, 1);
+  perform test_as('a0000000-0000-0000-0000-000000000031', true);
+  perform public.register_student('rlsmomkid', 'peach21', '家裡的小可', 'MOM1');
+  perform test_as('a0000000-0000-0000-0000-000000000032', true);
+  perform test_denied($$ select public.register_student('rlsmomkid2', 'peach21', '第二個', 'MOM1') $$,
+                      '班上滿了還註冊進去');
+  perform test_denied($$ select public.student_join_class('MOM1') $$, '班上滿了還換進去');
+  perform test_as('a0000000-0000-0000-0000-000000000031', true);
+  perform test_ok(public.student_join_class('MOM1') = 'MOM1', '本來就在班上的人再按一次不會被擋');
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  perform test_denied(format($$ select public.admin_set_teacher_limits(%L, 0, 40) $$, v_uid), '上限設成 0');
+  perform public.admin_set_teacher_limits(v_uid, 4, 40);
+  perform test_as(v_uid::text, false, 'mom@rlstest.local');
+  perform public.create_class('MOM4', '');
+  perform test_ok(true, '管理員調高之後開得了第四班');
+  perform test_denied($$ select public.admin_set_teacher_limits(auth.uid(), 50, 200) $$, '自己調自己的上限');
+
+  -- 同一台裝置最多 3 個
+  perform test_as('a0000000-0000-0000-0000-000000000030', true);
+  perform public.register_teacher('mom2@rlstest.local', 'longenough1', '媽媽二', true);
+  perform public.register_teacher('mom3@rlstest.local', 'longenough1', '媽媽三', true);
+  perform test_denied($$ select public.register_teacher('mom4@rlstest.local', 'longenough1', '媽媽四', true) $$,
+                      '同一台裝置開第四個帳號');
+
+  -- 以前自己註冊卻卡在「不是老師」的人：密碼對才開通
+  perform test_force($$ insert into auth.users (id, email, encrypted_password)
+                        values ('a0000000-0000-0000-0000-000000000033', 'oldstuck@rlstest.local',
+                                extensions.crypt('rightpass1', extensions.gen_salt('bf'))) $$);
+  perform test_as('a0000000-0000-0000-0000-000000000034', true);
+  perform test_denied($$ select public.register_teacher('oldstuck@rlstest.local', 'wrongpass1', '搶的人', true) $$,
+                      '密碼不對搶不走已經存在的 email');
+  perform public.register_teacher('oldstuck@rlstest.local', 'rightpass1', '卡住的爸爸', true);
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  select count(*) into v_n from public.admin_list_teachers() t
+   where t.user_id = 'a0000000-0000-0000-0000-000000000033';
+  perform test_ok(v_n = 1, '密碼對的舊帳號直接開通，不會多開一個');
 end $blk$;
 
 reset role;

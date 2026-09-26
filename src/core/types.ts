@@ -487,6 +487,12 @@ export interface TeacherRow {
   active: boolean
   classes: number
   students: number
+  email?: string
+  /** 自己在「老師／家長」畫面註冊的（不是管理員開的） */
+  selfSignup?: boolean
+  createdAt?: string
+  maxClasses?: number
+  maxStudents?: number
 }
 
 /** 管理員看到的一個班級：誰在帶、幾個人。 */

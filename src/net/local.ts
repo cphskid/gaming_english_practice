@@ -638,7 +638,7 @@ export class LocalRepository implements Repository {
     })
   }
 
-  async staffSignUp(email: string, _password: string, displayName: string): Promise<Staff> {
+  async staffSignUp(email: string, _password: string, displayName: string, _adult: boolean): Promise<Staff> {
     const staff: Staff = { userId: 'local-staff', email, displayName, isAdmin: true }
     write(k.staff, staff)
     return staff
@@ -1208,6 +1208,10 @@ export class LocalRepository implements Repository {
 
   async listInvites(): Promise<{ email: string; used: boolean }[]> {
     return []
+  }
+
+  async setTeacherLimits(): Promise<void> {
+    // 本地版沒有上限
   }
 
   async setTeacherActive(): Promise<void> {
