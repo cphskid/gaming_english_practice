@@ -107,3 +107,15 @@
 **Epic Boss Battle** — [Juhani Junkala](https://opengameart.org/content/boss-battle-music)
 
 授權為 Creative Commons Zero (CC0)。魔王團戰的背景音樂 `public/audio/music/boss.ogg`，已轉為單聲道 Ogg Vorbis。
+
+**Mixed fantasy backgrounds** — [ulfus](https://opengameart.org/content/mixed-fantasy-backgrounds)
+
+授權為 Creative Commons Zero (CC0)。標題畫面的浮空城背景 `public/title/floating-city.jpg`。
+
+**MedievalSharp** — wmk69，[SIL Open Font License 1.1](public/title/OFL-MedievalSharp.txt)
+
+標題「World Guardians」的英文字型 `public/title/title-latin.woff2`。只留英文字母並轉成 woff2；依 OFL 保留字型名稱的規定，改過的檔案改名為「WG Title Latin」。
+
+**霞鶩文楷 TC（LXGW WenKai TC）** — The LXGW WenKai Project Authors，[SIL Open Font License 1.1](public/title/OFL-LXGWWenKaiTC.txt)
+
+標題「守護異世界」與副標的中文字型 `public/title/title-cjk.woff2`。只留標題用到的 14 個字並轉成 woff2，改名為「WG Title CJK」。

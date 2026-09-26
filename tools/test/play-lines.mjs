@@ -28,7 +28,7 @@ page.on('pageerror', (e) => errors.push(String(e)))
 try {
   const id = 'zz' + Math.random().toString(36).slice(2, 8)
   await page.goto(BASE)
-  await page.getByRole('button', { name: '第一次來' }).click()
+  await page.locator('.start-btn').click({ force: true }); await page.getByRole('button', { name: '第一次來' }).click()
   await page.fill('#cls', 'TEST1'); await page.fill('#lid', id); await page.fill('#pw', 'abc123')
   await page.fill('#nick', '兵線' + id.slice(-3))
   await page.locator('form button[type=submit]').click()

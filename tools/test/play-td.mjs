@@ -25,7 +25,7 @@ await page.addInitScript((code) => {
 await page.goto(BASE)
 // 每次都是乾淨的瀏覽器，所以走註冊。帳號帶亂數，重跑才不會撞到上一次的。
 const BOT = 'bot' + Math.random().toString(36).slice(2, 8)
-await page.click('.tabs button:nth-child(2)')
+await page.locator('.start-btn').click({ force: true }); await page.click('.tabs button:nth-child(2)')
 await page.fill('#cls', CLASS)
 await page.fill('#lid', BOT)
 await page.fill('#pw', 'robot42')
