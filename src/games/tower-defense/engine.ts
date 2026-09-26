@@ -1,4 +1,4 @@
-import { CRYSTAL, FOCUS_MAX, FOCUS_STEP, SOLDIER_REACH, SOLDIER_SLOW, TOWERS, refundOf } from '@/data/towers'
+import { CRYSTAL, FOCUS_MAX, FOCUS_STEP, HERO, SOLDIER_REACH, SOLDIER_SLOW, TOWERS, refundOf } from '@/data/towers'
 import { JOB_EFFECT } from '@/data/jobs'
 import type { GameContext, GameHandle, LevelData, Point, Word } from '@/core/types'
 import { ART, TERRAIN_KEYS, loadArt, onArt } from './art'
@@ -212,10 +212,13 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   /**
-   * 你本人（職業英雄）。站在城堡前面，答對時出手——**只有外觀**，傷害照舊在 volley 裡算完。
-   * 見 games/hero.ts。
+   * 你本人（職業英雄）。站在城堡前面，答對時出手。箭塔都打不到的怪走進城堡周圍 HERO.reach，
+   * 由他出一發跟一座箭塔一樣的傷害（在 volley 裡算）；其他時候只演動畫。見 games/hero.ts、data/towers.ts 的 HERO。
    */
-  const hero = createHero(ctx.job, layout.castle.x - 12, layout.castle.y + 52, 58, -1)
+  const HERO_HOME = { x: layout.castle.x - 12, y: layout.castle.y + 52 }
+  const hero = createHero(ctx.job, HERO_HOME.x, HERO_HOME.y, 58, -1)
+  /** 這隻怪在不在英雄守的範圍裡。量法跟箭塔一樣：從英雄胸口到怪身體。 */
+  const heroReaches = (e: Enemy) => Math.hypot(HERO_HOME.x - e.x, HERO_HOME.y - 30 - (e.y - 22)) <= HERO.reach
 
   /** 怪現在剩幾成速度。寒霜陷阱生效中就是三成慢。 */
   const slowFactor = () => (S.buffs.some((b) => b.id === 'slow-30') ? 0.7 : 1)
@@ -393,7 +396,12 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       S.shots.push({ x0: ox, y0: oy, x1: e.x, y1: e.y - 24, life: 0.22 })
     }
 
-    if (!hits.length) {
+    // 英雄守城：箭塔都打不到、怪又走到城堡前面，英雄自己出手（見 data/towers.ts 的 HERO）
+    const guard = !hits.length && heroReaches(e)
+    if (guard) base += HERO.damage
+    const shooters = hits.length + (guard ? 1 : 0)
+
+    if (!shooters) {
       S.pops.push({ x: e.x, y: e.y - 40, text: '沒有塔打得到', color: '#ffd9a0', life: 1.2 })
       pickQuestion()
       return
@@ -401,7 +409,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
 
     ctx.audio.play('volley')
     hero.strike(e.x, e.y)
-    const mult = 1 + FOCUS_STEP * Math.min(FOCUS_MAX, hits.length - 1)
+    const mult = 1 + FOCUS_STEP * Math.min(FOCUS_MAX, shooters - 1)
     const total = Math.round(base * mult)
     const job = JOB_EFFECT[ctx.job] ?? JOB_EFFECT.knight
 
@@ -411,7 +419,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     const dead: Enemy[] = []
     e.hp -= main
     S.pops.push({ x: e.x + 18, y: e.y - 40, text: '-' + main, color: '#fff', life: 0.9 })
-    if (hits.length > 1)
+    if (guard) S.pops.push({ x: e.x + 18, y: e.y - 22, text: '英雄守城', color: '#9fd0ff', life: 1 })
+    if (shooters > 1)
       S.pops.push({ x: e.x + 18, y: e.y - 22, text: '集火 ×' + mult.toFixed(1), color: '#ffd05a', life: 1 })
     if (e.hp <= 0) dead.push(e)
 
@@ -865,6 +874,12 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       c2d.fillStyle = on ? 'rgba(255,224,138,.12)' : 'rgba(255,224,138,.05)'
       c2d.fill()
     }
+    // 英雄守的那一圈，讓人知道城堡門口有人顧，箭塔可以蓋前面一點
+    c2d.save()
+    c2d.setLineDash([4, 6]); c2d.strokeStyle = 'rgba(159,208,255,.55)'; c2d.lineWidth = 2
+    c2d.beginPath(); c2d.arc(HERO_HOME.x, HERO_HOME.y - 30, HERO.reach, 0, 7); c2d.stroke()
+    c2d.fillStyle = 'rgba(159,208,255,.06)'; c2d.fill()
+    c2d.restore()
   }
 
   function drawDecor(d: { k: string; x: number; y: number }) {

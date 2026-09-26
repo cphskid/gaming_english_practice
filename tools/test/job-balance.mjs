@@ -16,6 +16,8 @@
  *
  *   node tools/test/job-balance.mjs          兩個職業跑完十四關
  *   node tools/test/job-balance.mjs --tune   掃描倍率，找門檻最接近的組合
+ *   node tools/test/job-balance.mjs --hero   英雄守城讓十四關變簡單多少
+ *   加 --no-hero                             把英雄守城關掉再量
  */
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -31,7 +33,7 @@ function loadData() {
   writeFileSync(entry, `
     export { LEVELS } from '@/data/levels'
     export { JOB_EFFECT } from '@/data/jobs'
-    export { TOWERS, CRYSTAL, FOCUS_STEP, FOCUS_MAX, SOLDIER_SLOW } from '@/data/towers'
+    export { TOWERS, CRYSTAL, FOCUS_STEP, FOCUS_MAX, SOLDIER_SLOW, HERO } from '@/data/towers'
   `)
   const out = join(dir, 'data.mjs')
   execFileSync(join(ROOT, 'node_modules/.bin/esbuild'), [
@@ -41,7 +43,10 @@ function loadData() {
   return import(out)
 }
 
-const { LEVELS, JOB_EFFECT, TOWERS, CRYSTAL, FOCUS_STEP, FOCUS_MAX } = await loadData()
+const { LEVELS, JOB_EFFECT, TOWERS, CRYSTAL, FOCUS_STEP, FOCUS_MAX, HERO } = await loadData()
+
+/** 英雄守城要不要算進去。遊戲裡一直都在，關掉只是為了看它讓難度差多少。 */
+let heroOn = !process.argv.includes('--no-hero')
 
 // --- 引擎裡的常數（engine.ts 頂端）-----------------------------------------
 const ENTER_X = 40
@@ -165,6 +170,7 @@ function simulate(level, jobKey, { rate, acc, seed }) {
   }
 
   /** engine.ts 的 volley()，一行一行對過 */
+  const hx = layout.castle.x - 12, hy = layout.castle.y + 52
   const volley = (e) => {
     let base = 0, hits = 0
     for (const tw of towers) {
@@ -172,6 +178,8 @@ function simulate(level, jobKey, { rate, acc, seed }) {
       if (Math.hypot(s.x - e.x, s.y - 20 - (e.y - 22)) > TOWERS.archery.range) continue
       hits++; base += TOWERS.archery.damage
     }
+    // 英雄守城：engine.ts 的 heroReaches()，只補箭塔罩不到的空隙
+    if (heroOn && !hits && Math.hypot(hx - e.x, hy - 30 - (e.y - 22)) <= HERO.reach) { hits++; base += HERO.damage }
     if (!hits) return
     const mult = 1 + FOCUS_STEP * Math.min(FOCUS_MAX, hits - 1)
     const total = Math.round(base * mult)
@@ -341,5 +349,22 @@ function tune() {
     console.log(`  ${x.f}  ${String(x.r).padStart(4)}  ${x.sh}  ${x.mx}   ${(x.s >= 0 ? '+' : '') + x.s.toFixed(2)}`)
 }
 
-if (process.argv.includes('--tune')) tune()
+/** 英雄守城讓十四關變簡單多少：同一個基準（沒職業），有英雄 vs 沒英雄 */
+function heroReport() {
+  heroOn = false
+  const off = thresholds('plain')
+  heroOn = true
+  const on = thresholds('plain')
+  console.log(`英雄守城（範圍 ${HERO.reach}、傷害 ${HERO.damage}）對通關門檻的影響，單位：每分鐘答對幾題\n`)
+  console.log('關卡                沒英雄  有英雄')
+  LEVELS.forEach((lv, i) => {
+    const name = (`${lv.no}. ${lv.name}${lv.isBoss ? ' 👑' : ''}`).padEnd(18, ' ')
+    console.log(name + String(off[i]).padStart(6) + String(on[i]).padStart(8))
+  })
+  const d = on.map((x, i) => x - off[i])
+  console.log(`\n平均差 ${mean(d).toFixed(2)} 題／分，最多 ${Math.min(...d)}`)
+}
+
+if (process.argv.includes('--hero')) heroReport()
+else if (process.argv.includes('--tune')) tune()
 else process.exit(report() ? 0 : 1)
