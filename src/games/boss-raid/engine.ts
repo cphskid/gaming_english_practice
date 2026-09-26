@@ -64,8 +64,14 @@ const SHELL = `
   </div>
 </div>`
 
-/** 上面三塊木牌（跟兵推同一套尺寸，小朋友已經習慣了） */
-const BOARD = { y: 76, h: 46, w: 258, gap: 22 }
+/**
+ * 三塊木牌（跟兵推同一套尺寸與位置，小朋友已經習慣了）。
+ *
+ * **放在戰場下面**（2026-09-26 Chuck：正式區魔王團戰的答案還在上面）。兵推 0.10.1
+ * 就把木牌搬到下面了，團戰是更早從兵推複製出來的，當時沒跟著搬。放下面大拇指
+ * 不用橫越整個戰場，也不會遮住魔王。
+ */
+const BOARD = { y: 478, h: 60, w: 258, gap: 22 }
 const SLOT_COLOR = ['#e0963a', '#4fa3cf', '#ab7ad2']
 const slotX = (i: number) =>
   (W - (BOARD.w * 3 + BOARD.gap * 2)) / 2 + i * (BOARD.w + BOARD.gap) + BOARD.w / 2
