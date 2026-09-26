@@ -52,6 +52,9 @@ interface Enemy {
   px: number
   /** 牌子這一格該去的位置。px 是慢慢追過去的，不是直接跳過去——見 layoutPlates */
   ptx: number
+  /** 牌子離本體多遠、畫在本體下面多深（都是慢慢追的），見 plates.ts */
+  ox: number
+  ty: number
   pw: number
   tier: number
   /** 進場後第一次排版：牌子要直接出現在本體上，不能從畫面左邊滑進來 */
@@ -317,6 +320,10 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       lead.set(path, n + 1)
       spawnNext(Math.max(0, (2 - n) * LINE_SPACING))
     }
+    // 小隊最後一隻是在起點出生的，下一隻要等牠走開一個隊距才能出來。
+    // 以前這裡是 0：下一格就在同一個點再生一隻，只有一條路的地圖（第 3 關 S 形路）
+    // 就變成兩隻怪整路疊在一起，兩塊字牌互相推來推去，一轉彎就甩——Chuck 2026-09-26 回報的「飄」。
+    S.spawnTimer = LINE_SPACING / spec.speed
     ctx.audio.play('wave-start')
     if (!S.hinted) { S.hinted = true; toast('點怪物、或牠腳下的字牌，都算點到') }
     syncUI()
@@ -337,7 +344,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       word, path: s.path, dist: headStart, hp: s.hp, maxHp: s.hp, speed: s.speed,
       art: s.art, scale: s.scale, boss: s.boss,
       frame: Math.random() * 7, blocked: false,
-      px: 0, ptx: 0, pw: 0, tier: 0, laid: false, hold: 0, press: 0, good: 0, bad: 0, shake: 0,
+      px: 0, ptx: 0, ox: 0, ty: 0, pw: 0, tier: 0, laid: false, hold: 0, press: 0, good: 0, bad: 0, shake: 0,
       x: p.x, y: p.y, entered: false,
     })
   }
