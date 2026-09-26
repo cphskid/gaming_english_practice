@@ -707,6 +707,14 @@ h2.sec small{font-size:12px;font-weight:400;color:var(--muted)}
   pointer-events: none;
   z-index: 5;
 }
+.app-version.staging {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: #d9480f;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
 /* 真人對戰（2026-09-25） */
 .vs-live{display:flex;flex-direction:column;gap:10px;width:100%;max-width:620px}
 .vs-seek{display:flex;align-items:center;gap:12px;padding:14px 16px;text-align:left;border:2px solid var(--gold);

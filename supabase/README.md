@@ -57,6 +57,18 @@ VITE_SUPABASE_KEY=sb_publishable_...
 瀏覽器完整跑一場第 1 關：註冊新帳號、88 題三星通關，88 筆答題事件進資料庫，
 **前端顯示的金幣與資料庫算出來的完全一致**，兩套金幣算式沒有漂移。
 
+## 測試區（2026-09-26 起）
+
+- **測試站** https://cphskid.github.io/gaming_english_practice/dev/ ← `dev` 分支，接**測試庫**（`.env.staging`）。
+- **正式站** https://cphskid.github.io/gaming_english_practice/ ← `claude/project-thread-BetaRun`，接正式庫（`.env.production`）。
+
+流程：Claude 在 `dev` 修、改 schema 先套測試庫 → Chuck 在測試站確認說「發布」→
+正式庫套同一份 schema → `dev` 合併進 BetaRun。**正式庫永遠在正式站之前套好**
+（2026-09-24 反過來做過一次，全班登不進去）。
+
+測試庫＝第二個免費 Supabase 專案，建法跟正式庫一樣：`schema.sql` → `seed.sql`，
+再開 Anonymous sign-ins、匿名上限 200。測試庫的老師可以直接開、不寄信（mailer_autoconfirm 開著）。
+
 ## 之後要改 schema 怎麼做
 
 這個開發環境**連不到 Postgres 的 5432 埠**（只有 HTTPS 出得去，直連與連線池、

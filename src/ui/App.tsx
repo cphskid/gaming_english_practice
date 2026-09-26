@@ -604,7 +604,10 @@ export function App() {
       )}
 
       {screen !== 'play' && (
-        <div className="app-version">Beta v{__APP_VERSION__.replace(/\.0$/, '')}</div>
+        <div className={'app-version' + (import.meta.env.MODE === 'staging' ? ' staging' : '')}>
+          {/* 測試站（/dev/）接的是測試資料庫，標清楚免得跟正式站搞混 */}
+          {import.meta.env.MODE === 'staging' ? '測試區 ' : 'Beta '}v{__APP_VERSION__.replace(/\.0$/, '')}
+        </div>
       )}
 
       {screen === 'login' && (

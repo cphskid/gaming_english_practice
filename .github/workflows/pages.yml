@@ -3,27 +3,48 @@
 # 為什麼需要這個：Artifact 是跑在沙箱裡的，連不出去到 Supabase，
 # 所以在 Artifact 上永遠註冊不了帳號。要接資料庫就得有一個真的網址，
 # 小朋友也才有一個可以加書籤的連結。
+#
+# 一個網站放兩份（2026-09-26 開測試區）：
+#   /                正式站 ← claude/project-thread-BetaRun，接正式資料庫（.env.production）
+#   /dev/            測試站 ← dev，接測試資料庫（.env.staging，沒有就只存在瀏覽器裡）
+# GitHub Pages 一個 repo 只有一個站，而且只准預設分支發佈，
+# 所以推 dev 時只是「請 BetaRun 重發一次」，真正的建置永遠從 BetaRun 跑、兩份一起包。
 name: pages
 
 on:
   push:
-    branches: [claude/project-thread-BetaRun]
+    branches: [claude/project-thread-BetaRun, dev]
   workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
+  actions: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
+  # 推 dev：轉請 BetaRun 那份 workflow 重跑（GITHUB_TOKEN 觸發 workflow_dispatch 是被允許的）
+  kick:
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref claude/project-thread-BetaRun
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   build:
+    if: github.ref == 'refs/heads/claude/project-thread-BetaRun'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          path: dev-src
       # 禁散布的圖放在私有 repo，用只能讀那個 repo 的金鑰拉下來，見 tools/private-assets.sh
       - uses: actions/checkout@v4
         with:
@@ -34,9 +55,20 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            dev-src/package-lock.json
       - run: npm ci
       - run: sh tools/private-assets.sh private-assets
       - run: npm run build
+      # 測試站：--mode staging 只讀 .env.staging，絕對不會讀到正式庫的 .env.production
+      - name: build dev
+        working-directory: dev-src
+        run: |
+          npm ci
+          sh tools/private-assets.sh ../private-assets
+          npx tsc -b && npx vite build --mode staging
+          rm -rf ../dist/dev && cp -R dist ../dist/dev
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
