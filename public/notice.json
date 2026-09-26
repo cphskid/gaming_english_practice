@@ -1,0 +1,7 @@
+{
+  "_說明": "網站公告。mode：off 不顯示／banner 上方橫幅／maintenance 維修中擋住畫面／closed 停止營運。title、message、until 都是選填的中文字，until 例如「預計 21:30 恢復」。改完推上去約兩三分鐘生效，已開著的畫面最慢兩分鐘內跟上。維修時網址加 ?notice=off 可以自己進去測試。見 src/ui/Notice.tsx",
+  "mode": "banner",
+  "title": "測試區公告範例",
+  "message": "這條是公告橫幅的樣子，按右邊 ✕ 可以收起來。",
+  "until": ""
+}

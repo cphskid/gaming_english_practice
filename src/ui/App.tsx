@@ -36,6 +36,7 @@ import { RoomList, RoomLobby, familiarity, useRoomList, useRoomState } from './R
 import { Versus } from './Versus'
 import { FeedbackButton } from './Feedback'
 import { Changelog } from './Changelog'
+import { NoticeLayer } from './Notice'
 
 type Screen =
   | 'login' | 'staff' | 'create' | 'select' | 'shop' | 'character' | 'board'
@@ -614,6 +615,8 @@ export function App() {
         </button>
       )}
       {showChangelog && <Changelog onClose={() => setShowChangelog(false)} />}
+      {/* 網站公告／維修模式（public/notice.json），見 Notice.tsx */}
+      <NoticeLayer playing={screen === 'play'} />
 
       {screen === 'login' && (
         <Login onLogin={login} onRegister={register} onStaff={() => setScreen('staff')} />
