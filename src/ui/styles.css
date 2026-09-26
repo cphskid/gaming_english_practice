@@ -361,11 +361,17 @@ button{font-family:inherit}
 .mugbox.f-ribbon::after{content:'';position:absolute;left:50%;bottom:-62%;width:60%;height:66%;
   transform:translateX(-50%);background:url(./ribbon.png) center/contain no-repeat;
   image-rendering:pixelated;pointer-events:none}
-.mugbox.f-rainbow{border-color:transparent;background-clip:padding-box}
-.mugbox.f-rainbow::before{content:'';position:absolute;inset:-2px;border-radius:9px;z-index:-1;
-  background:conic-gradient(#ff6b6b,#ffd05a,#6fbf4a,#57c7d4,#8b5cc7,#ff6b6b);
-  animation:spinhue 3.5s linear infinite}
+/* isolation：自己成一層，彩虹（z-index:-1）才會畫在自己的底色上面、頭像下面。
+   沒有這一行，放在面板裡的時候彩虹整個被面板的底色蓋掉，買了看不到（2026-09-26 🌙 回報）。 */
+.mugbox.f-rainbow{border-color:transparent;background-clip:padding-box;isolation:isolate}
+.mugbox.f-rainbow::before{content:'';position:absolute;inset:-3px;border-radius:10px;z-index:-1;
+  background:conic-gradient(from var(--rb, 0deg),#ff6b6b,#ffd05a,#6fbf4a,#57c7d4,#8b5cc7,#ff6b6b);
+  animation:rbspin 2.5s linear infinite}
+/* 彩虹一圈一圈轉。@property 讓角度能動畫；不支援的瀏覽器就是一圈不轉的彩虹 */
+@property --rb{syntax:'<angle>';inherits:false;initial-value:0deg}
+@keyframes rbspin{to{--rb:360deg}}
 @keyframes spinhue{to{filter:hue-rotate(360deg)}}
+.topbar .mugbox.f-rainbow{border-color:transparent}
 
 .topbar .mug,.topbar .mugbox{width:36px;height:36px;border-radius:9px;border:2px solid var(--line);
   object-fit:cover;image-rendering:pixelated;flex:none}

@@ -58,9 +58,9 @@ const SHELL = `
   <canvas class="td-cv" width="1088" height="576"></canvas>
   <div class="td-toast"></div>
   <div class="tw-bar">
-    <button class="tw-line" data-line="recognize">${iconImg('eye', 20)}<b>認字</b></button>
-    <button class="tw-line" data-line="listen">👂<b>聽音</b></button>
-    <button class="tw-line" data-line="spell">${iconImg('quill', 20)}<b>拼字</b></button>
+    <button class="tw-line" data-line="recognize"><span class="tw-pic"></span><b>字母兵</b></button>
+    <button class="tw-line" data-line="listen"><span class="tw-pic"></span><b>音波弓手</b></button>
+    <button class="tw-line" data-line="spell"><span class="tw-pic"></span><b>拼字盾兵</b></button>
     <button class="tw-up">⬆️<b>升階</b><i></i></button>
     <span class="tw-crystal">${iconImg('crystal', 15)} 0</span>
   </div>
@@ -381,7 +381,28 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
       : `👥 ${n} 人團戰`
   }
 
+  /**
+   * 三顆出兵鈕跟對戰一樣：畫自己軍團那一階的兵、寫那一階的名字（字母兵→字母槍士→字母將軍）。
+   * 以前這裡寫「認字／聽音／拼字」配小圖示，跟對戰不一致（2026-09-26 Chuck：全站要統一）。
+   * 兵名與圖跟著階級變，階級沒變就不重畫。
+   */
+  let barKey = ''
+  function syncBarLines() {
+    const tier = mySeat().tier
+    const pics = elLines.map((b) => unitImg({ owner: me, line: b.dataset.line as Line } as RUnit, tier))
+    const key = tier + ':' + pics.map((im) => (im && im.complete && im.naturalWidth ? 1 : 0)).join('')
+    if (key === barKey) return
+    barKey = key
+    elLines.forEach((b, i) => {
+      b.querySelector('b')!.textContent = statsOf(b.dataset.line as Line, tier).name
+      const im = pics[i]
+      b.querySelector<HTMLElement>('.tw-pic')!.style.backgroundImage =
+        im && im.complete && im.naturalWidth ? `url("${im.src}")` : ''
+    })
+  }
+
   function syncBar() {
+    syncBarLines()
     for (const b of elLines) b.classList.toggle('on', b.dataset.line === S.line)
     const cost = nextCost(S.s, me)
     const seat = mySeat()
