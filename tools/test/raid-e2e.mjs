@@ -28,7 +28,7 @@ async function newKid(who) {
   const page = await b.newPage({ viewport: PHONE })
   page.on('pageerror', (e) => fail(nick + ' 那台畫面炸了：' + e.message))
   await page.goto(BASE, { waitUntil: 'networkidle' })
-  await page.getByRole('button', { name: '第一次來' }).click()
+  await page.locator('.start-btn').click({ force: true }); await page.getByRole('button', { name: '第一次來' }).click()
   await page.fill('#cls', CLASS)
   await page.fill('#lid', id)
   await page.fill('#pw', 'abc123')

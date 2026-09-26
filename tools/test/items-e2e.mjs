@@ -39,7 +39,7 @@ async function bagCount(name) {
 try {
   console.log('── 準備一個有道具的學生')
   await page.goto(BASE, { waitUntil: 'networkidle' })
-  await page.getByRole('button', { name: '第一次來' }).click()
+  await page.locator('.start-btn').click({ force: true }); await page.getByRole('button', { name: '第一次來' }).click()
   const id = 'it' + Date.now().toString().slice(-6)
   await page.fill('#cls', 'TEST1'); await page.fill('#lid', id); await page.fill('#pw', 'abc123')
   await page.fill('#nick', '道具' + id.slice(-3))

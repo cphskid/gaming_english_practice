@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Icon } from './Icon'
 
 /**
  * 學生的登入與註冊。**不收真實姓名、不收 email**——使用者是國小學生。
@@ -17,6 +16,8 @@ export function Login({
     => Promise<string | null>
   onStaff: () => void
 }) {
+  // 先給一個標題畫面，點一下才出登入框。不然背景一大半會被表單蓋住，看起來不像遊戲。
+  const [opened, setOpened] = useState(false)
   const [tab, setTab] = useState<'login' | 'register'>('login')
   const [loginId, setLoginId] = useState('')
   const [password, setPassword] = useState('')
@@ -61,9 +62,29 @@ export function Login({
     if (msg) setError(msg)
   }
 
+  const title = (
+    <header className={'game-title' + (opened ? ' small' : '')}>
+      <h1 lang="en">World Guardians</h1>
+      <p className="zh">守護異世界</p>
+      <p className="sub">用語言魔力來冒險吧！</p>
+    </header>
+  )
+
+  if (!opened) {
+    return (
+      <div className="screen title-screen">
+        <div className="title-bg" aria-hidden="true" />
+        {title}
+        <button className="start-btn" onClick={() => setOpened(true)}>點一下開始冒險</button>
+        <button className="teacher-link" onClick={onStaff}>我是老師 ›</button>
+      </div>
+    )
+  }
+
   return (
-    <div className="screen">
-      <h1><Icon name="castle" size={30} alt="" /> 單字守塔</h1>
+    <div className="screen title-screen opened">
+      <div className="title-bg" aria-hidden="true" />
+      {title}
 
       <div className="tabs">
         <button className={tab === 'login' ? 'on' : ''}
@@ -119,7 +140,7 @@ export function Login({
           : '帳號是登入用的，暱稱是大家看得到的名字，兩個可以不一樣。不會用到真實姓名，也不用填 email。'}
       </p>
 
-      <button className="btn ghost small" onClick={onStaff}>我是老師</button>
+      <button className="teacher-link" onClick={onStaff}>我是老師 ›</button>
     </div>
   )
 }

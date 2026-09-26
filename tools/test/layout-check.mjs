@@ -28,7 +28,7 @@ for (const size of SIZES) {
   console.log(`── ${size.name}（${size.w}×${size.h}）`)
   try {
     await page.goto(BASE, { waitUntil: 'networkidle' })
-    await page.getByRole('button', { name: '第一次來' }).click()
+    await page.locator('.start-btn').click({ force: true }); await page.getByRole('button', { name: '第一次來' }).click()
     const id = 'ui' + Date.now().toString().slice(-6) + size.w
     await page.fill('#cls', process.env.E2E_CLASS || 'TEST1'); await page.fill('#lid', id)
     await page.fill('#pw', 'abc123'); await page.fill('#nick', '版面')

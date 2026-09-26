@@ -855,3 +855,52 @@ input.pin{width:7.5em;font-size:20px;letter-spacing:.3em;text-align:center;paddi
 .cl-head b{color:var(--gold);margin-right:4px}
 .cl-head small{color:var(--muted);font-size:12px;margin-left:8px}
 .cl-ver ul{margin:4px 0 0;padding-left:20px;line-height:1.6;color:var(--ink)}
+/* 魔王團戰：開場按鈕黏在底部（2026-09-26） */
+.raid-openbar{position:sticky;bottom:0;z-index:4;width:100%;box-sizing:border-box;margin-top:8px;
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:4px;align-items:center;
+  background:rgba(18,26,34,.96);border-top:1px solid rgba(255,255,255,.15)}
+.raid-openbar .raidopen{justify-content:center;gap:8px}
+.raid-openbar p{margin:0}
+
+/*
+  標題畫面（登入前）：World Guardians 守護異世界。
+  字型只收標題用到的字（public/title/，OFL，子集化後改過字型名稱），
+  中文 5KB、英文 22KB，所以學校平板也不會等。背景是 CC0 手繪浮空城，見 CREDITS.md。
+  背景放在獨立的 fixed 層，畫面本身還是 .screen 那套可捲動排版，登入框放不下時捲得到。
+*/
+@font-face{font-family:"WG Title Latin";src:url(/title/title-latin.woff2) format("woff2");font-display:swap}
+@font-face{font-family:"WG Title CJK";src:url(/title/title-cjk.woff2) format("woff2");font-display:swap}
+.title-screen{position:relative;background:#0a1a4a}
+.title-bg{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:linear-gradient(#0a1a4acc,#0a1a4a33 45%,#0a1a4a99),
+    url(/title/floating-city.jpg) 58% center/cover #0a1a4a}
+.title-screen>*:not(.title-bg){position:relative;z-index:1}
+.game-title{text-align:center;text-shadow:0 2px 4px #000}
+.game-title h1{font-family:"WG Title Latin",serif;font-weight:400;font-size:50px;line-height:1;
+  color:#fff;text-shadow:0 0 18px #7fd4ff,0 3px 0 #1b3a7a,0 0 3px #000}
+.game-title .zh{margin:10px 0 0;font-family:"WG Title CJK",var(--font);font-size:30px;
+  letter-spacing:10px;padding-left:10px;color:#bfe9ff}
+.game-title .sub{margin:8px 0 0;font-family:"WG Title CJK",var(--font);font-size:17px;color:#fff}
+.game-title.small h1{font-size:38px}
+.game-title.small .zh{font-size:22px;margin-top:6px}
+.game-title.small .sub{display:none}
+/* 還沒點開：標題靠上、開始鈕靠下，中間留給背景 */
+.title-screen:not(.opened){justify-content:flex-start}
+.title-screen:not(.opened) .game-title{margin-top:12vh}
+.start-btn{margin-top:auto;border:2px solid #fff9;border-radius:30px;padding:13px 30px;
+  background:#0008;color:#fff;font-size:20px;font-weight:800;text-shadow:0 2px 3px #000;cursor:pointer;
+  animation:start-pulse 1.6s ease-in-out infinite}
+@keyframes start-pulse{50%{transform:scale(1.06);box-shadow:0 0 18px #7fd4ff88}}
+.teacher-link{border:none;background:none;color:#e8dcc4;font-size:14px;text-shadow:0 1px 3px #000;
+  padding:6px 12px;cursor:pointer;margin-bottom:8px}
+.title-screen.opened .form.panel{background:rgba(40,28,20,.9)}
+.title-screen.opened p.lede{color:#e8dcc4;text-shadow:0 1px 3px #000}
+.title-screen.opened .tabs{background:rgba(22,35,46,.85)}
+/* 手機橫拿：標題縮成一排，登入框才放得下 */
+@media (max-height:520px){
+  .title-screen:not(.opened) .game-title{margin-top:4vh}
+  .game-title h1,.game-title.small h1{font-size:34px}
+  .game-title .zh,.game-title.small .zh{font-size:20px;margin-top:4px}
+  .game-title .sub{font-size:14px}
+  .title-screen.opened .game-title{display:none}
+}

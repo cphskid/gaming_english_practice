@@ -38,7 +38,7 @@ try {
   // ── 註冊一個新學生
   const id = 'zz' + Math.random().toString(36).slice(2, 8)
   await page.goto(BASE, { waitUntil: 'networkidle' })
-  await page.getByRole('button', { name: '第一次來' }).click()
+  await page.locator('.start-btn').click({ force: true }); await page.getByRole('button', { name: '第一次來' }).click()
   await page.fill('#cls', CLASS)
   await page.fill('#lid', id)
   await page.fill('#pw', 'abc123')

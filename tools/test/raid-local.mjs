@@ -20,7 +20,7 @@ page.on('response', (r) => { if (r.status() >= 400) console.log('    ' + r.statu
 
 try {
   await page.goto(BASE, { waitUntil: 'networkidle' })
-  await page.getByRole('button', { name: '第一次來' }).click()
+  await page.locator('.start-btn').click({ force: true }); await page.getByRole('button', { name: '第一次來' }).click()
   await page.fill('#cls', 'LOCAL1')
   await page.fill('#lid', 'raidkid')
   await page.fill('#pw', 'abc123')

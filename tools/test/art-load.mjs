@@ -58,7 +58,7 @@ for (const scene of [
 
   await page.goto(BASE)
   const bot = 'bot' + Math.random().toString(36).slice(2, 8)
-  await page.click('.tabs button:nth-child(2)')
+  await page.locator('.start-btn').click({ force: true }); await page.click('.tabs button:nth-child(2)')
   await page.fill('#cls', 'TEST1')
   await page.fill('#lid', bot)
   await page.fill('#pw', 'robot42')

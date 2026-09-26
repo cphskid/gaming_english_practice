@@ -31,7 +31,7 @@ const PACKS = [
 try {
   console.log('── 註冊、塞金幣和等級（夠買傳說級）')
   await page.goto(BASE, { waitUntil: 'networkidle' })
-  await page.getByRole('button', { name: '第一次來' }).click()
+  await page.locator('.start-btn').click({ force: true }); await page.getByRole('button', { name: '第一次來' }).click()
   const id = 'lb' + Date.now().toString().slice(-6)
   await page.fill('#cls', 'TEST1'); await page.fill('#lid', id); await page.fill('#pw', 'abc123')
   await page.fill('#nick', '二批' + id.slice(-3))
