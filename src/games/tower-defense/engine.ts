@@ -212,12 +212,6 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   /**
-   * 你本人（職業英雄）。站在城堡前面，答對時出手。箭塔都打不到的怪走進城堡周圍 HERO.reach，
-   * 由他出一發跟一座箭塔一樣的傷害（在 volley 裡算）；其他時候只演動畫。見 games/hero.ts、data/towers.ts 的 HERO。
-   */
-  const HERO_HOME = { x: layout.castle.x - 12, y: layout.castle.y + 52 }
-  const hero = createHero(ctx.job, HERO_HOME.x, HERO_HOME.y, 58, -1)
-  /**
    * 英雄守的是**城門**（每條路的終點取平均），不是他腳下。
    *
    * 0.20.0～0.22.0 是從英雄胸口量：他站在城堡右下角，路卻是從城堡左邊偏上進城，
@@ -228,6 +222,13 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     const ends = layout.paths.map((p) => p[p.length - 1])
     return { x: ends.reduce((n, q) => n + q.x, 0) / ends.length, y: ends.reduce((n, q) => n + q.y, 0) / ends.length - 22 }
   })()
+  /**
+   * 你本人（職業英雄），站在城門前（2026-09-26 Chuck：站在城堡前比較有守城的樣子；
+   * 原本站在城堡右下角，離怪進城的地方很遠）。箭塔都打不到的怪走進城門 HERO.reach 以內，
+   * 答對時由他出一發跟一座箭塔一樣的傷害（在 volley 裡算）；其他時候只演動畫。見 games/hero.ts。
+   */
+  const HERO_HOME = { x: GATE.x - 44, y: GATE.y + 22 + 26 }
+  const hero = createHero(ctx.job, HERO_HOME.x, HERO_HOME.y, 58, -1)
   /** 這隻怪在不在英雄守的範圍裡：從城門到怪身體 */
   const heroReaches = (e: Enemy) => Math.hypot(GATE.x - e.x, GATE.y - (e.y - 22)) <= HERO.reach
   /** 有沒有任何一座箭塔打得到牠 */
