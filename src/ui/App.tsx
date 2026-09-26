@@ -93,6 +93,29 @@ export function App() {
   const { room, loaded: roomLoaded } = useRoomState(roomId, screen === 'lobby')
 
   /**
+   * 老師開放的關卡。以前只在登入時讀一次，老師上課當下按開放，
+   * 已經登入的小朋友要登出再登入才看得到——看起來就像老師按了沒反應。
+   * 回到選關畫面就重讀，停在選關畫面也每 20 秒再問一次。
+   */
+  const classCode = student?.classCode ?? null
+  useEffect(() => {
+    if (screen !== 'select' || !classCode) return
+    let alive = true
+    const tick = () => {
+      void repo.loadTeacherOpen(classCode)
+        .then((ids) => {
+          if (!alive) return
+          setTeacherOpen((prev) =>
+            prev.size === ids.length && ids.every((id) => prev.has(id)) ? prev : new Set(ids))
+        })
+        .catch(() => { /* 網路頓一下就留著上一次的 */ })
+    }
+    tick()
+    const t = setInterval(tick, 20_000)
+    return () => { alive = false; clearInterval(t) }
+  }, [screen, classCode])
+
+  /**
    * 結算中。打完一關要打好幾趟後端，這段時間遊戲已經停了、畫面是定住的，
    * 以前什麼都不顯示——小朋友按掉最後一隻怪之後看到的就是一個當掉的畫面。
    * error 不是 null 就是結算失敗，讓他按得了重試而不是被困在那裡。

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { CHAPTERS } from '@/data/levels'
 import { WORDS_BY_ID } from '@/data/words'
 import { WordStat } from '@/core/wordStat'
@@ -85,6 +85,36 @@ export function Teacher({
       setError(e instanceof Error ? e.message : String(e))
     }
   }, [active, refreshClass, refreshClasses])
+
+  /**
+   * 開放關卡。按下去**先亮起來**再慢慢存，而且只重讀開放清單。
+   *
+   * 以前按一下要等存檔＋重讀班級、名單、全班答題紀錄才亮，手機上要好幾秒，
+   * 看起來就是按了沒反應；錯誤訊息又印在頁面最上面，捲到下面的關卡區看不到。
+   * 連按幾關時，每次都從上一次按完的狀態算，不會把前一關蓋掉。
+   */
+  const openRef = useRef(open)
+  useEffect(() => { openRef.current = open }, [open])
+  const saving = useRef<Promise<void>>(Promise.resolve())
+  const [openError, setOpenError] = useState<string | null>(null)
+
+  const toggleOpen = (levelId: string) => {
+    if (!room) return
+    const code = room.code
+    const next = new Set(openRef.current)
+    if (next.has(levelId)) next.delete(levelId)
+    else next.add(levelId)
+    openRef.current = next
+    setOpen(next)
+    setOpenError(null)
+    saving.current = saving.current
+      .then(() => repo.setTeacherOpen(code, [...next]))
+      .catch(async (e) => {
+        setOpenError(e instanceof Error ? e.message : String(e))
+        // 存失敗就照資料庫的樣子顯示，不要留著一個假的「已開放」
+        try { setOpen(new Set(await repo.loadTeacherOpen(code))) } catch { /* 留著 */ }
+      })
+  }
 
   const missed = stat?.mostMissed(10) ?? []
 
@@ -230,6 +260,7 @@ export function Teacher({
             <div>
               <h2>這禮拜開放的關卡</h2>
               <p className="lede left">點一下就額外開放，不受學生自己的進度限制。</p>
+              {openError && <p className="error">{openError}</p>}
             </div>
             {CHAPTERS.map((ch, ci) => (
               <div key={ch.no}>
@@ -237,12 +268,7 @@ export function Teacher({
                 <div className="open">
                   {ch.levels.map((l) => (
                     <button key={l.id} className={open.has(l.id) ? 'on' : ''}
-                      onClick={() => void run(async () => {
-                        const next = new Set(open)
-                        if (next.has(l.id)) next.delete(l.id)
-                        else next.add(l.id)
-                        await repo.setTeacherOpen(room.code, [...next])
-                      })}>
+                      onClick={() => toggleOpen(l.id)}>
                       {l.no}. {l.name}
                     </button>
                   ))}
