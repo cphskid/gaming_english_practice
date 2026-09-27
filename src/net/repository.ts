@@ -286,6 +286,12 @@ export interface Repository {
   listFeedback(status?: FeedbackStatus): Promise<FeedbackRow[]>
   /** 管理員：改分類 */
   triageFeedback(id: number, status: FeedbackStatus, note: string): Promise<void>
+  /** 管理員：寫一句給回報的人看的話（空字串＝收回） */
+  replyFeedback(id: number, reply: string): Promise<void>
+  /** 自己回報過的，處理到哪了 */
+  myFeedback(): Promise<MyFeedbackRow[]>
+  /** 打開「我的回報」＝都看過了，紅點消掉 */
+  seenMyFeedback(): Promise<void>
 }
 
 export type FeedbackKind = 'bug' | 'confusing' | 'idea'
@@ -303,6 +309,19 @@ export interface FeedbackRow {
   context: Record<string, unknown>
   status: FeedbackStatus
   note: string | null
+  reply: string | null
+}
+
+export interface MyFeedbackRow {
+  id: number
+  createdAt: string
+  kind: FeedbackKind
+  message: string
+  status: FeedbackStatus
+  reply: string | null
+  /** 分類或回覆最後一次變動；比 seenAt 新就亮紅點 */
+  updatedAt: string | null
+  seenAt: string | null
 }
 
 export interface ClassRosterRow {

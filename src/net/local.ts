@@ -15,7 +15,7 @@ import type {
 import type {
   AchievementRow, AddedTeacher, BadgeCount, ClassRosterRow, LeaderRow, LevelResult, PublicProfile, WeeklySlot, WeeklyStar,
   Repository, RoomBrief, RoomMember, RoomState, RaidSeat, RaidSyncResult, RaidResult, SavedResult, VersusMatchInput, Ghost, GhostRow,
-  LiveLobby, LiveMatchInfo, LiveSyncResult, LivePerson, FeedbackKind, FeedbackRow, FeedbackStatus,
+  LiveLobby, LiveMatchInfo, LiveSyncResult, LivePerson, FeedbackKind, FeedbackRow, FeedbackStatus, MyFeedbackRow,
 } from './repository'
 import { packMoves, unpackMoves, type PackedMove } from '@/core/opponent'
 import { evaluateAchievements, tierOf, type AchValue, type VersusRecord } from '@/core/achievements'
@@ -1228,7 +1228,7 @@ export class LocalRepository implements Repository {
     if (!text) throw new Error('請寫一下發生什麼事')
     all.unshift({
       id: (all[0]?.id ?? 0) + 1, createdAt: new Date().toISOString(), who: '本機', role: 'student',
-      classCode: null, kind, message: text.slice(0, 500), screen, context, status: 'new', note: null,
+      classCode: null, kind, message: text.slice(0, 500), screen, context, status: 'new', note: null, reply: null,
     })
     write(k.feedback, all.slice(0, 200))
   }
@@ -1239,7 +1239,25 @@ export class LocalRepository implements Repository {
 
   async triageFeedback(id: number, status: FeedbackStatus, note: string): Promise<void> {
     write(k.feedback, read<FeedbackRow[]>(k.feedback, []).map((f) =>
-      (f.id === id ? { ...f, status, note: note.trim() || f.note } : f)))
+      (f.id === id ? { ...f, status, note: note.trim() || f.note, updatedAt: new Date().toISOString() } : f)))
+  }
+
+  async replyFeedback(id: number, reply: string): Promise<void> {
+    write(k.feedback, read<FeedbackRow[]>(k.feedback, []).map((f) =>
+      (f.id === id ? { ...f, reply: reply.trim() || null, updatedAt: new Date().toISOString() } : f)))
+  }
+
+  async myFeedback(): Promise<MyFeedbackRow[]> {
+    type Stored = FeedbackRow & { updatedAt?: string; seenAt?: string }
+    return read<Stored[]>(k.feedback, []).slice(0, 20).map((f) => ({
+      id: f.id, createdAt: f.createdAt, kind: f.kind, message: f.message, status: f.status,
+      reply: f.reply ?? null, updatedAt: f.updatedAt ?? null, seenAt: f.seenAt ?? null,
+    }))
+  }
+
+  async seenMyFeedback(): Promise<void> {
+    const now = new Date().toISOString()
+    write(k.feedback, read<FeedbackRow[]>(k.feedback, []).map((f) => ({ ...f, seenAt: now })))
   }
 
 }

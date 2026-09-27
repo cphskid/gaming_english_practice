@@ -876,6 +876,18 @@ begin
                   '管理員看得到回報，班級與身分是伺服器補的');
   perform public.triage_feedback(v_id, 'bug', '老師開放關卡按鈕沒反應');
   perform test_ok((select status from public.list_feedback('bug') f where f.id = v_id) = 'bug', '管理員改分類');
+  perform public.reply_feedback(v_id, '  謝謝你，我們正在修！ ');
+  perform test_denied(format($$ select public.reply_feedback(%s, %L) $$, v_id, repeat('啊', 301)), '回覆超過 300 字');
+
+  -- 本人看得到回覆、看不到內部筆記；打開後紅點消掉
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  perform test_denied(format($$ select public.reply_feedback(%s, 'x') $$, v_id), '學生不能回覆');
+  perform test_ok((select m.reply = '謝謝你，我們正在修！' and m.status = 'bug'
+                          and m.updated_at is not null and m.seen_at is null
+                     from public.my_feedback() m where m.id = v_id), '本人看得到分類與回覆，還沒看過');
+  perform public.seen_my_feedback();
+  perform test_ok((select m.seen_at >= m.updated_at from public.my_feedback() m where m.id = v_id), '看過以後紅點消掉');
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
 
   -- 排程用的專用帳號：只讀得到回報，不是管理員
   perform test_force($$ insert into public.feedback_readers (user_id, note)
