@@ -13,7 +13,16 @@ import type { FeedbackKind } from '@/net/repository'
 
 /** 最近幾個錯誤訊息。main.tsx 一開始就掛上，回報時一起送。 */
 const recentErrors: string[] = []
+/** 最後點過的幾個按鈕。小朋友寫「按了沒反應」時，看這個才知道是按哪一顆。 */
+const recentTaps: string[] = []
 export function watchErrors(): void {
+  document.addEventListener('click', (e) => {
+    const el = (e.target as Element | null)?.closest?.('button, a, [role=button]')
+    if (!el || el.closest('.feedback-fab, .feedback-box')) return
+    const label = (el.textContent || el.getAttribute('aria-label') || el.className || '?').trim().replace(/\s+/g, ' ')
+    recentTaps.push(`${new Date().toISOString().slice(11, 19)} ${label.slice(0, 40)}${(el as HTMLButtonElement).disabled ? '（停用中）' : ''}`)
+    if (recentTaps.length > 5) recentTaps.shift()
+  }, true)
   const keep = (msg: string) => {
     recentErrors.push(`${new Date().toISOString().slice(11, 19)} ${msg}`.slice(0, 300))
     if (recentErrors.length > 5) recentErrors.shift()
@@ -31,18 +40,20 @@ const KINDS: { id: FeedbackKind; label: string; hint: string }[] = [
   { id: 'idea', label: '💡 我有想法', hint: '例如：希望多一個什麼功能' },
 ]
 
-export function FeedbackButton({ screen, levelId }: { screen: string; levelId?: string | null }) {
+export function FeedbackButton({ screen, levelId, mode }: {
+  screen: string; levelId?: string | null; mode?: string | null
+}) {
   const [open, setOpen] = useState(false)
   return (
     <>
       <button className="feedback-fab" onClick={() => setOpen(true)} aria-label="回報問題">💬 問題回報</button>
-      {open && <FeedbackForm screen={screen} levelId={levelId} onClose={() => setOpen(false)} />}
+      {open && <FeedbackForm screen={screen} levelId={levelId} mode={mode} onClose={() => setOpen(false)} />}
     </>
   )
 }
 
-function FeedbackForm({ screen, levelId, onClose }: {
-  screen: string; levelId?: string | null; onClose: () => void
+function FeedbackForm({ screen, levelId, mode, onClose }: {
+  screen: string; levelId?: string | null; mode?: string | null; onClose: () => void
 }) {
   const [kind, setKind] = useState<FeedbackKind>('bug')
   const [text, setText] = useState('')
@@ -55,6 +66,8 @@ function FeedbackForm({ screen, levelId, onClose }: {
       await repo.submitFeedback(kind, text, screen, {
         ver: __APP_VERSION__,
         level: levelId ?? null,
+        mode: mode ?? null,
+        taps: [...recentTaps],
         ua: navigator.userAgent,
         view: `${window.innerWidth}x${window.innerHeight}`,
         backend,
