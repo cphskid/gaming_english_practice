@@ -4108,6 +4108,12 @@ create table if not exists public.feedback (
 create index if not exists feedback_status_idx on public.feedback (status, created_at);
 create index if not exists feedback_user_idx on public.feedback (user_id, created_at);
 alter table public.feedback enable row level security;
+-- 給回報的人看的回覆（2026-09-27）。triage_note 是內部筆記，不給本人看；
+-- reply 是寫給小朋友看的話。seen_at 是本人最後一次打開「我的回報」，
+-- 比它新的處理結果就在按鈕上亮紅點。
+alter table public.feedback add column if not exists reply      text;
+alter table public.feedback add column if not exists replied_at timestamptz;
+alter table public.feedback add column if not exists seen_at    timestamptz;
 
 -- 可以讀回饋、改分類的帳號。管理員本來就可以；這張表是給排程用的專用帳號：
 -- 只看得到回饋，碰不到學生密碼、金幣、班級設定。
@@ -4193,25 +4199,53 @@ begin
 end;
 $$;
 
--- 自己回報過的（學生老師看得到自己的回報處理到哪了）
+-- 寫一句給回報的人看的話。空字串就是收回。
+create or replace function public.reply_feedback(p_id bigint, p_reply text)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_reply text := nullif(btrim(coalesce(p_reply, '')), '');
+begin
+  if not public.can_triage_feedback() then raise exception '只有管理員可以回覆'; end if;
+  if char_length(v_reply) > 300 then raise exception '回覆寫太長了，300 字以內'; end if;
+  update public.feedback
+     set reply = v_reply,
+         replied_at = case when v_reply is null then null else now() end
+   where id = p_id;
+  if not found then raise exception '找不到這則回報'; end if;
+end;
+$$;
+
+-- 自己回報過的（學生老師看得到自己的回報處理到哪了）。
+-- 內部筆記 triage_note 不給；updated_at 是分類或回覆最後一次變動，前端拿來跟 seen_at 比。
+drop function if exists public.my_feedback();
 create or replace function public.my_feedback()
-returns table (id bigint, created_at timestamptz, kind text, message text, status text)
+returns table (id bigint, created_at timestamptz, kind text, message text, status text,
+               reply text, updated_at timestamptz, seen_at timestamptz)
 language sql stable security definer set search_path = public, pg_temp as $$
-  select f.id, f.created_at, f.kind, f.message, f.status
+  select f.id, f.created_at, f.kind, f.message, f.status,
+         f.reply, greatest(f.triaged_at, f.replied_at), f.seen_at
     from public.feedback f
    where f.user_id = auth.uid()
    order by f.created_at desc limit 20;
 $$;
 
+-- 打開「我的回報」＝全部看過了，紅點消掉
+create or replace function public.seen_my_feedback()
+returns void language sql security definer set search_path = public, pg_temp as $$
+  update public.feedback set seen_at = now() where user_id = auth.uid();
+$$;
+
 revoke all on function public.can_triage_feedback(), public.submit_feedback(text, text, text, jsonb),
-  public.list_feedback(text, int), public.triage_feedback(bigint, text, text), public.my_feedback()
+  public.list_feedback(text, int), public.triage_feedback(bigint, text, text), public.my_feedback(),
+  public.reply_feedback(bigint, text), public.seen_my_feedback()
   from public, anon;
 grant execute on function
   public.can_triage_feedback(),
   public.submit_feedback(text, text, text, jsonb),
   public.list_feedback(text, int),
   public.triage_feedback(bigint, text, text),
-  public.my_feedback()
+  public.my_feedback(),
+  public.reply_feedback(bigint, text),
+  public.seen_my_feedback()
 to authenticated;
 
 -- =============================================================================

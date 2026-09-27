@@ -6,7 +6,7 @@ import type {
 import type {
   AchievementRow, AddedTeacher, BadgeCount, Pin, ClassRosterRow, LeaderRow, LevelResult, PublicProfile, WeeklySlot, WeeklyStar,
   Repository, RoomBrief, RoomMember, RoomState, RaidSeat, RaidSyncResult, RaidResult, SavedResult, VersusMatchInput, Ghost, GhostRow,
-  LiveLobby, LiveMatchInfo, LiveSyncResult, FeedbackKind, FeedbackRow, FeedbackStatus,
+  LiveLobby, LiveMatchInfo, LiveSyncResult, FeedbackKind, FeedbackRow, FeedbackStatus, MyFeedbackRow,
 } from './repository'
 import { packMoves, unpackMoves } from '@/core/opponent'
 
@@ -975,18 +975,41 @@ export class SupabaseRepository implements Repository {
     type Row = {
       id: number; created_at: string; who: string; role: FeedbackRow['role']; class_code: string | null
       kind: FeedbackKind; message: string; screen: string | null; context: Record<string, unknown> | null
-      status: FeedbackStatus; triage_note: string | null
+      status: FeedbackStatus; triage_note: string | null; reply: string | null
     }
     return ((data as Row[] | null) ?? []).map((r) => ({
       id: r.id, createdAt: r.created_at, who: r.who, role: r.role, classCode: r.class_code,
       kind: r.kind, message: r.message, screen: r.screen, context: r.context ?? {},
-      status: r.status, note: r.triage_note,
+      status: r.status, note: r.triage_note, reply: r.reply,
     }))
   }
 
   async triageFeedback(id: number, status: FeedbackStatus, note: string): Promise<void> {
     const { error } = await this.db.rpc('triage_feedback', { p_id: id, p_status: status, p_note: note })
     fail('改不了分類', error)
+  }
+
+  async replyFeedback(id: number, reply: string): Promise<void> {
+    const { error } = await this.db.rpc('reply_feedback', { p_id: id, p_reply: reply })
+    fail('回覆送不出去', error)
+  }
+
+  async myFeedback(): Promise<MyFeedbackRow[]> {
+    const { data, error } = await this.db.rpc('my_feedback')
+    fail('讀不到你的回報', error)
+    type Row = {
+      id: number; created_at: string; kind: FeedbackKind; message: string; status: FeedbackStatus
+      reply: string | null; updated_at: string | null; seen_at: string | null
+    }
+    return ((data as Row[] | null) ?? []).map((r) => ({
+      id: r.id, createdAt: r.created_at, kind: r.kind, message: r.message, status: r.status,
+      reply: r.reply, updatedAt: r.updated_at, seenAt: r.seen_at,
+    }))
+  }
+
+  async seenMyFeedback(): Promise<void> {
+    const { error } = await this.db.rpc('seen_my_feedback')
+    fail('標記已讀失敗', error)
   }
 
 }

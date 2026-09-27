@@ -318,6 +318,27 @@ const STATUS: { id: FeedbackStatus; label: string }[] = [
 ]
 const KIND_LABEL = { bug: '🐞 壞掉了', confusing: '❓ 看不懂', idea: '💡 想法' }
 
+/** 寫給回報的人看的話；本人在「我的回報」看得到，按鈕會亮紅點 */
+function FeedbackReply({ id, reply, onDone, onError }: {
+  id: number; reply: string | null; onDone: () => Promise<void>; onError: (m: string) => void
+}) {
+  const [text, setText] = useState(reply ?? '')
+  const [busy, setBusy] = useState(false)
+  const dirty = text.trim() !== (reply ?? '')
+  return (
+    <div className="fb-row">
+      <input className="fb-reply-input" value={text} maxLength={300} placeholder="回覆給本人（他看得到）"
+        onChange={(e) => setText(e.target.value)} />
+      <button className="btn small" disabled={!dirty || busy} onClick={() => void (async () => {
+        setBusy(true)
+        try { await repo.replyFeedback(id, text); await onDone() }
+        catch (err) { onError(err instanceof Error ? err.message : String(err)) }
+        finally { setBusy(false) }
+      })()}>{busy ? '送出中…' : reply ? '改回覆' : '回覆'}</button>
+    </div>
+  )
+}
+
 /**
  * 學生老師按「回報」送來的東西。Claude 排程會定期來分類，
  * 這裡是給管理員自己看、自己改分類用的。
@@ -363,7 +384,8 @@ function FeedbackInbox() {
               </select>
             </div>
             <div>{r.message}</div>
-            {r.note && <div className="fb-meta">處理說明：{r.note}</div>}
+            {r.note && <div className="fb-meta">內部筆記：{r.note}</div>}
+            <FeedbackReply id={r.id} reply={r.reply} onDone={load} onError={setError} />
             <div className="fb-meta">
               {new Date(r.createdAt).toLocaleString('zh-TW')}・{r.screen}
               {typeof r.context.level === 'string' && `・${r.context.level}`}
