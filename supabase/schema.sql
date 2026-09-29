@@ -661,6 +661,11 @@ begin
    where id = p_student;
 end;
 $$;
+-- **只准 register_student / login_student 在驗過密碼之後叫。**
+-- Postgres 新建的函式預設給 PUBLIC 執行，底下「誰可以叫哪一支」那段只撤了
+-- anon / authenticated，撤不到 PUBLIC。這支曾因此人人可叫：同學的 id 在排行榜上
+-- 拿得到，叫一次就把自己的裝置綁成那位同學（2026-09-29 安全檢查抓到）。
+revoke all on function public.link_device(uuid) from public, anon, authenticated;
 
 -- -----------------------------------------------------------------------------
 -- 註冊。班級代碼就是邀請碼：沒有一組有效而且開放加入的代碼就註冊不了，

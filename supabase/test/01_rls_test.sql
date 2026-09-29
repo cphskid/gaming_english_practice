@@ -166,6 +166,16 @@ select test_as('a0000000-0000-0000-0000-000000000013', true);
 select test_ok((select error from public.login_student('rlsming','wrong99')) is not null, '密碼打錯進不去');
 select test_ok((select error from public.login_student('rlsnobody','apple99')) is not null, '帳號不存在進不去');
 
+\echo '── 拿同學的 id 直接綁到自己的裝置（盜用帳號）'
+-- link_device 是登入成功後內部用的。它曾經沒撤掉 Postgres 預設給 PUBLIC 的執行權，
+-- 同學的 id 在排行榜上拿得到，叫一次就變成那個人。
+select test_ok(not has_function_privilege('anon', 'public.link_device(uuid)', 'execute')
+           and not has_function_privilege('authenticated', 'public.link_device(uuid)', 'execute'),
+               'link_device 從外面叫不到');
+select test_as('a0000000-0000-0000-0000-000000000015', true);
+select test_denied($$ select public.link_device((select s.id from public.students s where s.nickname = '小明')) $$,
+                   '拿同學的 id 綁裝置');
+
 \echo '── 換一台裝置登入，要接回同一個存檔（這就是接後端的理由）'
 do $$
 declare v_old uuid; v_new uuid;

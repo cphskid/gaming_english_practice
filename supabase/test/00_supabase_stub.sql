@@ -24,6 +24,13 @@ end $$;
 
 grant usage on schema public, extensions, auth to anon, authenticated;
 
+-- 真的 Supabase 對 public schema 設了預設權限：之後新建的函式與資料表會自動
+-- grant 給 anon / authenticated。加上 Postgres 本身「新函式預設給 PUBLIC 執行」，
+-- 一支函式沒被明確 revoke 就是人人可叫。本機照抄，才測得出漏掉 revoke 的函式。
+alter default privileges in schema public grant all on tables    to anon, authenticated;
+alter default privileges in schema public grant all on functions to anon, authenticated;
+alter default privileges in schema public grant all on sequences to anon, authenticated;
+
 -- 欄位照真的 Supabase 抄，因為 admin_create_teacher 是**自己手寫 auth.users**
 -- （老師帳號由管理員直接開，不寄確認信）。欄位少一個，本機就測不到寫錯什麼。
 -- confirmed_at 在真的 Supabase 是自動算出來的欄位，這裡照做，寫它就會報錯。
