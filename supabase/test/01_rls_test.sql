@@ -935,6 +935,13 @@ begin
   perform test_ok(exists (select 1 from public.list_feedback('fixed') f where f.id = v_id), '救回來了');
   perform test_as('a0000000-0000-0000-0000-000000000011', true);
   perform test_ok(exists (select 1 from public.refresh_achievements() r where r = 'helper'), '回報修好了：小幫手');
+
+  -- 登出再登入＝換一個裝置身分（小明改用電腦），以前的回報還是要看得到
+  perform test_as('a0000000-0000-0000-0000-000000000013', true);
+  perform public.login_student('rlsming', 'apple99');
+  perform test_ok(exists (select 1 from public.my_feedback() m where m.id = v_id), '換裝置身分登入還看得到自己的回報');
+  perform public.seen_my_feedback();
+  perform test_ok((select m.seen_at is not null from public.my_feedback() m where m.id = v_id), '換裝置也標得了已讀');
 end $blk$;
 
 \echo '── 暱稱禁用字'

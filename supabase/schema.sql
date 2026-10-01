@@ -4260,14 +4260,18 @@ language sql stable security definer set search_path = public, pg_temp as $$
   select f.id, f.created_at, f.kind, f.message, f.status,
          f.reply, greatest(f.triaged_at, f.replied_at), f.seen_at
     from public.feedback f
-   where f.user_id = auth.uid() and f.hidden_at is null
+   -- 學生每次登入都是一個新的裝置身分（匿名登入），所以學生要用 student_id 認，
+   -- 只比 user_id 的話登出再登入就看不到以前的回報（2026-10-01 Chuck 抓到）
+   where (f.user_id = auth.uid() or f.student_id = public.current_student_id())
+     and f.hidden_at is null
    order by f.created_at desc limit 20;
 $$;
 
 -- 打開「我的回報」＝全部看過了，紅點消掉
 create or replace function public.seen_my_feedback()
 returns void language sql security definer set search_path = public, pg_temp as $$
-  update public.feedback set seen_at = now() where user_id = auth.uid();
+  update public.feedback set seen_at = now()
+   where user_id = auth.uid() or student_id = public.current_student_id();
 $$;
 
 revoke all on function public.can_triage_feedback(), public.submit_feedback(text, text, text, jsonb),
