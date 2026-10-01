@@ -282,8 +282,13 @@ export interface Repository {
   // ---------------------------------------------------------------- 回報問題
   /** 學生或老師回報一則問題。班級、暱稱、身分由伺服器補，前端只送內容與畫面資訊。 */
   submitFeedback(kind: FeedbackKind, message: string, screen: string, context: Record<string, unknown>): Promise<void>
-  /** 管理員：讀回報。status 不給就是全部。 */
-  listFeedback(status?: FeedbackStatus): Promise<FeedbackRow[]>
+  /**
+   * 讀回報。status 不給就是全部；hidden=true 只看被刪掉（隱藏）的，管理員救回用。
+   * 管理員看全部；老師只看得到自己帶的班的學生回報（伺服器過濾）。
+   */
+  listFeedback(status?: FeedbackStatus, hidden?: boolean): Promise<FeedbackRow[]>
+  /** 管理員：刪除＝隱藏，hidden=false 救回來 */
+  hideFeedback(id: number, hidden: boolean): Promise<void>
   /** 管理員：改分類 */
   triageFeedback(id: number, status: FeedbackStatus, note: string): Promise<void>
   /** 管理員：寫一句給回報的人看的話（空字串＝收回） */

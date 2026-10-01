@@ -2156,7 +2156,8 @@ insert into public.achievements (id, category, ord, reward_item, reward_title, t
   ('so-close', 'secret', 49, null, '', '{}', 1),
   ('bare-handed', 'secret', 50, null, '', '{}', 1),
   ('combo-20', 'secret', 51, null, '', '{}', 1),
-  ('all-rounder', 'secret', 52, null, '全能生', '{}', 1)
+  ('helper', 'secret', 52, null, '', '{}', 1),
+  ('all-rounder', 'secret', 53, null, '全能生', '{}', 1)
 on conflict (id) do update
   set category = excluded.category, ord = excluded.ord,
       reward_item = excluded.reward_item, reward_title = excluded.reward_title,
@@ -2164,7 +2165,7 @@ on conflict (id) do update
 
 -- 目錄以這份清單為準。刪掉的成就要跟著消失，不然畫面上沒有、資料庫裡卻還在，
 -- 別人的徽章牆上會冒出一個誰都看不懂的東西。
-delete from public.achievements where id not in ('first-answer', 'hundred', 'nemesis', 'theme-king', 'mastered-50', 'literate', 'read-100', 'listen-100', 'spell-100', 'triple-day', 'long-words', 'balanced', 'combo', 'first-clear', 'three-star', 'no-damage', 'boss-slayer', 'stars-30', 'all-clear', 'all-clear-2', 'all-clear-3', 'first-match', 'veteran', 'all-lines', 'top-tier', 'comeback', 'never-quit', 'war-flag', 'first-live', 'live-mates', 'raid-slayer', 'raid-wins', 'big-team', 'raid-mates', 'dressed', 'five-colors', 'all-frames', 'avatar-10', 'dual-job', 'item-taster', 'week-3', 'days', 'weekend', 'replay', 'month-12', 'old-friend', 'week-5', 'persistent', 'quick-hand', 'so-close', 'bare-handed', 'combo-20', 'all-rounder');
+delete from public.achievements where id not in ('first-answer', 'hundred', 'nemesis', 'theme-king', 'mastered-50', 'literate', 'read-100', 'listen-100', 'spell-100', 'triple-day', 'long-words', 'balanced', 'combo', 'first-clear', 'three-star', 'no-damage', 'boss-slayer', 'stars-30', 'all-clear', 'all-clear-2', 'all-clear-3', 'first-match', 'veteran', 'all-lines', 'top-tier', 'comeback', 'never-quit', 'war-flag', 'first-live', 'live-mates', 'raid-slayer', 'raid-wins', 'big-team', 'raid-mates', 'dressed', 'five-colors', 'all-frames', 'avatar-10', 'dual-job', 'item-taster', 'week-3', 'days', 'weekend', 'replay', 'month-12', 'old-friend', 'week-5', 'persistent', 'quick-hand', 'so-close', 'bare-handed', 'combo-20', 'helper', 'all-rounder');
 
 
 -- 關卡。**這一段是 tools/gen-levels-seed.mjs 從 src/data/levels.ts 產生的，不要手改。**

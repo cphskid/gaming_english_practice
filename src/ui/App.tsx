@@ -604,7 +604,8 @@ export function App() {
       {/* 回報問題：登入後才有（要知道是誰回報的），玩的時候不顯示免得擋到戰場 */}
       {screen !== 'play' && (student || staff) && (
         <FeedbackButton screen={screen} levelId={playing?.level?.id}
-          mode={playing ? (playing.raid ? 'raid' : playing.level ? 'td' : 'versus') : null} />
+          mode={playing ? (playing.raid ? 'raid' : playing.level ? 'td' : 'versus') : null}
+          inbox={staff ? (staff.isAdmin ? 'admin' : 'teacher') : null} />
       )}
 
       {screen !== 'play' && (

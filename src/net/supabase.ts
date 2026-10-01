@@ -969,8 +969,8 @@ export class SupabaseRepository implements Repository {
     fail('送不出去', error)
   }
 
-  async listFeedback(status?: FeedbackStatus): Promise<FeedbackRow[]> {
-    const { data, error } = await this.db.rpc('list_feedback', { p_status: status ?? null })
+  async listFeedback(status?: FeedbackStatus, hidden = false): Promise<FeedbackRow[]> {
+    const { data, error } = await this.db.rpc('list_feedback', { p_status: status ?? null, p_hidden: hidden })
     fail('讀不到回報', error)
     type Row = {
       id: number; created_at: string; who: string; role: FeedbackRow['role']; class_code: string | null
@@ -987,6 +987,11 @@ export class SupabaseRepository implements Repository {
   async triageFeedback(id: number, status: FeedbackStatus, note: string): Promise<void> {
     const { error } = await this.db.rpc('triage_feedback', { p_id: id, p_status: status, p_note: note })
     fail('改不了分類', error)
+  }
+
+  async hideFeedback(id: number, hidden: boolean): Promise<void> {
+    const { error } = await this.db.rpc('hide_feedback', { p_id: id, p_hidden: hidden })
+    fail(hidden ? '刪不掉' : '救不回來', error)
   }
 
   async replyFeedback(id: number, reply: string): Promise<void> {

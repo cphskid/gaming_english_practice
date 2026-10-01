@@ -1233,8 +1233,15 @@ export class LocalRepository implements Repository {
     write(k.feedback, all.slice(0, 200))
   }
 
-  async listFeedback(status?: FeedbackStatus): Promise<FeedbackRow[]> {
-    return read<FeedbackRow[]>(k.feedback, []).filter((f) => !status || f.status === status)
+  async listFeedback(status?: FeedbackStatus, hidden = false): Promise<FeedbackRow[]> {
+    type Stored = FeedbackRow & { hiddenAt?: string | null }
+    return read<Stored[]>(k.feedback, [])
+      .filter((f) => (!status || f.status === status) && !!f.hiddenAt === hidden)
+  }
+
+  async hideFeedback(id: number, hidden: boolean): Promise<void> {
+    write(k.feedback, read<FeedbackRow[]>(k.feedback, []).map((f) =>
+      (f.id === id ? { ...f, hiddenAt: hidden ? new Date().toISOString() : null } : f)))
   }
 
   async triageFeedback(id: number, status: FeedbackStatus, note: string): Promise<void> {
@@ -1248,8 +1255,8 @@ export class LocalRepository implements Repository {
   }
 
   async myFeedback(): Promise<MyFeedbackRow[]> {
-    type Stored = FeedbackRow & { updatedAt?: string; seenAt?: string }
-    return read<Stored[]>(k.feedback, []).slice(0, 20).map((f) => ({
+    type Stored = FeedbackRow & { updatedAt?: string; seenAt?: string; hiddenAt?: string | null }
+    return read<Stored[]>(k.feedback, []).filter((f) => !f.hiddenAt).slice(0, 20).map((f) => ({
       id: f.id, createdAt: f.createdAt, kind: f.kind, message: f.message, status: f.status,
       reply: f.reply ?? null, updatedAt: f.updatedAt ?? null, seenAt: f.seenAt ?? null,
     }))

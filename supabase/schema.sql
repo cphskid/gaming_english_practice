@@ -2993,6 +2993,13 @@ begin
     v_got := array_append(v_got, 'combo-20');
   end if;
 
+  -- 小幫手（2026-10-01）：回報的問題被修好了。放彩蛋類不給提示，免得有人亂報來刷；
+  -- 被管理員刪掉（隱藏）的不算。
+  if exists (select 1 from public.feedback f
+              where f.student_id = v_student and f.status = 'fixed' and f.hidden_at is null) then
+    v_got := array_append(v_got, 'helper');
+  end if;
+
   -- ---------------------------------------------------------------- 寫進去
   -- 目錄裡沒有的 id 不寫（前端跑在新版、資料庫還沒灌新目錄的那段時間）。
   for v_new in
@@ -4119,6 +4126,8 @@ alter table public.feedback enable row level security;
 alter table public.feedback add column if not exists reply      text;
 alter table public.feedback add column if not exists replied_at timestamptz;
 alter table public.feedback add column if not exists seen_at    timestamptz;
+-- 管理員「刪除」＝隱藏（2026-10-01）：收件匣與本人都看不到，資料留著可以救回來
+alter table public.feedback add column if not exists hidden_at  timestamptz;
 
 -- 可以讀回饋、改分類的帳號。管理員本來就可以；這張表是給排程用的專用帳號：
 -- 只看得到回饋，碰不到學生密碼、金幣、班級設定。
@@ -4175,16 +4184,38 @@ begin
 end;
 $$;
 
--- 讀回饋。p_status 給 null 就是全部，新的在前面。
-create or replace function public.list_feedback(p_status text default null, p_limit int default 200)
+-- 讀回饋。p_status 給 null 就是全部，新的在前面。p_hidden=true 只看被隱藏的（救回用）。
+-- 老師也叫得到，但只看得到自己帶的班的學生回報、看不到隱藏的（2026-10-01）。
+drop function if exists public.list_feedback(text, int);
+create or replace function public.list_feedback(
+  p_status text default null, p_limit int default 200, p_hidden boolean default false)
 returns setof public.feedback language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare v_all boolean := public.can_triage_feedback();
 begin
-  if not public.can_triage_feedback() then raise exception '只有管理員可以看回報'; end if;
+  if not v_all and not exists (select 1 from public.teachers t where t.user_id = auth.uid() and t.active) then
+    raise exception '只有管理員和老師可以看回報';
+  end if;
   return query
     select * from public.feedback f
-     where p_status is null or f.status = p_status
+     where (p_status is null or f.status = p_status)
+       and (case when v_all and coalesce(p_hidden, false) then f.hidden_at is not null
+                 else f.hidden_at is null end)
+       and (v_all or (f.role = 'student' and f.class_code in
+                        (select c.code from public.classes c where c.owner = auth.uid())))
      order by f.created_at desc
      limit least(greatest(coalesce(p_limit, 200), 1), 1000);
+end;
+$$;
+
+-- 隱藏／救回。只有管理員（排程用的讀回報帳號不行）。
+create or replace function public.hide_feedback(p_id bigint, p_hidden boolean)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if not public.is_admin() then raise exception '只有管理員可以刪除回報'; end if;
+  update public.feedback
+     set hidden_at = case when p_hidden then now() else null end
+   where id = p_id;
+  if not found then raise exception '找不到這則回報'; end if;
 end;
 $$;
 
@@ -4229,7 +4260,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
   select f.id, f.created_at, f.kind, f.message, f.status,
          f.reply, greatest(f.triaged_at, f.replied_at), f.seen_at
     from public.feedback f
-   where f.user_id = auth.uid()
+   where f.user_id = auth.uid() and f.hidden_at is null
    order by f.created_at desc limit 20;
 $$;
 
@@ -4240,13 +4271,14 @@ returns void language sql security definer set search_path = public, pg_temp as 
 $$;
 
 revoke all on function public.can_triage_feedback(), public.submit_feedback(text, text, text, jsonb),
-  public.list_feedback(text, int), public.triage_feedback(bigint, text, text), public.my_feedback(),
-  public.reply_feedback(bigint, text), public.seen_my_feedback()
+  public.list_feedback(text, int, boolean), public.triage_feedback(bigint, text, text), public.my_feedback(),
+  public.reply_feedback(bigint, text), public.seen_my_feedback(), public.hide_feedback(bigint, boolean)
   from public, anon;
 grant execute on function
   public.can_triage_feedback(),
   public.submit_feedback(text, text, text, jsonb),
-  public.list_feedback(text, int),
+  public.list_feedback(text, int, boolean),
+  public.hide_feedback(bigint, boolean),
   public.triage_feedback(bigint, text, text),
   public.my_feedback(),
   public.reply_feedback(bigint, text),

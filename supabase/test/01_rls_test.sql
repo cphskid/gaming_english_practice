@@ -908,6 +908,33 @@ begin
   perform test_ok(not public.is_admin(), '專用帳號不是管理員');
   perform test_denied($$ select * from public.admin_list_teachers() $$, '專用帳號不能看老師名單');
   perform test_force($$ delete from public.feedback_readers where user_id = 'a0000000-0000-0000-0000-000000000003' $$);
+  perform test_as('a0000000-0000-0000-0000-000000000003', false, 'nobody@rlstest.local');
+  perform test_denied(format($$ select public.hide_feedback(%s, true) $$, v_id), '路人刪回報');
+
+  -- 老師：只看得到自己班學生的，改不了也刪不了（2026-10-01）
+  perform test_as('a0000000-0000-0000-0000-000000000001', false, 'teacher1@rlstest.local');
+  perform test_ok(exists (select 1 from public.list_feedback() f where f.id = v_id), '班導看得到自己班學生的回報');
+  perform test_ok(not exists (select 1 from public.list_feedback() f where f.class_code is distinct from 'RLS1'),
+                  '班導看不到別班或老師的回報');
+  perform test_denied(format($$ select public.triage_feedback(%s, 'fixed', null) $$, v_id), '老師改分類');
+  perform test_denied(format($$ select public.hide_feedback(%s, true) $$, v_id), '老師刪回報');
+  perform test_as('a0000000-0000-0000-0000-000000000002', false, 'teacher2@rlstest.local');
+  perform test_ok(not exists (select 1 from public.list_feedback() f where f.id = v_id), '別班老師看不到');
+
+  -- 管理員刪除＝隱藏：收件匣、本人都看不到，可以救回來；隱藏的修好不給小幫手
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  perform public.triage_feedback(v_id, 'fixed', null);
+  perform public.hide_feedback(v_id, true);
+  perform test_ok(not exists (select 1 from public.list_feedback() f where f.id = v_id), '隱藏後收件匣看不到');
+  perform test_ok(exists (select 1 from public.list_feedback(null, 200, true) f where f.id = v_id), '在「已刪除」找得到');
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  perform test_ok(not exists (select 1 from public.my_feedback() m where m.id = v_id), '隱藏後本人也看不到');
+  perform test_ok(not exists (select 1 from public.refresh_achievements() r where r = 'helper'), '被刪掉的回報不給小幫手');
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  perform public.hide_feedback(v_id, false);
+  perform test_ok(exists (select 1 from public.list_feedback('fixed') f where f.id = v_id), '救回來了');
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  perform test_ok(exists (select 1 from public.refresh_achievements() r where r = 'helper'), '回報修好了：小幫手');
 end $blk$;
 
 \echo '── 暱稱禁用字'
