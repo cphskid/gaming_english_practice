@@ -26,6 +26,12 @@ export interface Repository {
   /** 這台裝置上次是誰。沒有就回 null（要去登入）。 */
   currentStudent(): Promise<Student | null>
   logout(): Promise<void>
+  /**
+   * 樂園准不准這個學生進來玩（park_can_enter）。設施維修中、班上沒開放、還沒加入班級都會被擋，
+   * reason 是給小朋友看的一句話。樂園還沒裝到資料庫、或網路出錯時一律放行——
+   * 寧可多放一個人進來，也不要整班在上課時被一個檢查卡在門外。
+   */
+  canEnter(facility: string): Promise<{ ok: boolean; reason?: string }>
 
   setPassword(oldPassword: string, newPassword: string): Promise<void>
   /** 回傳實際存下來的暱稱 */

@@ -183,6 +183,11 @@ export class LocalRepository implements Repository {
     return id ? read<Student | null>(k.student(id), null) : null
   }
 
+  /** 本機模式沒有樂園，永遠放行 */
+  async canEnter(): Promise<{ ok: boolean; reason?: string }> {
+    return { ok: true }
+  }
+
   async logout(): Promise<void> {
     setSession(null)
   }

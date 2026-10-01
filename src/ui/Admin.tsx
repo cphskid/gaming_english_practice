@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { AdminClassRow, TeacherRow } from '@/core/types'
-import { repo } from '@/net'
+import { PARK_URL, repo } from '@/net'
 import { FeedbackInbox } from './FeedbackInbox'
 
 /**
@@ -68,9 +68,23 @@ export function Admin({ onBack }: { onBack: () => void }) {
       {note && <p className="note">{note}</p>}
 
       <div className="teacher">
-        <FeedbackInbox canManage />
-
-        <NicknameGuard />
+        {/*
+          2026-10 接上時空冒險樂園：回報收件匣和暱稱禁用字搬到樂園的管理員頁（cphskid.github.io 的 teacher.html），
+          這裡只留連結。還沒接樂園（本機模式）的時候照舊放在這裡。
+        */}
+        {PARK_URL ? (
+          <p className="note">
+            回報收件匣和暱稱禁用字搬到樂園了：
+            <a href={PARK_URL + 'teacher.html#feedback'}>回報收件匣</a>
+            {'　'}
+            <a href={PARK_URL + 'teacher.html#admin'}>暱稱禁用字（管理員頁）</a>
+          </p>
+        ) : (
+          <>
+            <FeedbackInbox canManage />
+            <NicknameGuard />
+          </>
+        )}
 
         <div>
           <h2>幫人開帳號</h2>

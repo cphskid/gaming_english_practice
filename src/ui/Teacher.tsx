@@ -3,7 +3,7 @@ import { CHAPTERS, LEVELS } from '@/data/levels'
 import { WORDS_BY_ID } from '@/data/words'
 import { WordStat } from '@/core/wordStat'
 import { SKILL_NAME, type ClassRoom, type Staff } from '@/core/types'
-import { repo, type ClassRosterRow } from '@/net'
+import { PARK_URL, repo, type ClassRosterRow } from '@/net'
 import { TeacherRoom } from './Room'
 import { Icon } from './Icon'
 
@@ -141,6 +141,8 @@ export function Teacher({
           })}>我是這裡的管理員</button>
         )}
         <span className="spacer" />
+        {/* 開班、開放遊戲、全班各科進度、重設密碼都在樂園；這裡留英文專屬的細節（最常錯的字、開放關卡、團戰） */}
+        {PARK_URL && <a className="btn small" href={PARK_URL + 'teacher.html'}>樂園教師入口</a>}
         <button className="btn ghost small" onClick={onBack}>回遊戲</button>
         <button className="btn ghost small" onClick={onLogout}>登出</button>
       </div>

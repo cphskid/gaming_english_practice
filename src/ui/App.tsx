@@ -13,7 +13,7 @@ import { CORE_WORDS, WORDS_BY_ID, wordsOfLevel } from '@/data/words'
 import { bossRaid, towerDefense, tugOfWar } from '@/games'
 import { BOSS_BY_ID, bossWords } from '@/data/bosses'
 import { loadArt } from '@/games/tower-defense/art'
-import { repo } from '@/net'
+import { PARK_FACILITY, PARK_URL, repo } from '@/net'
 import type { LiveMatchInfo, SavedResult } from '@/net/repository'
 import { liveLink } from '@/net/live'
 import { raidLink } from '@/net/raid'
@@ -37,11 +37,12 @@ import { Versus } from './Versus'
 import { FeedbackButton } from './Feedback'
 import { Changelog } from './Changelog'
 import { NoticeLayer } from './Notice'
+import { ParkGate } from './ParkGate'
 
 type Screen =
   | 'login' | 'staff' | 'create' | 'select' | 'shop' | 'character' | 'board'
   | 'play' | 'result' | 'teacher' | 'admin' | 'settings' | 'rooms' | 'lobby' | 'versus'
-  | 'profile' | 'peer'
+  | 'profile' | 'peer' | 'blocked'
 
 interface Playing {
   /** 對戰沒有關卡 */
@@ -85,6 +86,8 @@ export function App() {
   const [roomId, setRoomId] = useState<string | null>(null)
   /** 正在看誰的徽章牆（從排行榜點進去的） */
   const [peerId, setPeerId] = useState<string | null>(null)
+  /** 樂園不讓進來的原因（park_can_enter）。null＝可以玩。 */
+  const [blocked, setBlocked] = useState<string | null>(null)
 
   /**
    * 班上開著哪幾場，以及我在的那一場。玩的時候都不問——戰場那個迴圈不該被
@@ -106,6 +109,11 @@ export function App() {
     if (screen !== 'select' || !classCode) return
     let alive = true
     const tick = () => {
+      // 管理員把設施改成維修中、老師把班上的開放關掉，停在選關畫面的人也要馬上知道
+      void repo.canEnter(PARK_FACILITY).then((gate) => {
+        if (!alive || gate.ok) return
+        setBlocked(gate.reason ?? null); setScreen('blocked')
+      })
       void repo.loadTeacherOpen(classCode)
         .then((ids) => {
           if (!alive) return
@@ -130,6 +138,13 @@ export function App() {
 
   /** 載入一位學生的全部東西並進到選關畫面。登入、註冊、換班都走這裡。 */
   const enter = useCallback(async (s: Student) => {
+    // 先問樂園准不准進來（設施維修中、班上沒開放……）。不准就停在門口，進度先不載。
+    const gate = await repo.canEnter(PARK_FACILITY)
+    if (!gate.ok) {
+      setStudent(s); setBlocked(gate.reason ?? null); setScreen('blocked')
+      return
+    }
+    setBlocked(null)
     const [c, p, stats, open] = await Promise.all([
       repo.loadCharacter(s.id),
       repo.loadProgress(s.id),
@@ -196,7 +211,7 @@ export function App() {
     await repo.staffLogout()
     setStudent(null); setCharacter(null); setStaff(null)
     setProgress(new Map()); setTeacherOpen(new Set()); setStat(new WordStat())
-    setRoomId(null)
+    setRoomId(null); setBlocked(null)
     setScreen('login')
   }, [])
 
@@ -621,7 +636,14 @@ export function App() {
       <NoticeLayer playing={screen === 'play'} />
 
       {screen === 'login' && (
-        <Login onLogin={login} onRegister={register} onStaff={() => setScreen('staff')} />
+        <Login onLogin={login} onRegister={register}
+          // 接上樂園之後，老師和家長一律去樂園的教師入口（開班、看全班進度都在那裡）
+          onStaff={() => { if (PARK_URL) location.href = PARK_URL + 'teacher.html'; else setScreen('staff') }} />
+      )}
+
+      {screen === 'blocked' && student && (
+        <ParkGate nickname={student.nickname} reason={blocked ?? '現在還不能進來'}
+          onRetry={() => enter(student)} onLogout={() => void logout()} />
       )}
 
       {screen === 'staff' && (

@@ -20,3 +20,14 @@ export const repo: Repository =
 
 /** 目前存在哪裡。換裝置看不到紀錄的時候，第一個要問的就是這個。 */
 export const backend: 'supabase' | 'local' = url && key ? 'supabase' : 'local'
+
+/**
+ * 時空冒險樂園（cphskid.github.io）。樂園管帳號、班級、老師後台，這個遊戲是樂園裡的一個設施。
+ * 只有接了資料庫才算接上樂園——localStorage 模式（本機開發、自動試玩）照舊自己一套。
+ * 樂園跟遊戲在同一個網域，登入狀態是共用的，所以跳過去不用再登入一次。
+ */
+export const PARK_URL: string | null =
+  backend === 'supabase' ? import.meta.env.VITE_PARK_URL || null : null
+
+/** 這個遊戲在樂園的設施代碼（park_facilities.code） */
+export const PARK_FACILITY = 'guardian'

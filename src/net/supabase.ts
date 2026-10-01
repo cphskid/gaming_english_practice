@@ -146,6 +146,18 @@ export class SupabaseRepository implements Repository {
     await this.db.auth.signOut()
   }
 
+  async canEnter(facility: string): Promise<{ ok: boolean; reason?: string }> {
+    try {
+      const { data, error } = await this.db.rpc('park_can_enter', { p_facility: facility })
+      // PGRST202＝資料庫還沒裝樂園（正式庫在開幕前就是這樣），照舊放行
+      if (error || !data) return { ok: true }
+      const r = data as { ok?: boolean; reason?: string }
+      return r.ok === false ? { ok: false, reason: r.reason ?? '現在還不能進來' } : { ok: true }
+    } catch {
+      return { ok: true }
+    }
+  }
+
   async setPassword(oldPassword: string, newPassword: string): Promise<void> {
     const { error } = await this.db.rpc('student_set_password', {
       p_old: oldPassword, p_new: newPassword,
