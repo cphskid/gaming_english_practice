@@ -23,7 +23,8 @@ export function ParkGate({ nickname, reason, onRetry, onLogout }: {
         setBusy(true)
         try { await onRetry() } finally { setBusy(false) }
       })()}>{busy ? '問問看…' : '再試一次'}</button>
-      {PARK_URL && <a className="btn ghost" href={PARK_URL}>回時空冒險樂園</a>}
+      {/* 帶 #map 直接回樂園的島嶼地圖，不要停在 Start Game 開場 */}
+      {PARK_URL && <a className="btn ghost" href={PARK_URL + '#map'}>回時空冒險樂園</a>}
       <button className="btn ghost small" onClick={onLogout}>換一個帳號</button>
     </div>
   )
