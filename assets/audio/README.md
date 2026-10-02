@@ -27,10 +27,11 @@
 | `sfx/ui-tap.wav` | 按鈕 | Brackeys |
 | `sfx/explosion.wav` | TNT 哥布林爆炸 | Brackeys |
 | `music/adventure.mp3` | 通用背景音樂 | Brackeys |
+| `public/audio/sfx/victory.ogg` | 勝利短曲（樂園統一編號 MU-20） | ElevenLabs（付費期間產，可商用） |
+| `public/audio/sfx/defeat.ogg` | 失敗短曲（MU-21） | ElevenLabs（付費期間產，可商用） |
 
 ## 還缺的
 
-- **勝利短曲、失敗短曲**（結算畫面）
 - **戰鬥音樂、魔王音樂**（目前只有一首通用曲）
 
 這幾個在補上檔案之前，由音訊模組用 Web Audio 合成佔位音，不會卡住開發。
