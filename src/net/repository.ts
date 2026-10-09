@@ -26,6 +26,12 @@ export interface Repository {
   /** 這台裝置上次是誰。沒有就回 null（要去登入）。 */
   currentStudent(): Promise<Student | null>
   logout(): Promise<void>
+  /**
+   * 樂園准不准這個學生進來玩（park_can_enter）。設施維修中、班上沒開放、還沒加入班級都會被擋，
+   * reason 是給小朋友看的一句話。樂園還沒裝到資料庫、或網路出錯時一律放行——
+   * 寧可多放一個人進來，也不要整班在上課時被一個檢查卡在門外。
+   */
+  canEnter(facility: string): Promise<{ ok: boolean; reason?: string }>
 
   setPassword(oldPassword: string, newPassword: string): Promise<void>
   /** 回傳實際存下來的暱稱 */
@@ -282,8 +288,13 @@ export interface Repository {
   // ---------------------------------------------------------------- 回報問題
   /** 學生或老師回報一則問題。班級、暱稱、身分由伺服器補，前端只送內容與畫面資訊。 */
   submitFeedback(kind: FeedbackKind, message: string, screen: string, context: Record<string, unknown>): Promise<void>
-  /** 管理員：讀回報。status 不給就是全部。 */
-  listFeedback(status?: FeedbackStatus): Promise<FeedbackRow[]>
+  /**
+   * 讀回報。status 不給就是全部；hidden=true 只看被刪掉（隱藏）的，管理員救回用。
+   * 管理員看全部；老師只看得到自己帶的班的學生回報（伺服器過濾）。
+   */
+  listFeedback(status?: FeedbackStatus, hidden?: boolean): Promise<FeedbackRow[]>
+  /** 管理員：刪除＝隱藏，hidden=false 救回來 */
+  hideFeedback(id: number, hidden: boolean): Promise<void>
   /** 管理員：改分類 */
   triageFeedback(id: number, status: FeedbackStatus, note: string): Promise<void>
   /** 管理員：寫一句給回報的人看的話（空字串＝收回） */

@@ -256,6 +256,8 @@ export const ACHIEVEMENTS: AchDef[] = [
     desc: '一整關沒用任何道具就通關。' },
   { id: 'combo-20', category: 'secret', name: '連對二十', secret: true,
     desc: '同一場裡連對二十題。' },
+  { id: 'helper', category: 'secret', name: '小幫手', secret: true,
+    desc: '回報的問題被修好了。謝謝你幫大家找到問題！' },
   { id: 'all-rounder', category: 'secret', name: '全能生', secret: true,
     desc: '八個大類每一類都至少拿到一個徽章。', rewardTitle: '全能生' },
 ]

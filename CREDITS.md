@@ -123,3 +123,5 @@
 **Noto Sans TC** — Google，[SIL Open Font License 1.1](https://github.com/google/fonts/blob/main/ofl/notosanstc/OFL.txt)
 
 介紹影片（`public/about/intro.mp4`）的字幕字型，只烤進影片畫面，沒有收錄字型檔。影片片尾的英文標題用上面的 MedievalSharp，背景音樂是上面的 Determined Pursuit（CC0）。
+
+**ElevenLabs** — 勝利短曲 `victory.ogg`（MU-20）、失敗短曲 `defeat.ogg`（MU-21），2026-10-02 用 ElevenLabs Creator 付費方案產生，可商用。

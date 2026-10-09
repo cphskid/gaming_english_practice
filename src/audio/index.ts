@@ -28,10 +28,11 @@ const FILES: Partial<Record<SfxName, string[]>> = {
   'ui-tap': ['ui-tap.wav'],
   explosion: ['explosion.wav'],
   'battle-horn': ['battle-horn.ogg'],
-  // victory 與 defeat 還沒有檔案，下面用合成的頂著
+  victory: ['victory.ogg'], // 樂園統一編號 MU-20（ElevenLabs）
+  defeat: ['defeat.ogg'], // MU-21
 }
 
-/** 沒有檔案的先合成：[頻率, 起始秒, 長度秒] */
+/** 沒有檔案（或檔案載入失敗）時的合成聲：[頻率, 起始秒, 長度秒] */
 const SYNTH: Partial<Record<SfxName, [number, number, number][]>> = {
   victory: [[523, 0, 0.14], [659, 0.13, 0.14], [784, 0.26, 0.14], [1046, 0.39, 0.34]],
   defeat: [[392, 0, 0.18], [330, 0.17, 0.2], [247, 0.36, 0.42]],

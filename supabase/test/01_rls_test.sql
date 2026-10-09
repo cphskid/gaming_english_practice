@@ -166,6 +166,16 @@ select test_as('a0000000-0000-0000-0000-000000000013', true);
 select test_ok((select error from public.login_student('rlsming','wrong99')) is not null, '密碼打錯進不去');
 select test_ok((select error from public.login_student('rlsnobody','apple99')) is not null, '帳號不存在進不去');
 
+\echo '── 拿同學的 id 直接綁到自己的裝置（盜用帳號）'
+-- link_device 是登入成功後內部用的。它曾經沒撤掉 Postgres 預設給 PUBLIC 的執行權，
+-- 同學的 id 在排行榜上拿得到，叫一次就變成那個人。
+select test_ok(not has_function_privilege('anon', 'public.link_device(uuid)', 'execute')
+           and not has_function_privilege('authenticated', 'public.link_device(uuid)', 'execute'),
+               'link_device 從外面叫不到');
+select test_as('a0000000-0000-0000-0000-000000000015', true);
+select test_denied($$ select public.link_device((select s.id from public.students s where s.nickname = '小明')) $$,
+                   '拿同學的 id 綁裝置');
+
 \echo '── 換一台裝置登入，要接回同一個存檔（這就是接後端的理由）'
 do $$
 declare v_old uuid; v_new uuid;
@@ -898,6 +908,40 @@ begin
   perform test_ok(not public.is_admin(), '專用帳號不是管理員');
   perform test_denied($$ select * from public.admin_list_teachers() $$, '專用帳號不能看老師名單');
   perform test_force($$ delete from public.feedback_readers where user_id = 'a0000000-0000-0000-0000-000000000003' $$);
+  perform test_as('a0000000-0000-0000-0000-000000000003', false, 'nobody@rlstest.local');
+  perform test_denied(format($$ select public.hide_feedback(%s, true) $$, v_id), '路人刪回報');
+
+  -- 老師：只看得到自己班學生的，改不了也刪不了（2026-10-01）
+  perform test_as('a0000000-0000-0000-0000-000000000001', false, 'teacher1@rlstest.local');
+  perform test_ok(exists (select 1 from public.list_feedback() f where f.id = v_id), '班導看得到自己班學生的回報');
+  perform test_ok(not exists (select 1 from public.list_feedback() f where f.class_code is distinct from 'RLS1'),
+                  '班導看不到別班或老師的回報');
+  perform test_denied(format($$ select public.triage_feedback(%s, 'fixed', null) $$, v_id), '老師改分類');
+  perform test_denied(format($$ select public.hide_feedback(%s, true) $$, v_id), '老師刪回報');
+  perform test_as('a0000000-0000-0000-0000-000000000002', false, 'teacher2@rlstest.local');
+  perform test_ok(not exists (select 1 from public.list_feedback() f where f.id = v_id), '別班老師看不到');
+
+  -- 管理員刪除＝隱藏：收件匣、本人都看不到，可以救回來；隱藏的修好不給小幫手
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  perform public.triage_feedback(v_id, 'fixed', null);
+  perform public.hide_feedback(v_id, true);
+  perform test_ok(not exists (select 1 from public.list_feedback() f where f.id = v_id), '隱藏後收件匣看不到');
+  perform test_ok(exists (select 1 from public.list_feedback(null, 200, true) f where f.id = v_id), '在「已刪除」找得到');
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  perform test_ok(not exists (select 1 from public.my_feedback() m where m.id = v_id), '隱藏後本人也看不到');
+  perform test_ok(not exists (select 1 from public.refresh_achievements() r where r = 'helper'), '被刪掉的回報不給小幫手');
+  perform test_as('a0000000-0000-0000-0000-000000000000', false, 'admin@rlstest.local');
+  perform public.hide_feedback(v_id, false);
+  perform test_ok(exists (select 1 from public.list_feedback('fixed') f where f.id = v_id), '救回來了');
+  perform test_as('a0000000-0000-0000-0000-000000000011', true);
+  perform test_ok(exists (select 1 from public.refresh_achievements() r where r = 'helper'), '回報修好了：小幫手');
+
+  -- 登出再登入＝換一個裝置身分（小明改用電腦），以前的回報還是要看得到
+  perform test_as('a0000000-0000-0000-0000-000000000013', true);
+  perform public.login_student('rlsming', 'apple99');
+  perform test_ok(exists (select 1 from public.my_feedback() m where m.id = v_id), '換裝置身分登入還看得到自己的回報');
+  perform public.seen_my_feedback();
+  perform test_ok((select m.seen_at is not null from public.my_feedback() m where m.id = v_id), '換裝置也標得了已讀');
 end $blk$;
 
 \echo '── 暱稱禁用字'

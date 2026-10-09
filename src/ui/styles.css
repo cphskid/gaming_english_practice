@@ -855,6 +855,7 @@ input.pin{width:7.5em;font-size:20px;letter-spacing:.3em;text-align:center;paddi
 /* 我的回報（2026-09-27）：有新處理結果時按鈕亮紅點 */
 .feedback-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#e5484d;margin-left:5px;vertical-align:middle;box-shadow:0 0 0 2px rgba(0,0,0,.3)}
 .feedback-tabs{display:flex;gap:6px;justify-content:center;margin-bottom:8px}
+.feedback-tabs .btn{white-space:nowrap;padding-left:10px;padding-right:10px}
 .fb-mine{max-height:55vh;overflow-y:auto}
 .fb-item.fb-new{outline:2px solid #e5b84d}
 .fb-msg{white-space:pre-wrap;word-break:break-word}
@@ -862,6 +863,12 @@ input.pin{width:7.5em;font-size:20px;letter-spacing:.3em;text-align:center;paddi
 .fb-badge{font-size:12px;font-weight:700;padding:2px 8px;border-radius:10px;color:#fff}
 .fb-wait{background:#6b7280}.fb-work{background:#d97706}.fb-done{background:#16a34a}.fb-close{background:#4b5563}
 .fb-reply-input{flex:1;min-width:0;font:inherit;font-size:14px;padding:5px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.25);color:inherit}
+.fb-row .spacer{flex:1}
+.btn.danger{background:#c2413b;border-color:#c2413b;color:#fff}
+/* 管理員／老師在回報視窗裡看收件匣：寬一點、裡面自己捲 */
+.feedback-box.feedback-inbox{width:min(560px,calc(100vw - 32px));max-width:none}
+.feedback-inbox .fb-inbox{max-height:62vh;overflow-y:auto}
+.feedback-box .fb-inbox h2,.fb-inbox h2{font-size:17px;margin:0;text-align:left}
 .fb-newtag{font-size:11px;color:#e5b84d;font-weight:700}
 .fb-list{display:flex;flex-direction:column;gap:8px}
 .fb-item{padding:10px;border-radius:8px;background:rgba(0,0,0,.2);display:flex;flex-direction:column;gap:4px;font-size:14px}

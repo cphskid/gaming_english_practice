@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { repo } from '@/net'
 import { backend } from '@/net'
 import type { FeedbackKind, FeedbackStatus, MyFeedbackRow } from '@/net/repository'
+import { FeedbackInbox, isPending } from './FeedbackInbox'
 
 /**
  * 回報問題。
@@ -57,11 +58,20 @@ const MY_STATUS: Record<FeedbackStatus, { label: string; tone: 'wait' | 'work' |
 const isUnread = (r: MyFeedbackRow) =>
   !!r.updatedAt && (!r.seenAt || Date.parse(r.updatedAt) > Date.parse(r.seenAt))
 
-export function FeedbackButton({ screen, levelId, mode }: {
-  screen: string; levelId?: string | null; mode?: string | null
+/** 管理員與老師按「問題回報」先看到收件匣（2026-10-01）；管理員能管，老師只看自己班 */
+export type FeedbackInboxRole = 'admin' | 'teacher' | null
+
+export function FeedbackButton({ screen, levelId, mode, inbox = null }: {
+  screen: string; levelId?: string | null; mode?: string | null; inbox?: FeedbackInboxRole
 }) {
   const [open, setOpen] = useState(false)
   const [mine, setMine] = useState<MyFeedbackRow[] | null>(null)
+  /** 管理員：待處理幾則（還沒看＋要 Chuck 決定），按鈕上亮紅點 */
+  const [pending, setPending] = useState(0)
+  useEffect(() => {
+    if (inbox !== 'admin') return
+    void repo.listFeedback().then((rows) => setPending(rows.filter(isPending).length)).catch(() => {})
+  }, [inbox])
 
   const loadMine = useCallback(async () => {
     try { setMine(await repo.myFeedback()) } catch { /* 讀不到就不亮紅點，不擋回報 */ }
@@ -69,12 +79,14 @@ export function FeedbackButton({ screen, levelId, mode }: {
   useEffect(() => { void loadMine() }, [loadMine])
 
   const unread = mine?.filter(isUnread).length ?? 0
+  const dot = unread + pending
   return (
     <>
       <button className="feedback-fab" onClick={() => setOpen(true)} aria-label="回報問題">
-        💬 問題回報{unread > 0 && <span className="feedback-dot" aria-label={`${unread} 則有新消息`} />}
+        💬 問題回報{dot > 0 && <span className="feedback-dot" aria-label={`${dot} 則有新消息`} />}
       </button>
       {open && <FeedbackForm screen={screen} levelId={levelId} mode={mode} mine={mine} unread={unread}
+        inbox={inbox} pending={pending} onPending={setPending}
         onSeen={() => {
           void repo.seenMyFeedback().catch(() => {})
           const now = new Date().toISOString()
@@ -110,13 +122,16 @@ function MyFeedbackList({ rows, fresh }: { rows: MyFeedbackRow[] | null; fresh: 
   )
 }
 
-function FeedbackForm({ screen, levelId, mode, mine, unread, onSeen, onSent, onClose }: {
+function FeedbackForm({ screen, levelId, mode, mine, unread, inbox, pending, onPending, onSeen, onSent, onClose }: {
   screen: string; levelId?: string | null; mode?: string | null
   mine: MyFeedbackRow[] | null; unread: number
+  inbox: FeedbackInboxRole; pending: number; onPending: (n: number) => void
   onSeen: () => void; onSent: () => void; onClose: () => void
 }) {
   // 有新消息就直接打開「我的回報」
-  const [tab, setTab] = useState<'write' | 'mine'>(unread > 0 ? 'mine' : 'write')
+  // 管理員／老師先看收件匣；其他人有新消息就直接打開「我的回報」
+  const [tab, setTab] = useState<'inbox' | 'write' | 'mine'>(
+    inbox ? 'inbox' : unread > 0 ? 'mine' : 'write')
   // 打開當下還沒看過的那幾則；標成看過以後，這次打開的期間仍然框起來
   const [fresh] = useState(() => new Set((mine ?? []).filter(isUnread).map((r) => r.id)))
   useEffect(() => { if (tab === 'mine' && unread > 0) onSeen() }, [tab, unread, onSeen])
@@ -148,7 +163,7 @@ function FeedbackForm({ screen, levelId, mode, mine, unread, onSeen, onSent, onC
 
   return (
     <div className="confirm" role="dialog" aria-modal="true">
-      <div className="confirm-box panel feedback-box">
+      <div className={'confirm-box panel feedback-box' + (tab === 'inbox' ? ' feedback-inbox' : '')}>
         {state === 'done' ? (
           <>
             <h2>收到了，謝謝你！</h2>
@@ -161,12 +176,24 @@ function FeedbackForm({ screen, levelId, mode, mine, unread, onSeen, onSent, onC
           <>
             <h2>問題回報</h2>
             <div className="feedback-tabs">
+              {inbox && (
+                <button className={'btn small' + (tab === 'inbox' ? '' : ' ghost')} onClick={() => setTab('inbox')}>
+                  📥 {inbox === 'admin' ? '收件匣' : '班上的'}{pending > 0 && <span className="feedback-dot" />}
+                </button>
+              )}
               <button className={'btn small' + (tab === 'write' ? '' : ' ghost')} onClick={() => setTab('write')}>✏️ 寫新的</button>
               <button className={'btn small' + (tab === 'mine' ? '' : ' ghost')} onClick={() => setTab('mine')}>
                 📬 我的回報{unread > 0 && <span className="feedback-dot" />}
               </button>
             </div>
-            {tab === 'mine' ? (
+            {tab === 'inbox' ? (
+              <>
+                <FeedbackInbox canManage={inbox === 'admin'} onPending={onPending} />
+                <div className="confirm-btns">
+                  <button className="btn" onClick={onClose}>關閉</button>
+                </div>
+              </>
+            ) : tab === 'mine' ? (
               <>
                 <MyFeedbackList rows={mine} fresh={fresh} />
                 <div className="confirm-btns">
