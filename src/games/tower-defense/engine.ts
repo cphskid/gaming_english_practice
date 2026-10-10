@@ -865,7 +865,9 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     // 所有站在地上的東西照「腳下的 y」由遠到近排，遮擋關係才會對
     const scene: { y: number; f: () => void }[] = []
     if (!mapReady) for (const d of layout.decor) scene.push({ y: d.y, f: () => drawDecor(d) })
-    scene.push({ y: layout.castle.y, f: drawCastle })
+    // 新畫風的城堡是一大塊方形、左邊一直延伸到城門口，英雄就站在那裡（2026-10-10 Chuck：城堡蓋到英雄）。
+    // 城堡一律畫在最後面，站在城門前的英雄和走進城的怪都壓在它前面。
+    scene.push({ y: PARK ? -1e9 : layout.castle.y, f: drawCastle })
     scene.push({ y: hero.y, f: () => hero.draw(c2d) })
     for (const t of S.towers) { const s = SLOTS[t.slot]; scene.push({ y: s.y, f: () => drawTower(t, s) }) }
     for (const t of S.towers) { const sd = t.soldier; if (sd && sd.hp > 0) scene.push({ y: sd.y, f: () => drawSoldier(sd) }) }
@@ -1043,8 +1045,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       // 城堡圖底下自帶一圈草地圓盤，圓盤的中心大約在圖高 85% 的地方，對到原本城堡的腳
       const im = img['p-castle']
       if (!im?.complete) return
-      const w = 196, h = (im.height / im.width) * w
-      c2d.drawImage(im, layout.castle.x - w / 2 + 4, layout.castle.y + 26 - h, w, h)
+      const w = 190, h = (im.height / im.width) * w
+      c2d.drawImage(im, layout.castle.x - w / 2 + 12, layout.castle.y + 26 - h, w, h)
       return
     }
     const im = art(CASTLE_KEY) ?? art('castle')
