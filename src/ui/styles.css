@@ -222,7 +222,26 @@ button{font-family:inherit}
   background:#b8352d;color:#fff;font-size:12px;font-weight:800;padding:1px 8px;border-radius:99px;
   box-shadow:0 2px 0 #7d211b}
 @keyframes td-call{50%{transform:translate(-50%,-50%) scale(1.1)}}
-@media (prefers-reduced-motion:reduce){ .td-call,.td-rb{animation:none} }
+.td-rb.on{border-color:#5fae3c;box-shadow:0 0 0 4px rgba(95,174,60,.45),0 4px 0 #3c7a22;transform:translate(-50%,-50%) scale(1.12)}
+.td-rb.on span{background:#5fae3c;color:#fff;border-color:#3c7a22}
+.td-rb i{position:absolute;right:-4px;top:-4px;width:22px;height:22px;border-radius:50%;background:#5fae3c;color:#fff;
+  font:900 14px/22px system-ui;font-style:normal;border:2px solid #fff}
+.td-call:not(.ready){animation:none;opacity:.8}
+.td-start{position:absolute;pointer-events:auto;cursor:pointer;display:grid;grid-template-columns:auto auto;
+  align-items:center;column-gap:6px;padding:5px 16px 5px 8px;border-radius:999px;border:3px solid #fff3c4;
+  background:linear-gradient(#ff7b54,#d9412a);box-shadow:0 4px 0 #8f2a17,0 6px 14px rgba(0,0,0,.35);color:#fff;
+  font:900 20px/1.1 system-ui;text-shadow:0 2px 0 rgba(0,0,0,.25);transform-origin:100% 100%}
+.td-start img{width:40px;height:40px;grid-row:span 2}
+.td-start b{text-align:left}
+.td-start small{font-size:11px;font-weight:700;opacity:.9;text-align:left}
+.td-start:not(.ready){filter:grayscale(.6);opacity:.85}
+.td-start.ready{animation:td-start 1s ease-in-out infinite}
+@keyframes td-start{50%{transform:scale(1.07)}}
+.td-guide{position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:6;max-width:min(92%,640px);
+  padding:7px 16px;border-radius:14px;background:rgba(255,248,230,.96);border:3px solid #d29a32;color:#4a2e14;
+  font:800 15px/1.35 system-ui;text-align:center;box-shadow:0 4px 10px rgba(0,0,0,.25);pointer-events:none}
+@media (max-width:700px){.td-guide{font-size:13px;padding:5px 10px}.td-start{font-size:16px}.td-start img{width:30px;height:30px}}
+@media (prefers-reduced-motion:reduce){ .td-call,.td-rb,.td-start{animation:none} }
 .td-toast{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(18,28,16,.92);
   padding:6px 15px;border-radius:99px;font-size:13px;font-weight:700;opacity:0;transition:.25s;
   pointer-events:none;z-index:4;white-space:nowrap}

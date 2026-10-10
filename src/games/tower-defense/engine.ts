@@ -132,6 +132,7 @@ const SHELL = `
   <div class="td-toast"></div>
   <div class="td-ring" hidden></div>
   <div class="td-calls"></div>
+  <div class="td-guide" hidden></div>
   <div class="td-tray">
     <button class="td-card td-sel" data-kind="archery"><b>${iconImg('bow', 15)} 箭塔 <i>40</i></b><span>射程內的怪會被它射中</span></button>
     <button class="td-card" data-kind="barracks"><b>${iconImg('shield', 15)} 軍營 <i>30</i></b><span>派士兵擋路，替你爭取時間</span></button>
@@ -168,6 +169,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   const elBuffs = $<HTMLElement>('.td-buffs')
   const elRing = $<HTMLElement>('.td-ring')
   const elCalls = $<HTMLElement>('.td-calls')
+  const elGuide = $<HTMLElement>('.td-guide')
 
   // 素材是一張一張進來的，ART 這個物件會就地長大，所以拿參考就好，不用重新指派。
   const img = ART
@@ -340,7 +342,12 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     // 就變成兩隻怪整路疊在一起，兩塊字牌互相推來推去，一轉彎就甩——Chuck 2026-09-26 回報的「飄」。
     S.spawnTimer = LINE_SPACING / spec.speed
     ctx.audio.play('wave-start')
-    if (!S.hinted) { S.hinted = true; toast('點怪物、或牠腳下的字牌，都算點到') }
+    if (PARK) {
+      incoming = 3
+      if (S.wave === 1) toast('怪從左邊路口進來了！看上面的中文，點寫著那個英文字的怪')
+    }
+    if (!S.hinted && !PARK) { S.hinted = true; toast('點怪物、或牠腳下的字牌，都算點到') }
+    else if (!S.hinted && S.wave > 1) { S.hinted = true; toast('點怪物、或牠腳下的字牌，都算點到') }
     syncUI()
   }
 
@@ -862,6 +869,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       c2d.globalAlpha = 1
     }
     hero.drawFx(c2d)
+    if (PARK) drawGuideArrows()
     // 一次性的圖片特效。治療用的是素材包裡修士的 Heal_Effect，11 格。
     for (const f of S.fx) {
       const im = img[f.kind]
@@ -916,10 +924,22 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         c2d.strokeStyle = `rgba(255,214,90,${0.35 + 0.4 * k})`; c2d.lineWidth = 3
         c2d.beginPath(); c2d.ellipse(s.x, s.y - 4, 34 + 3 * k, 15 + 1.5 * k, 0, 0, 7); c2d.stroke()
       })
+      // 圓盤上選了一種塔、還沒確認：在塔位上先畫一座半透明的虛影
+      if (ringSlot !== null && ringPick && ringPick !== 'sell') {
+        const s = SLOTS[ringSlot]
+        const im = img['p-' + ringPick]
+        if (im?.complete) {
+          const h = ringPick === 'archery' ? 116 : 84
+          const w = (im.width / im.height) * h
+          c2d.save(); c2d.globalAlpha = 0.55 + 0.15 * Math.sin(S.t * 6)
+          c2d.drawImage(im, s.x - w / 2, s.y + 12 - h, w, h)
+          c2d.restore()
+        }
+      }
       if (S.selected !== null) {
         const s = SLOTS[S.selected]
         const t = S.towers.find((x) => x.slot === S.selected)
-        const spec = TOWERS[t ? t.kind : 'archery']
+        const spec = TOWERS[t ? t.kind : ringPick && ringPick !== 'sell' ? ringPick : 'archery']
         if (spec.range) {
           c2d.save()
           c2d.fillStyle = 'rgba(255,240,180,.14)'; c2d.strokeStyle = 'rgba(255,224,138,.9)'; c2d.lineWidth = 2.5
@@ -1182,7 +1202,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       const back = refundOf(TOWERS[sel.kind].cost, sel.builtAtWave < S.wave)
       elSell.innerHTML = `拆除 ${TOWERS[sel.kind].name}（退 ${back} ${iconImg('crystal', 13)}）`
     }
-    if (PARK) { syncCalls(); if (!build) closeRing() }
+    if (PARK) { syncCalls(); if (!build) closeRing(); syncGuide() }
   }
 
   /**
@@ -1302,37 +1322,59 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   let ringSlot: number | null = null
+  /** 圓盤上按了第一下、等著確認的那一顆（'archery'／'barracks'／'sell'） */
+  let ringPick: string | null = null
   /**
    * 圓盤選單：空塔位跳兩顆（箭塔、軍營），已經蓋了的跳一顆拆除。
    * 只是換一種點法，背後還是同一個 tapSlot／sellSelected，所以規則、價錢、退費都一樣。
+   *
+   * **要按兩下**（2026-10-10 Chuck 試玩：點一下就蓋好，很容易誤觸）。
+   * 第一下只是「選」：地圖上先畫出那座塔的虛影和射程，鈕上寫「再點一次」；
+   * 同一顆再點一次才真的蓋。跟 Kingdom Rush 一樣。
    */
   function openRing(idx: number) {
     ringSlot = idx
+    ringPick = null
     S.selected = idx
-    const t = S.towers.find((x) => x.slot === idx)
-    const p = toStage(SLOTS[idx].x, SLOTS[idx].y - 34)
-    elRing.style.left = p.left + 'px'
-    elRing.style.top = p.top + 'px'
-    // 手機上畫布縮得很小，鈕跟著縮，但不小於大拇指按得到的 42px
-    const sz = Math.max(42, Math.min(60, 60 * p.k))
-    const u = sz / 60
-    const btn = (act: string, pic: string, label: string, dx: number, dy: number, off = false) =>
-      `<button class="td-rb${off ? ' off' : ''}" data-act="${act}" style="left:${dx * u}px;top:${dy * u}px;width:${sz}px;height:${sz}px">`
-      + `<img src="${pUrl(pic)}" alt=""><span>${label}</span></button>`
-    if (t) {
-      const back = refundOf(TOWERS[t.kind].cost, t.builtAtWave < S.wave)
-      elRing.innerHTML = btn('sell', 'hammer', `拆除 +${back}`, 0, -46)
-    } else {
-      elRing.innerHTML =
-        btn('archery', 'bow', `箭塔 ${TOWERS.archery.cost}`, -42, -34, S.crystals < TOWERS.archery.cost)
-        + btn('barracks', 'shield', `軍營 ${TOWERS.barracks.cost}`, 42, -34, S.crystals < TOWERS.barracks.cost)
-    }
+    renderRing()
     elRing.hidden = false
     ctx.audio.play('ui-tap')
     syncUI()
   }
+  function renderRing() {
+    if (ringSlot === null) return
+    const idx = ringSlot
+    const t = S.towers.find((x) => x.slot === idx)
+    const p = toStage(SLOTS[idx].x, SLOTS[idx].y - 30)
+    // 手機上畫布縮得很小，鈕跟著縮，但不小於大拇指按得到的 46px
+    const sz = Math.max(46, Math.min(62, 62 * p.k))
+    const u = sz / 62
+    const gap = 74 * u // 兩顆鈕中心離塔位多遠：拉開一點，手指才不會一次壓到兩顆
+    // 太靠畫面邊緣就往裡挪，太靠上就改放到塔位下面
+    const st = (cv.parentElement as HTMLElement).getBoundingClientRect()
+    const half = (t ? 0 : gap) + sz / 2 + 6
+    const left = Math.max(half, Math.min(st.width - half, p.left))
+    const below = p.top - 46 * u - sz / 2 - 26 < 0
+    const dy = below ? 58 * u : -46 * u
+    elRing.style.left = left + 'px'
+    elRing.style.top = p.top + 'px'
+    const btn = (act: string, pic: string, label: string, dx: number, off = false) => {
+      const on = ringPick === act
+      return `<button class="td-rb${off ? ' off' : ''}${on ? ' on' : ''}" data-act="${act}" style="left:${dx}px;top:${dy}px;width:${sz}px;height:${sz}px">`
+        + `<img src="${pUrl(pic)}" alt="">${on ? '<i>✓</i>' : ''}<span>${on ? (act === 'sell' ? '再點一次拆掉' : '再點一次蓋') : label}</span></button>`
+    }
+    if (t) {
+      const back = refundOf(TOWERS[t.kind].cost, t.builtAtWave < S.wave)
+      elRing.innerHTML = btn('sell', 'hammer', `拆除（退 ${back}）`, 0)
+    } else {
+      elRing.innerHTML =
+        btn('archery', 'bow', `箭塔 ${TOWERS.archery.cost}`, -gap, S.crystals < TOWERS.archery.cost)
+        + btn('barracks', 'shield', `軍營 ${TOWERS.barracks.cost}`, gap, S.crystals < TOWERS.barracks.cost)
+    }
+  }
   function closeRing() {
     ringSlot = null
+    ringPick = null
     elRing.hidden = true
   }
   elRing.addEventListener('pointerdown', (ev) => ev.stopPropagation())
@@ -1342,6 +1384,17 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     ctx.audio.unlock()
     const idx = ringSlot
     const act = b.dataset.act!
+    if (act !== 'sell' && S.crystals < TOWERS[act].cost) {
+      toast('水晶不夠，還差 ' + (TOWERS[act].cost - S.crystals) + ' 顆')
+      return
+    }
+    // 第一下：選起來、預覽；第二下（同一顆）才算數
+    if (ringPick !== act) {
+      ringPick = act
+      ctx.audio.play('ui-tap')
+      renderRing()
+      return
+    }
     closeRing()
     if (act === 'sell') { S.selected = idx; sellSelected(); return }
     S.picked = act
@@ -1350,8 +1403,9 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   })
 
   /**
-   * 開波鈕：每條路進場的地方放一顆骷髏盾牌（Kingdom Rush 的「召喚下一波」）。
-   * 只在備戰時出現，點哪一顆都一樣，就是開始這一波。
+   * 開波鈕：每條路進場的地方放一顆骷髏盾牌（Kingdom Rush 的「召喚下一波」），
+   * 另外右下角有一顆大大的「開戰」——試玩時 Chuck 說擺好塔之後不知道怎麼讓怪進來，
+   * 路口那顆太小、又跟地圖混在一起。兩種都一樣是開始這一波。
    */
   const ENTRIES = (() => {
     const out: Point[] = []
@@ -1370,26 +1424,81 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   let callsSig = ''
   function syncCalls() {
     const show = S.phase === 'build'
+    const ready = S.towers.length > 0
     const r = cv.getBoundingClientRect()
-    const sig = show + ':' + S.wave + ':' + Math.round(r.width) + 'x' + Math.round(r.height) + ':' + Math.round(r.left) + ',' + Math.round(r.top)
+    const sig = show + ':' + ready + ':' + S.wave + ':' + Math.round(r.width) + 'x' + Math.round(r.height) + ':' + Math.round(r.left) + ',' + Math.round(r.top)
     if (sig === callsSig) return
     callsSig = sig
-    elCalls.innerHTML = show
-      ? ENTRIES.map((p) => {
-        const q = toStage(p.x, p.y)
-        const sz = Math.max(40, Math.min(58, 58 * q.k))
-        return `<button class="td-call" style="left:${q.left}px;top:${q.top}px;width:${sz}px;height:${sz}px" aria-label="開始第 ${S.wave} 波">`
-          + `<img src="${pUrl('skull')}" alt=""><span>第 ${S.wave} 波</span></button>`
-      }).join('')
-      : ''
+    if (!show) { elCalls.innerHTML = ''; return }
+    const corner = toStage(W - 14, H - 14)
+    elCalls.innerHTML = ENTRIES.map((p) => {
+      const q = toStage(p.x, p.y)
+      const sz = Math.max(42, Math.min(58, 58 * q.k))
+      return `<button class="td-call${ready ? ' ready' : ''}" style="left:${q.left}px;top:${q.top}px;width:${sz}px;height:${sz}px" aria-label="開始第 ${S.wave} 波">`
+        + `<img src="${pUrl('skull')}" alt=""><span>開戰</span></button>`
+    }).join('')
+      + `<button class="td-start${ready ? ' ready' : ''}" style="right:${(cv.parentElement as HTMLElement).getBoundingClientRect().width - corner.left}px;bottom:${(cv.parentElement as HTMLElement).getBoundingClientRect().height - corner.top}px">`
+      + `<img src="${pUrl('skull')}" alt=""><b>開戰！</b><small>第 ${S.wave} / ${rules.waves.length} 波</small></button>`
   }
   elCalls.addEventListener('pointerdown', (ev) => ev.stopPropagation())
   elCalls.addEventListener('click', (ev) => {
-    if (!(ev.target as HTMLElement).closest('.td-call')) return
+    if (!(ev.target as HTMLElement).closest('.td-call, .td-start')) return
     ctx.audio.unlock(); ctx.audio.play('ui-tap')
     closeRing()
     startWave()
   })
+
+  /**
+   * 開場引導（2026-10-10 Chuck 試玩：一進去一片地圖，不知道要從哪裡開始）。
+   * 戰場上方一條說明，地圖上有一支金色箭頭指著「現在該點哪裡」：
+   *   ① 還沒蓋塔 → 指一塊空地
+   *   ② 蓋好了   → 指右下角的開戰
+   *   開戰那一刻 → 路口閃紅色箭頭，說怪從這裡進來
+   * 只有第一波會一步一步教；後面幾波只留一句短的。
+   */
+  function guideText(): string {
+    if (S.phase !== 'build') return ''
+    if (!S.towers.length) return ringPick ? '同一顆再點一次，塔就蓋好了' : ringSlot !== null ? '選一種塔：箭塔會射怪、軍營會派兵擋路' : '① 點一塊閃金光的石板空地，蓋一座塔'
+    if (S.wave === 1) return '② 塔蓋好了！可以再多蓋幾座；準備好就按右下角「開戰！」'
+    return `第 ${S.wave} 波要來了：可以再蓋塔，準備好就按「開戰！」`
+  }
+  let guideSig = ''
+  function syncGuide() {
+    const g = guideText()
+    if (g === guideSig) return
+    guideSig = g
+    elGuide.textContent = g
+    elGuide.hidden = !g
+  }
+  /** 開戰後幾秒內，路口閃紅箭頭 */
+  let incoming = 0
+  function drawGuideArrows() {
+    if (S.phase === 'build' && !S.towers.length && ringSlot === null) {
+      // 指最靠近路口的那塊空地：怪先經過那裡，蓋那邊最有用
+      const free = SLOTS.map((s, i) => ({ s, i })).filter(({ i }) => !S.towers.some((t) => t.slot === i))
+      const tgt = free.sort((a, b) => a.s.x - b.s.x)[0]?.s
+      if (tgt) arrow(tgt.x, tgt.y - 44 - Math.abs(Math.sin(S.t * 4)) * 10, '#ffd24a', Math.PI / 2)
+    }
+    if (incoming > 0) {
+      const a = Math.min(1, incoming) * (0.6 + 0.4 * Math.abs(Math.sin(S.t * 8)))
+      c2d.save(); c2d.globalAlpha = a
+      for (const p of ENTRIES) arrow(p.x + 60 + Math.sin(S.t * 8) * 6, p.y, '#ff5a4a', 0)
+      c2d.restore()
+    }
+  }
+  /** 一支粗粗的卡通箭頭，尖端在 (x, y)，rot＝0 朝右、π/2 朝下 */
+  function arrow(x: number, y: number, color: string, rot: number) {
+    c2d.save()
+    c2d.translate(x, y); c2d.rotate(rot)
+    c2d.beginPath()
+    c2d.moveTo(0, 0); c2d.lineTo(-20, -18); c2d.lineTo(-20, -8); c2d.lineTo(-40, -8)
+    c2d.lineTo(-40, 8); c2d.lineTo(-20, 8); c2d.lineTo(-20, 18); c2d.closePath()
+    c2d.lineJoin = 'round'; c2d.lineWidth = 5; c2d.strokeStyle = '#ffffff'; c2d.stroke()
+    c2d.fillStyle = color; c2d.fill()
+    c2d.lineWidth = 2; c2d.strokeStyle = 'rgba(80,40,10,.6)'; c2d.stroke()
+    c2d.restore()
+  }
+
   // 視窗一變大小，畫布就跟著縮放，鈕的位置要重算；圓盤直接收起來
   const ro = new ResizeObserver(() => { if (PARK) { closeRing(); callsSig = ''; syncCalls() } })
   ro.observe(cv)
@@ -1406,6 +1515,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     // 上一趟放棄了才會重開，所以在關卡裡也救得回來，不用退出去重進。
     if (!img[PARK ? 'p-ground' : 'tiles'] && now - artKick > 3000) { artKick = now; void loadArt() }
     syncBuffs()
+    if (PARK) { syncGuide(); if (incoming > 0) incoming -= Math.min(0.05, dt) }
     draw()
     raf = requestAnimationFrame(loop)
   }
