@@ -159,7 +159,8 @@ export interface LevelData {
   maxWordLevel: WordLevel
   isBoss: boolean
   /** 外觀。每五關換一次配色，所以多關共用。 */
-  skin: { tileset: string }
+  /** map：關卡用哪張版面（layouts.ts 的鍵，結尾 M 是上下翻），新畫風拿它找整張畫好的底圖 */
+  skin: { tileset: string; map?: string }
   layout: Layout
   rules: LevelRules
 }

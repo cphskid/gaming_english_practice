@@ -185,6 +185,27 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   const PARK = level.chapter === 1
   if (PARK) root.classList.add('td-park')
   let terrain: HTMLCanvasElement | null = null
+  /**
+   * 整張畫好的關卡底圖（2026-10-10 Chuck：路要跟選關大地圖同一種畫風，別太幼）。
+   * 一個版面一張（public/td-park/maps/<版面>.webp），上下翻的版面（名字結尾 M）拿同一張翻過來畫。
+   * 樹、石頭、路都已經畫在圖上，所以有這張就不畫 decor、也不用程式畫路；圖還沒到之前先用舊的程式地形墊著。
+   */
+  const MAP_NAME = PARK && level.skin.map ? level.skin.map.replace(/M$/, '') : ''
+  const MAP_FLIP = !!level.skin.map?.endsWith('M')
+  const mapIm = new Image()
+  let mapReady = false
+  if (MAP_NAME) {
+    mapIm.onload = () => { mapReady = mapIm.naturalWidth > 0; terrain = null }
+    mapIm.src = `${import.meta.env.BASE_URL}td-park/maps/${MAP_NAME}.webp`.replace(/([^:])\/{2,}/g, '$1/')
+  }
+  function buildMapTerrain(): HTMLCanvasElement {
+    const cnv = document.createElement('canvas'); cnv.width = W; cnv.height = H
+    const g = cnv.getContext('2d')!
+    g.imageSmoothingQuality = 'high'
+    if (MAP_FLIP) { g.translate(0, H); g.scale(1, -1) }
+    g.drawImage(mapIm, 0, 0, W, H)
+    return cnv
+  }
   // 地形先畫在暫存畫布上再整張貼；地形用到的圖後到的話得把它作廢重畫。
   const unArt = onArt((k) => {
     if (TERRAIN_KEYS.includes(k) || PARK_TERRAIN_KEYS.includes(k) || k === 'p-flowers' || k === 'p-bush') terrain = null
@@ -831,7 +852,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   function draw() {
-    if (!terrain && PARK) terrain = buildParkTerrain(layout, img, W, H)
+    if (!terrain && mapReady) terrain = buildMapTerrain()
+    else if (!terrain && PARK) terrain = buildParkTerrain(layout, img, W, H)
     else if (!terrain && img.tiles) buildTerrain()
     if (terrain) c2d.drawImage(terrain, 0, 0)
     else drawLoadingField()
@@ -842,7 +864,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
 
     // 所有站在地上的東西照「腳下的 y」由遠到近排，遮擋關係才會對
     const scene: { y: number; f: () => void }[] = []
-    for (const d of layout.decor) scene.push({ y: d.y, f: () => drawDecor(d) })
+    if (!mapReady) for (const d of layout.decor) scene.push({ y: d.y, f: () => drawDecor(d) })
     scene.push({ y: layout.castle.y, f: drawCastle })
     scene.push({ y: hero.y, f: () => hero.draw(c2d) })
     for (const t of S.towers) { const s = SLOTS[t.slot]; scene.push({ y: s.y, f: () => drawTower(t, s) }) }

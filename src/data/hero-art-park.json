@@ -1,23 +1,23 @@
 {
  "knight": {
-  "w": 276,
+  "w": 285,
   "h": 200,
-  "foot": 197,
-  "cx": 153.0,
-  "body": 195,
+  "foot": 198,
+  "cx": 86.2,
+  "body": 177,
   "anims": {
    "idle": 1,
-   "run": 3,
+   "run": 2,
    "attack": 4,
    "attack2": 4
   }
  },
  "mage": {
-  "w": 230,
+  "w": 269,
   "h": 200,
-  "foot": 197,
-  "cx": 145.5,
-  "body": 185,
+  "foot": 198,
+  "cx": 88.5,
+  "body": 168,
   "anims": {
    "idle": 1,
    "run": 2,

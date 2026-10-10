@@ -183,7 +183,7 @@ function build(o: {
     isBoss: o.boss,
     // 第一章照舊 40＋編號×10；後兩章照章內難度刻度，不然第 85 關會給 890
     bonus: o.chapter === 1 ? 40 + o.no * 10 : 40 + Math.round(o.d * 10) + 30 * (o.chapter - 1),
-    skin: { tileset: o.tileset },
+    skin: { tileset: o.tileset, map: o.layout },
     layout,
     rules: {
       castleHp: o.boss ? 15 : 20,
