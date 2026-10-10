@@ -39,7 +39,7 @@ for (const size of SIZES) {
     await page.locator('.avatars .av').nth(2).click()
     await page.locator('button.btn.big').click()
     await page.waitForSelector('.levels')
-    await page.locator('.lv').first().click()
+    await page.locator('.lv').first().click(); await page.locator('.lvgo').click()
     await page.waitForSelector('.td-cv')
     await page.locator('.rotate').click({ timeout: 1500 }).catch(() => {})
     await page.waitForTimeout(500)

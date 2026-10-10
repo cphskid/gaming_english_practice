@@ -75,7 +75,7 @@ try {
 
   // ------------------------------------------------------------------ 守塔
   console.log('── 守塔')
-  await page.locator('.levels .lv').first().click()
+  await page.locator('.levels .lv').first().click(); await page.locator('.lvgo').click()
   await page.waitForSelector('.td-cv', { timeout: 20000 })
   await page.locator('.rotate').click().catch(() => {})
   await page.waitForTimeout(400)

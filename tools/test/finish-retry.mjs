@@ -58,7 +58,7 @@ try {
   const before = await coinOf()
 
   // ── 第一關打到通關
-  await page.locator('.lv').first().click()
+  await page.locator('.lv').first().click(); await page.locator('.lvgo').click()
   await page.waitForSelector('.td-cv', { timeout: 30000 })
   await page.locator('.rotate').click().catch(() => {})
   await page.waitForTimeout(600)

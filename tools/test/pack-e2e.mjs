@@ -115,7 +115,7 @@ try {
   await page.waitForSelector('.levels')
   // 關卡本來就是橫著玩的，轉過來才量得準
   await page.setViewportSize({ width: 844, height: 390 })
-  await page.locator('.lv').first().click()
+  await page.locator('.lv').first().click(); await page.locator('.lvgo').click()
   await page.waitForSelector('.td-cv', { timeout: 10000 })
   await page.locator('.rotate').click({ timeout: 1500 }).catch(() => {})
   await page.waitForTimeout(600)
@@ -175,7 +175,7 @@ try {
   await page.getByRole('button', { name: '回去' }).click()
   await page.waitForSelector('.levels')
   await page.setViewportSize({ width: 844, height: 390 })
-  await page.locator('.lv').first().click()
+  await page.locator('.lv').first().click(); await page.locator('.lvgo').click()
   await page.waitForSelector('.td-cv', { timeout: 10000 })
   await page.locator('.rotate').click({ timeout: 1500 }).catch(() => {})
   await page.waitForTimeout(600)

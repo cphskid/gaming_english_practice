@@ -22,6 +22,7 @@ import { audio } from '@/audio'
 import { Login } from './Login'
 import { StaffAuth } from './StaffAuth'
 import { LevelSelect } from './LevelSelect'
+import { isParkKey } from '@/games/tower-defense/park'
 import { GameHost } from './GameHost'
 import { Result } from './Result'
 import { Teacher } from './Teacher'
@@ -170,7 +171,9 @@ export function App() {
    * 挑關卡的那段時間網路本來就是閒的，先抓完進去就直接有圖。
    */
   useEffect(() => {
-    if (screen === 'select') void loadArt()
+    // 2026-10-10 起只先抓新畫風那一份（見 docs/image-loading.md）。舊的像素圖不在這裡抓：
+    // 只有還用得到它們的畫面（二三章、對戰、團戰）進去時才由那個畫面自己抓，不跟第一章的地圖搶頻寬。
+    if (screen === 'select') void loadArt(isParkKey)
   }, [screen])
 
   /**

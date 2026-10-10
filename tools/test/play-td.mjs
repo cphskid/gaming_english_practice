@@ -43,7 +43,7 @@ await page.waitForSelector('.levels', { timeout: 20000 })
 const chIdx = LEVEL <= 14 ? 0 : LEVEL <= 52 ? 1 : 2
 const head = page.locator('.chhead').nth(chIdx)
 if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click()
-await page.locator('.lv', { hasText: `第 ${LEVEL} 關` }).first().click()
+await page.locator('.lv', { hasText: `第 ${LEVEL} 關` }).first().click(); await page.locator('.lvgo').click()
 await page.waitForSelector('.td-cv')
 await page.waitForTimeout(700)
 

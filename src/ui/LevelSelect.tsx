@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { prefetchMap } from '@/games/tower-defense/park'
 import { CHAPTERS, LEVELS } from '@/data/levels'
 import { THEME_NAME } from '@/data/words'
 import { chapterCleared, expIntoLevel, isUnlocked, levelFromExp } from '@/core/progress'
@@ -8,7 +9,61 @@ import type { RoomBrief } from '@/net'
 import { BOSS_BY_ID } from '@/data/bosses'
 import { BossFace } from './Room'
 import { Avatar } from './Avatar'
-import { Icon } from './Icon'
+import WORLD from '@/data/world-stops.json'
+
+/**
+ * 選關大地圖（2026-10-10 改版，Kingdom Rush 那種戰役地圖）。
+ *
+ * 一章一張畫好的地圖（public/td-park/world/ch<章>.webp），路上的 14 個點跟產圖用的是同一份座標
+ * （src/data/world-stops.json，產圖腳本 art/guardian/world_guide.py）。第一章剛好 14 關就一關一點；
+ * 二、三章三十幾關，就沿著同一條路平均撒開——路是同一條曲線，所以撒在哪裡都還是在路上。
+ *
+ * 點旗子不會直接開打，先跳一張關卡卡片、按「出發！」才進去：小旗子在手機上很小，
+ * 一點就開打很容易點錯關（跟蓋塔要點兩下同一個道理）。
+ * 上面那排七顆鈕收成右下角三顆大鈕（英雄營、對戰、魔王團戰）；排行榜、徽章、商店、設定
+ * 之後要交給樂園，改版期間先縮成右上角的小字鈕。
+ */
+type Pt = { x: number; y: number }
+
+const STOPS: Pt[] = WORLD.stops.map(([x, y]) => ({ x, y }))
+const CASTLE: Pt = { x: WORLD.castle[0], y: WORLD.castle[1] }
+
+/** 跟 world_guide.py 一樣的 Catmull-Rom，地圖上的路就是照這條畫的 */
+function curve(pts: Pt[], n = 24): Pt[] {
+  const P = [pts[0], ...pts, pts[pts.length - 1]]
+  const out: Pt[] = []
+  for (let i = 1; i < P.length - 2; i++) {
+    const [p0, p1, p2, p3] = [P[i - 1], P[i], P[i + 1], P[i + 2]]
+    for (let k = 0; k < n; k++) {
+      const t = k / n
+      const f = (a: number, b: number, c: number, d: number) =>
+        0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t)
+      out.push({ x: f(p0.x, p1.x, p2.x, p3.x), y: f(p0.y, p1.y, p2.y, p3.y) })
+    }
+  }
+  out.push(pts[pts.length - 1])
+  return out
+}
+
+/** n 個關卡點：剛好 14 個就用畫好的空地；多的話沿著第一點到最後一點的路，照長度平均撒 */
+function stopsFor(n: number): Pt[] {
+  if (n === STOPS.length) return STOPS
+  // 長寬比 16:9，量長度要用畫面上的距離
+  const line = curve(STOPS)
+  const d = [0]
+  for (let i = 1; i < line.length; i++) d.push(d[i - 1] + Math.hypot((line[i].x - line[i - 1].x) * 16, (line[i].y - line[i - 1].y) * 9))
+  const L = d[d.length - 1]
+  return Array.from({ length: n }, (_, k) => {
+    const want = (L * k) / Math.max(1, n - 1)
+    let i = d.findIndex((v) => v >= want)
+    if (i <= 0) return line[0]
+    const t = (want - d[i - 1]) / (d[i] - d[i - 1] || 1)
+    return { x: line[i - 1].x + (line[i].x - line[i - 1].x) * t, y: line[i - 1].y + (line[i].y - line[i - 1].y) * t }
+  })
+}
+
+const base = import.meta.env.BASE_URL
+const pic = (k: string) => `${base}td-park/p-${k}.webp`.replace(/([^:])\/{2,}/g, '$1/')
 
 export function LevelSelect({
   student, character, progress, teacherOpen, rooms,
@@ -36,83 +91,130 @@ export function LevelSelect({
   const cleared = new Set([...progress.values()].filter((p) => p.clearedAt).map((p) => p.levelId))
   const lv = levelFromExp(character.exp)
   const { into, need } = expIntoLevel(character.exp)
-  // 一次只攤開一章，85 關全部攤開在手機上要滑很久。預設攤開「正在打的那一章」：
-  // 已經打開、而且還沒全破的最後一章；三章都破了就攤開第三章。
+  // 預設攤開「正在打的那一章」：已經打開、而且還沒全破的最後一章；三章都破了就攤開第三章。
   const [openCh, setOpenCh] = useState<number>(() => {
     const live = CHAPTERS.filter((c) => c.no === 1 || chapterCleared(c.no - 1, LEVELS, cleared))
     const cur = live.find((c) => !chapterCleared(c.no, LEVELS, cleared)) ?? live[live.length - 1]
     return cur?.no ?? 1
   })
+  const [card, setCard] = useState<LevelData | null>(null)
+
+  const ch = CHAPTERS.find((c) => c.no === openCh) ?? CHAPTERS[0]
+  const ci = ch.no - 1
+  const open = ch.no === 1 || chapterCleared(ch.no - 1, LEVELS, cleared)
+  const byTeacher = open ? 0 : ch.levels.filter((l) => teacherOpen.has(l.id)).length
+  const stars = ch.levels.reduce((n, l) => n + (progress.get(l.id)?.stars ?? 0), 0)
+  const pts = stopsFor(ch.levels.length)
+  const unlockedOf = (l: LevelData) => isUnlocked(l.no, LEVELS, { cleared, teacherOpen })
+  // 「現在該打這一關」：打得到、還沒過的第一關，旗子會跳、會發光
+  const next = ch.levels.find((l) => unlockedOf(l) && !cleared.has(l.id))
+  const dense = ch.levels.length > 20
+  // 選關畫面閒著的時候先把「該打的那一關」的地圖抓好；點開卡片時再補抓那一關的
+  useEffect(() => { if (next) prefetchMap(next) }, [next])
+  useEffect(() => { if (card) prefetchMap(card) }, [card])
 
   return (
-    <div className="screen">
-      <div className="topbar">
-        <Avatar character={character} />
-        <span className="who">{student.nickname}</span>
-        <span className="stat">{JOB_NAME[character.job]}　Lv.{lv}　{into}/{need} exp</span>
+    <div className="screen wm">
+      <div className="wm-top">
+        <Avatar character={character} size={40} />
+        <div className="wm-who">
+          <b>{student.nickname}</b>
+          <span>{JOB_NAME[character.job]}　Lv.{lv}</span>
+          <i className="wm-exp"><i style={{ width: `${Math.round((into / Math.max(1, need)) * 100)}%` }} /></i>
+        </div>
+        <span className="wm-coin"><img src={pic('coin')} alt="" />{character.coins}</span>
         <span className="spacer" />
-        <span className="stat"><Icon name="coin" size={15} /> {character.coins}</span>
-        <button className="btn ghost" onClick={onVersus}>對戰</button>
-        <button className="btn ghost" onClick={onRooms}>魔王團戰</button>
-        <button className="btn ghost" onClick={onBoard}>排行榜</button>
-        <button className="btn ghost" onClick={onProfile}>徽章</button>
-        <button className="btn ghost" onClick={onCharacter}>我的角色</button>
-        <button className="btn ghost" onClick={onShop}>商店</button>
-        <button className="btn ghost" onClick={onSettings}>設定</button>
+        <nav className="wm-mini">
+          <button onClick={onBoard}>排行榜</button>
+          <button onClick={onProfile}>徽章</button>
+          <button onClick={onShop}>商店</button>
+          <button onClick={onSettings}>設定</button>
+        </nav>
       </div>
 
       {rooms.length > 0 && <RoomBanner rooms={rooms} onRoom={onRoom} />}
 
-      {CHAPTERS.map((ch, ci) => {
-        // 整章打開只看進度。老師另外開的後面章節的某一關，章還是鎖著、只有那一關能打——
-        // 以前只要章裡有一關被老師開，整章就亮起來，看起來像進度出錯（2026-09-26 回報）。
-        const open = ch.no === 1 || chapterCleared(ch.no - 1, LEVELS, cleared)
-        const byTeacher = open ? 0 : ch.levels.filter((l) => teacherOpen.has(l.id)).length
-        const done = ch.levels.filter((l) => cleared.has(l.id)).length
-        const stars = ch.levels.reduce((n, l) => n + (progress.get(l.id)?.stars ?? 0), 0)
-        const shown = openCh === ch.no
-        return (
-          <section key={ch.no} className={'chapter ch' + ch.no + (open ? '' : ' locked')}>
-            <button className="chhead" onClick={() => setOpenCh(shown ? 0 : ch.no)} aria-expanded={shown}>
-              <span className="chno">第{'一二三'[ci]}章</span>
-              <span className="chnm">{ch.name}</span>
-              <span className="chst">
-                {open ? `${done}/${ch.levels.length} 關　★ ${stars}`
-                  : byTeacher ? `🔒 老師開放 ${byTeacher} 關` : '🔒'}
-              </span>
-              <span className="chcaret">{shown ? '▾' : '▸'}</span>
+      <div className="wm-tabs" role="tablist">
+        {CHAPTERS.map((c, i) => {
+          const o = c.no === 1 || chapterCleared(c.no - 1, LEVELS, cleared)
+          const done = c.levels.filter((l) => cleared.has(l.id)).length
+          return (
+            <button key={c.no} className={'chhead wm-tab' + (c.no === openCh ? ' on' : '') + (o ? '' : ' locked')}
+              aria-expanded={c.no === openCh} onClick={() => { setOpenCh(c.no); setCard(null) }}>
+              <span className="chno">第{'一二三'[i]}章</span>
+              <span className="chnm">{c.name}</span>
+              <span className="chst">{o ? `${done}/${c.levels.length}` : <img src={pic('lock')} alt="未開放" />}</span>
             </button>
-            {shown && !open && (
-              <div className="chlock">
-                把第{'一二三'[ci - 1]}章的 {CHAPTERS[ci - 1].levels.length} 關全部打過，就會打開這一章。
-                （還差 {CHAPTERS[ci - 1].levels.filter((l) => !cleared.has(l.id)).length} 關）
+          )
+        })}
+      </div>
+
+      <div className="wm-scroll">
+        <div className={'levels wm-map' + (dense ? ' dense' : '')}
+          style={{ backgroundImage: `url(${base}td-park/world/ch${ch.no}.webp)`.replace(/([^:])\/{2,}/g, '$1/') }}
+          onClick={() => setCard(null)}>
+          <div className="wm-stars-total"><img src={pic('star')} alt="" /> {stars} / {ch.levels.length * 3}</div>
+          <img className="wm-castle" src={pic('castle')} alt=""
+            style={{ left: `${CASTLE.x * 100}%`, top: `${CASTLE.y * 100}%` }} />
+          {ch.levels.map((l, k) => {
+            const p = progress.get(l.id)
+            const unlocked = unlockedOf(l)
+            const st = p?.stars ?? 0
+            const done = cleared.has(l.id)
+            const icon = l.isBoss ? 'stop-boss' : done ? 'stop-flag' : 'stop'
+            return (
+              <button key={l.id}
+                className={'lv wm-stop' + (l.isBoss ? ' boss' : '') + (done ? ' done' : '') + (l === next ? ' next' : '') + (card === l ? ' sel' : '')}
+                style={{ left: `${pts[k].x * 100}%`, top: `${pts[k].y * 100}%` }}
+                disabled={!unlocked}
+                onClick={(ev) => { ev.stopPropagation(); setCard(l) }}>
+                <img className="wm-base" src={pic(icon)} alt="" />
+                <span className="wm-no">{l.no}</span>
+                <span className="sr">第 {l.no} 關</span>
+                {done && <span className="wm-stars">{[0, 1, 2].map((i) => <img key={i} src={pic('star')} alt="" className={i < st ? '' : 'off'} />)}</span>}
+                {!unlocked && <img className="wm-lock" src={pic('lock')} alt="未開放" />}
+                {unlocked && !open && teacherOpen.has(l.id) && <span className="byteacher">老師開放</span>}
+                {l === next && <span className="wm-here">▼</span>}
+              </button>
+            )
+          })}
+
+          {!open && (
+            <div className="chlock wm-locknote">
+              <img src={pic('lock')} alt="" />
+              把第{'一二三'[ci - 1]}章的 {CHAPTERS[ci - 1].levels.length} 關全部打過，就會打開這一章
+              （還差 {CHAPTERS[ci - 1].levels.filter((l) => !cleared.has(l.id)).length} 關）
+              {byTeacher > 0 && `。老師先開放了 ${byTeacher} 關`}
+            </div>
+          )}
+
+          {card && (
+            <div className="wm-card" onClick={(ev) => ev.stopPropagation()}
+              style={{
+                left: `${Math.min(78, Math.max(22, pts[ch.levels.indexOf(card)].x * 100))}%`,
+                top: `${pts[ch.levels.indexOf(card)].y * 100}%`,
+              }}
+              data-below={pts[ch.levels.indexOf(card)].y < 0.45 ? '1' : '0'}>
+              <button className="wm-x" onClick={() => setCard(null)} aria-label="關閉">×</button>
+              <div className="wm-cno">第 {card.no} 關{card.isBoss ? '・魔王' : ''}</div>
+              <div className="wm-cnm">{card.name}</div>
+              <div className="wm-cth">
+                {card.themes.length ? card.themes.slice(0, 3).map((t) => THEME_NAME[t] ?? t).join('、') : '全部主題'}
               </div>
-            )}
-            {shown && (
-              <div className="levels">
-                {ch.levels.map((l) => {
-                  const p = progress.get(l.id)
-                  const unlocked = isUnlocked(l.no, LEVELS, { cleared, teacherOpen })
-                  const st = p?.stars ?? 0
-                  return (
-                    <button key={l.id} className={'lv' + (l.isBoss ? ' boss' : '')}
-                      disabled={!unlocked} onClick={() => onPlay(l)}>
-                      {!unlocked && <span className="lock">🔒</span>}
-                      {unlocked && !open && teacherOpen.has(l.id) && <span className="byteacher">老師開放</span>}
-                      <div className="no">第 {l.no} 關{l.isBoss ? '・魔王' : ''}</div>
-                      <div className="nm">{l.name}</div>
-                      <div className="th">
-                        {l.themes.length ? l.themes.slice(0, 3).map((t) => THEME_NAME[t] ?? t).join('、') : '全部主題'}
-                      </div>
-                      <div className="st">{'★'.repeat(st)}{'☆'.repeat(3 - st)}</div>
-                    </button>
-                  )
-                })}
+              <div className="wm-cst">
+                {[0, 1, 2].map((i) => <img key={i} src={pic('star')} alt="" className={i < (progress.get(card.id)?.stars ?? 0) ? '' : 'off'} />)}
               </div>
-            )}
-          </section>
-        )
-      })}
+              <button className="btn lvgo" onClick={() => onPlay(card)}>出發！</button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <nav className="wm-big">
+        <button onClick={onCharacter}><img src={pic('btn-hero')} alt="" /><b>英雄營</b></button>
+        <button onClick={onVersus}><img src={pic('btn-vs')} alt="" /><b>對戰</b></button>
+        <button onClick={onRooms}><img src={pic('btn-raid')} alt="" /><b>魔王團戰</b></button>
+      </nav>
     </div>
   )
 }

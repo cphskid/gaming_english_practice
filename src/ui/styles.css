@@ -1005,3 +1005,108 @@ input.pin{width:7.5em;font-size:20px;letter-spacing:.3em;text-align:center;paddi
 .notice-box p{margin:0;font-size:15px;line-height:1.8;white-space:pre-line}
 .notice-box .until{color:var(--gold);font-weight:700}
 .notice-box .hint{font-size:12.5px;color:var(--muted)}
+
+/*
+  選關大地圖（2026-10-10，Kingdom Rush 戰役地圖那種）。
+  .screen 原本是置中的一欄卡片，這裡改成整頁：上面一條狀態列＋分章分頁，中間一張地圖吃掉剩下的高度。
+  地圖固定 16:9，用 container query 算「放得下的最大那一張」；手機直拿太窄就固定 640px 寬、左右滑。
+  沿用舊的 .levels／.lv／.chhead 類名，測試和其他地方的選擇器才不用全改。
+*/
+.screen.wm{justify-content:flex-start;gap:8px;padding:8px 12px 10px;overflow:hidden;position:relative;
+  background:radial-gradient(ellipse at 50% 40%,#2b4a5e,#14212b 75%)}
+.wm-top{display:flex;align-items:center;gap:10px;width:100%;max-width:1200px;padding:6px 12px;border-radius:14px;
+  background:linear-gradient(#fbecc8,#ecd29a);border:3px solid #9b6a2c;box-shadow:0 3px 0 #6b4618;color:#4a2e14}
+.wm-who{display:flex;flex-direction:column;line-height:1.15;min-width:0}
+.wm-who b{font-size:16px}
+.wm-who span{font-size:12px;color:#7a5a30;font-weight:700}
+.wm-exp{display:block;width:110px;height:6px;border-radius:3px;background:#c9a96e;margin-top:3px;overflow:hidden}
+.wm-exp i{display:block;height:100%;background:#4fa3cf}
+.wm-coin{display:flex;align-items:center;gap:4px;font-weight:900;font-size:16px;color:#8a5a10;margin-left:6px}
+.wm-coin img{width:22px;height:22px}
+.wm-top .spacer{flex:1}
+.wm-mini{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.wm-mini button{border:2px solid #b8873f;background:#fff6dc;color:#5a3a18;font-weight:800;font-size:12.5px;
+  padding:4px 10px;border-radius:99px;cursor:pointer}
+.wm .roomcall{max-width:1200px}
+.wm-tabs{display:flex;gap:8px;width:100%;max-width:1200px}
+.wm .wm-tab{flex:1;width:auto;padding:6px 12px;border-radius:12px 12px 4px 4px;border:3px solid #9b6a2c;
+  background:linear-gradient(#e8cf98,#d4b273);color:#5a3a18;box-shadow:0 2px 0 #6b4618}
+.wm .wm-tab .chno{color:#8a6a40}
+.wm .wm-tab .chnm{font-size:15px}
+.wm .wm-tab .chst{font-weight:800}
+.wm .wm-tab .chst img{width:18px;height:22px;object-fit:contain;vertical-align:middle}
+.wm .wm-tab.on{background:linear-gradient(#fff4d4,#f2d48e);border-color:#d29a32;transform:translateY(2px)}
+.wm .wm-tab.locked{opacity:.75}
+.wm-scroll{flex:1 1 0 !important;min-height:0;width:100%;container-type:size;overflow:auto;
+  display:flex;align-items:center;justify-content:safe center}
+.wm .wm-map{position:relative;display:block;max-width:none;margin:0;flex:none;
+  width:min(100cqw,177.78cqh);aspect-ratio:16/9;background-size:cover;background-position:center;
+  border-radius:16px;border:4px solid #6b4618;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+@media (max-width:640px){ .wm .wm-map{width:640px} }
+/* 二、三章三十幾關擠在同一條路上：地圖至少 960px 寬，放不下就左右滑 */
+.wm .wm-map.dense{width:max(min(100cqw,177.78cqh),960px)}
+.wm-castle{position:absolute;width:15%;transform:translate(-50%,-62%);pointer-events:none;
+  filter:drop-shadow(0 6px 6px rgba(0,0,0,.35))}
+/* 關卡點：一顆石台（打過的插藍旗、魔王關是骷髏台），上面寫關數 */
+.wm .wm-stop{position:absolute;transform:translate(-50%,-62%);width:5.4%;aspect-ratio:1;padding:0;margin:0;
+  background:none;border:none;border-radius:0;cursor:pointer;display:block}
+.wm .wm-map.dense .wm-stop{width:3.9%}
+.wm .wm-stop:disabled{opacity:1;cursor:not-allowed}
+.wm .wm-stop:disabled .wm-base{filter:grayscale(.9) brightness(.8)}
+.wm-base{position:absolute;left:0;bottom:0;width:100%;height:100%;object-fit:contain;object-position:bottom;
+  filter:drop-shadow(0 3px 2px rgba(0,0,0,.4))}
+.wm-no{position:absolute;left:50%;bottom:-2px;transform:translate(-50%,40%);min-width:1.9em;padding:0 .35em;
+  font-size:clamp(9px,1.05cqw,15px);font-weight:900;line-height:1.5;border-radius:99px;
+  background:#fff6dc;border:2px solid #9b6a2c;color:#4a2e14;text-align:center}
+.wm .wm-stop.boss .wm-no{background:#ffe0d6;border-color:#a52a20;color:#7a1a14}
+.wm-stars{position:absolute;left:50%;top:-6%;transform:translate(-50%,-100%);display:flex;gap:1px;white-space:nowrap}
+.wm-stars img{width:clamp(8px,1.1cqw,16px)}
+.wm-stars img.off,.wm-cst img.off{filter:grayscale(1) brightness(.75);opacity:.55}
+.wm-lock{position:absolute;left:50%;top:50%;width:34%;opacity:.9;transform:translate(-50%,-55%)}
+.wm .wm-stop .byteacher{position:absolute;top:auto;bottom:100%;right:auto;left:50%;transform:translateX(-50%);white-space:nowrap}
+.wm .wm-stop.next .wm-base{filter:drop-shadow(0 0 6px #ffe36a) drop-shadow(0 0 10px #ffcf3a)}
+.wm-here{position:absolute;left:50%;top:-10%;transform:translate(-50%,-100%);color:#ffd24a;font-size:clamp(14px,2cqw,26px);
+  text-shadow:0 2px 0 #7a4a10,0 0 6px rgba(0,0,0,.4);animation:wm-bob .9s ease-in-out infinite}
+@keyframes wm-bob{50%{transform:translate(-50%,-130%)}}
+.wm .wm-stop.sel .wm-no{background:#ffd24a}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.wm-locknote{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:70%;margin:0;
+  display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(255,246,220,.95);border:3px solid #9b6a2c;
+  color:#4a2e14;font-weight:700;font-size:14px;border-radius:14px}
+.wm-locknote img{width:28px}
+/* 關卡卡片：點旗子跳出來，出發才進關 */
+.wm-card{position:absolute;z-index:5;width:230px;transform:translate(-50%,calc(-100% - 40px));padding:12px 14px 14px;
+  border-radius:16px;background:linear-gradient(#fff8e4,#f4e1b6);border:4px solid #b8873f;box-shadow:0 6px 0 #6b4618,0 10px 24px rgba(0,0,0,.45);
+  color:#4a2e14;text-align:center;animation:td-pop .16s ease-out}
+.wm-card[data-below="1"]{transform:translate(-50%,40px)}
+.wm-x{position:absolute;right:6px;top:4px;border:none;background:none;font-size:22px;font-weight:900;color:#9b6a2c;cursor:pointer}
+.wm-cno{font-size:12px;font-weight:800;color:#8a6a40}
+.wm-cnm{font-size:20px;font-weight:900;margin-top:2px}
+.wm-cth{font-size:12.5px;color:#7a5a30;margin-top:3px}
+.wm-cst{display:flex;justify-content:center;gap:4px;margin:8px 0 10px}
+.wm-cst img{width:26px}
+.wm-card .lvgo{background:linear-gradient(#7cc94e,#4f9a2c);box-shadow:0 4px 0 #2f6a14;font-size:18px;padding:9px 34px}
+/* 右下三顆大鈕、左下星星 */
+.wm-big{position:absolute;right:20px;bottom:16px;display:flex;gap:10px;z-index:4}
+.wm-big button{display:flex;flex-direction:column;align-items:center;gap:0;border:none;background:none;cursor:pointer;padding:0}
+.wm-big img{width:clamp(54px,7vw,84px);filter:drop-shadow(0 4px 4px rgba(0,0,0,.5))}
+.wm-big b{margin-top:-10px;padding:2px 10px;border-radius:99px;background:#7a1a14;border:2px solid #f2c46a;color:#fff3d0;
+  font-size:clamp(12px,1.3vw,15px);white-space:nowrap;box-shadow:0 2px 0 #3a0a08}
+.wm-big button:active img{transform:translateY(2px)}
+.wm-stars-total{position:absolute;left:1.2%;top:2%;z-index:4;display:flex;align-items:center;gap:6px;padding:5px 12px;
+  border-radius:12px;background:rgba(255,246,220,.94);border:3px solid #9b6a2c;color:#4a2e14;font-weight:900}
+.wm-stars-total img{width:22px}
+@media (max-height:480px){
+  .screen.wm{gap:5px;padding:5px 8px}
+  .wm-top{padding:3px 10px}
+  .wm .wm-tab{padding:3px 10px}
+  .wm .wm-tab .chno{display:none}
+  .wm-big{right:12px;bottom:8px}
+  .wm-stars-total{font-size:13px;padding:3px 9px}
+}
+@media (max-width:640px){
+  .wm-mini button{font-size:11px;padding:3px 7px}
+  .wm .wm-tab .chno{display:none}
+  .wm-exp{width:70px}
+}
+@media (prefers-reduced-motion:reduce){ .wm-here{animation:none} }

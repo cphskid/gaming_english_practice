@@ -50,8 +50,9 @@ export function onArt(cb: (key: string) => void): () => void {
  * 開始抓（或繼續抓）素材。可以重複呼叫：正在抓就跟著同一趟，
  * 上一趟放棄了就重開一趟。所以進關卡時每隔幾秒再叫一次就等於自動重試。
  */
-export function loadArt(): Promise<Record<string, HTMLImageElement>> {
+export function loadArt(want?: (key: string) => boolean): Promise<Record<string, HTMLImageElement>> {
   if (complete) return Promise.resolve(ART)
+  if (want) return loadSome(want)
   if (!running) {
     // 這裡刻意不會 reject：呼叫端都是 `void loadArt()`，丟出去也沒有人接，
     // 只會在主控台留一筆沒人處理的錯誤。抓不到就是這趟沒抓到，下一趟重來。
@@ -60,9 +61,34 @@ export function loadArt(): Promise<Record<string, HTMLImageElement>> {
   return running.then(() => ART)
 }
 
+/**
+ * 只抓這個畫面用得到的那幾張（2026-10-10 載圖加速原則，見 docs/image-loading.md）。
+ *
+ * 新畫風的第一章只用 p- 開頭的圖，以前一進選關就把 150 張全抓（含五色像素城堡、雪地貼圖…），
+ * 慢網路上要十幾秒，地圖、怪物得跟一堆用不到的圖搶頻寬。現在每個畫面只要自己那一份，
+ * 照 PRIORITY 的順序排隊：先出現在畫面上的先抓。
+ */
+const PRIORITY = ['p-castle', 'p-plot', 'p-goblin', 'p-archery', 'p-barracks', 'p-ogre', 'p-soldier', 'p-heart', 'p-crystal', 'p-skull']
+let indexP: Promise<Record<string, string> | null> | null = null
+function index() {
+  const base = import.meta.env.BASE_URL || '/'
+  if (!indexP) indexP = fetchIndex(`${base}td-art.json`.replace(/([^:])\/{2,}/g, '$1/')).then((r) => { if (!r) indexP = null; return r })
+  return indexP
+}
+async function loadSome(want: (key: string) => boolean) {
+  const idx = await index()
+  if (!idx) return ART
+  const base = import.meta.env.BASE_URL || '/'
+  const url = (v: string) => `${base}${v}`.replace(/([^:])\/{2,}/g, '$1/')
+  const rank = (k: string) => { const i = PRIORITY.indexOf(k); return i < 0 ? 99 : i }
+  const keys = Object.keys(idx).filter(want).sort((a, b) => rank(a) - rank(b))
+  await Promise.all(keys.map((k) => grab(k, url(idx[k]))))
+  return ART
+}
+
 async function run() {
   const base = import.meta.env.BASE_URL || '/'
-  const index = await fetchIndex(`${base}td-art.json`.replace(/([^:])\/{2,}/g, '$1/'))
+  const index = await fetchIndexCached()
   if (!index) return
 
   const url = (v: string) => `${base}${v}`.replace(/([^:])\/{2,}/g, '$1/')
@@ -76,6 +102,8 @@ async function run() {
   await Promise.all(rest.map((k) => grab(k, url(index[k]))))
   if (keys.every((k) => ART[k])) complete = true
 }
+
+function fetchIndexCached() { return index() }
 
 /** 索引抓不到就退讓幾次再試；還是不行就這趟放棄，下一趟重來。 */
 async function fetchIndex(src: string): Promise<Record<string, string> | null> {

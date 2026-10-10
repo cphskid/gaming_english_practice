@@ -106,7 +106,7 @@ try {
   await page.setViewportSize({ width: 844, height: 390 })
   await page.getByRole('button', { name: '回去' }).click()
   await page.waitForSelector('.levels')
-  await page.locator('.lv').first().click()
+  await page.locator('.lv').first().click(); await page.locator('.lvgo').click()
   await page.waitForSelector('.td-cv')
   await page.waitForTimeout(800)
   const td = await page.evaluate(async () => {

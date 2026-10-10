@@ -6,7 +6,7 @@ import { PLATE_RULES, layoutPlates as runPlateLayout, plateY } from './plates'
 import { iconImg, iconUrl } from '@/data/icons'
 import { legionById } from '@/data/legions'
 import { createHero } from '../hero'
-import { DECOR, PARK_TERRAIN_KEYS, SPRITES, buildParkTerrain, drawFrame } from './park'
+import { DECOR, PARK_FALLBACK, mapUrl, PARK_TERRAIN_KEYS, SPRITES, buildParkTerrain, drawFrame } from './park'
 
 const W = 1088
 const H = 576
@@ -190,13 +190,25 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
    * 一個版面一張（public/td-park/maps/<版面>.webp），上下翻的版面（名字結尾 M）拿同一張翻過來畫。
    * 樹、石頭、路都已經畫在圖上，所以有這張就不畫 decor、也不用程式畫路；圖還沒到之前先用舊的程式地形墊著。
    */
+  /**
+   * 新畫風這一關要抓哪些圖：p- 開頭的，但「程式畫地圖」用的地面、海、樹石（PARK_FALLBACK）
+   * 只有底圖抓不到時才要——有底圖就不跟它搶頻寬。
+   */
+  let mapFailed = false
+  const parkKeys = (k: string) => k.startsWith('p-') && (mapFailed || !MAP_NAME || !PARK_FALLBACK.has(k))
   const MAP_NAME = PARK && level.skin.map ? level.skin.map.replace(/M$/, '') : ''
   const MAP_FLIP = !!level.skin.map?.endsWith('M')
   const mapIm = new Image()
   let mapReady = false
   if (MAP_NAME) {
     mapIm.onload = () => { mapReady = mapIm.naturalWidth > 0; terrain = null }
-    mapIm.src = `${import.meta.env.BASE_URL}td-park/maps/${MAP_NAME}.webp`.replace(/([^:])\/{2,}/g, '$1/')
+    // 底圖真的抓不到（斷線、檔案不見）才退回程式畫的地圖
+    mapIm.onerror = () => { mapFailed = true; void loadArt(parkKeys) }
+    mapIm.src = mapUrl(MAP_NAME)
+  }
+  /** 開打前一定要到的圖：地圖、城堡、兩種怪 */
+  function parkReady() {
+    return (mapReady || mapFailed || !MAP_NAME) && !!img['p-castle'] && !!img['p-goblin'] && !!img['p-ogre']
   }
   function buildMapTerrain(): HTMLCanvasElement {
     const cnv = document.createElement('canvas'); cnv.width = W; cnv.height = H
@@ -328,6 +340,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   function startWave() {
     if (S.phase !== 'build') return
     if (!S.towers.length) return toast('先蓋一座塔再開戰')
+    // 地圖或怪物的圖還沒到就不開打（2026-10-10 Chuck：都開始打了地圖還沒出來）
+    if (PARK && !parkReady()) return toast('地圖還在載入，馬上好…')
 
     const spec = rules.waves[Math.min(S.wave - 1, rules.waves.length - 1)]
     S.spawnQueue = []
@@ -853,7 +867,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
 
   function draw() {
     if (!terrain && mapReady) terrain = buildMapTerrain()
-    else if (!terrain && PARK) terrain = buildParkTerrain(layout, img, W, H)
+    else if (!terrain && PARK && (mapFailed || !MAP_NAME)) terrain = buildParkTerrain(layout, img, W, H)
     else if (!terrain && img.tiles) buildTerrain()
     if (terrain) c2d.drawImage(terrain, 0, 0)
     else drawLoadingField()
@@ -1537,14 +1551,14 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     if (S.phase !== 'done' && !paused) update(dt)
     // 地圖的圖還沒到就每三秒再敲一次。loadArt 正在跑就跟著同一趟，
     // 上一趟放棄了才會重開，所以在關卡裡也救得回來，不用退出去重進。
-    if (!img[PARK ? 'p-ground' : 'tiles'] && now - artKick > 3000) { artKick = now; void loadArt() }
+    if (!img[PARK ? 'p-castle' : 'tiles'] && now - artKick > 3000) { artKick = now; void (PARK ? loadArt(parkKeys) : loadArt()) }
     syncBuffs()
     if (PARK) { syncGuide(); if (incoming > 0) incoming -= Math.min(0.05, dt) }
     draw()
     raf = requestAnimationFrame(loop)
   }
 
-  void loadArt()
+  void (PARK ? loadArt(parkKeys) : loadArt())
 
   // 開發模式下把內部狀態開出來，自動測試才驗得到難度曲線與出題漏洞。
   // 正式版 build 會整段消失（import.meta.env.DEV 在 production 是 false）。

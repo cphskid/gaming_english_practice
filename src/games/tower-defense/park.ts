@@ -16,6 +16,24 @@ import type { Layout } from '@/core/types'
  */
 
 /** 地形用到的圖：到了就要把地圖重畫一次（跟 art.ts 的 TERRAIN_KEYS 同一個用途） */
+/** 程式畫地圖才用得到的圖。每關有畫好的底圖之後，只有底圖抓不到時才抓這些。 */
+export const PARK_FALLBACK = new Set(['p-ground', 'p-road', 'p-sea', 'p-tree', 'p-pine', 'p-bush', 'p-boulders', 'p-rock', 'p-stump', 'p-flowers', 'p-pebbles', 'p-flag'])
+/** 新畫風畫面要先抓的那一份：p- 開頭、但不含程式畫地圖用的 */
+export const isParkKey = (k: string) => k.startsWith('p-') && !PARK_FALLBACK.has(k)
+
+/** 每關畫好的底圖（public/td-park/maps/<版面>.webp）。上下翻的版面（結尾 M）用同一張。 */
+export function mapUrl(layoutName: string): string {
+  return `${import.meta.env.BASE_URL}td-park/maps/${layoutName.replace(/M$/, '')}.webp`.replace(/([^:])\/{2,}/g, '$1/')
+}
+const prefetched = new Map<string, HTMLImageElement>()
+/** 先把某一關的底圖抓進瀏覽器快取：選關畫面閒著的時候、點開關卡卡片的那一刻 */
+export function prefetchMap(level: { chapter: number; skin: { map?: string } }) {
+  if (level.chapter !== 1 || !level.skin.map) return
+  const u = mapUrl(level.skin.map)
+  if (prefetched.has(u)) return
+  const im = new Image(); im.decoding = 'async'; im.src = u
+  prefetched.set(u, im)
+}
 export const PARK_TERRAIN_KEYS = ['p-sea', 'p-ground', 'p-road']
 
 /** 佈局裡的裝飾物鍵 → 新圖，以及畫多高（px，畫布座標） */

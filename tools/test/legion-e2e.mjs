@@ -148,7 +148,7 @@ try {
   await page.waitForSelector('.levels, .result, .vs-foe', { timeout: 10000 })
   await page.goto(BASE, { waitUntil: 'networkidle' })
   await page.waitForSelector('.levels', { timeout: 10000 })
-  await page.locator('.lv').first().click()
+  await page.locator('.lv').first().click(); await page.locator('.lvgo').click()
   await page.waitForSelector('.td-cv', { timeout: 10000 })
   await page.locator('.rotate').click({ timeout: 1500 }).catch(() => {})
   await page.waitForTimeout(1500)

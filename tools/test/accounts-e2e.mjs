@@ -72,7 +72,7 @@ await p.waitForSelector('.levels', { timeout: 25000 })
 say(true, '學生註冊得了，而且直接進到關卡畫面')
 // 正式版沒有 window.__td（那是開發模式才開出來的自動測試後門），
 // 所以這裡只確認關卡真的開得起來、畫布畫得出來、沒有丟例外。
-await p.locator('.lv').first().click()
+await p.locator('.lv').first().click(); await p.locator('.lvgo').click()
 await p.waitForSelector('.td-cv', { timeout: 25000 })
 await p.waitForTimeout(1500)
 say(true, '第一關進得去，畫面畫得出來')
