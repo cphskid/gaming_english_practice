@@ -8,8 +8,10 @@ import { Badge } from './Profile'
 import { Icon } from './Icon'
 
 export function Result({
-  result, bonus, unlocked = [], raid, onRetry, onBack,
+  result, bonus, unlocked = [], raid, time, onRetry, onBack,
 }: {
+  /** 時光幣模式（樂園合用）：今天換到幾枚、上限多少 */
+  time?: { today: number; cap: number; per: number }
   result: SessionResult
   /** 魔王團戰：伺服器認了沒、打倒幾次、是不是第一次（外框就是這一場拿到的） */
   raid?: RaidResult & { bossId: string }
@@ -39,7 +41,10 @@ export function Result({
         <div className="rows">
           <div className="row"><span>答對</span><b>{me?.correct ?? 0} / {me?.asked ?? 0} 題（{acc}%）</b></div>
           <div className="row"><span>最長連擊</span><b>{me?.bestCombo ?? 0}</b></div>
-          <div className="row"><span>獲得銅幣</span><b><Icon name="coin" size={15} /> {bonus.coins}</b></div>
+          {time
+            ? <div className="row"><span>獲得時光幣</span><b><Icon name="coin" size={15} /> {bonus.coins}
+                <small className="muted">　今天 {time.today}/{time.cap}</small></b></div>
+            : <div className="row"><span>獲得銅幣</span><b><Icon name="coin" size={15} /> {bonus.coins}</b></div>}
           <div className="row"><span>獲得經驗</span><b>{bonus.exp} exp</b></div>
           {result.bonusCoins > 0 && (
             <div className="row"><span>首次通關獎勵</span><b><Icon name="coin" size={15} /> {result.bonusCoins}</b></div>

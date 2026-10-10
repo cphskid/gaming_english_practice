@@ -1194,3 +1194,13 @@ button.kr-card{cursor:pointer;font:inherit}
 .kr .raid-openbar .btn.ghost{color:#5a3a18;border-color:#b8873f;background:#fff6dc}
 .kr .pinshow{color:#ffd76a}
 .kr .btn.ghost{color:#5a3a18;border-color:#b8873f;background:#fff6dc}
+.kr-top .coins{display:flex;align-items:center;gap:4px;font-weight:900;font-size:16px;color:#8a5a10}
+.kr-top .mug,.kr-top .mugbox{width:36px;height:36px;border-radius:9px;flex:none}
+.screen.kr.wide .shopwrap{width:100%;max-width:760px}
+.kr .shopwrap{display:flex;flex-direction:column;gap:10px}
+.kr .items{max-width:none}
+.kr .item{background:linear-gradient(#fffaf0,#f7e8c6);border:3px solid #d6b46e;border-radius:14px;color:#4a2e14;box-shadow:0 3px 0 #b08a45}
+.kr .item .i-desc,.kr .item .i-tag,.kr .item .i-modes,.kr .lg-head small{color:#7a5a30}
+.kr .item .i-go{color:#9a5a10}
+.kr .lg-shelf{margin:10px}
+.kr .lg-head small{color:#e9d9b6}

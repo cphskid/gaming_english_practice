@@ -191,12 +191,14 @@ export class SupabaseRepository implements Repository {
     const row = data as CharacterRow | null
     // join_class 會順便開好角色，所以正常不會是 null
     if (!row) throw new Error('讀取角色失敗：找不到這個學生的存檔')
+    const w = await this.wallet()
     return {
       studentId,
       job: row.job,
       avatar: row.avatar ?? '',
       exp: row.exp,
-      coins: row.coins,
+      coins: w ? w.coins : row.coins,
+      ...(w ? { time: { today: w.today, cap: w.cap, per: w.per } } : {}),
       items: row.items ?? {},
       equipped: row.equipped ?? [],
       pinned: row.pinned ?? [],
@@ -224,7 +226,31 @@ export class SupabaseRepository implements Repository {
     fail('存頭像失敗', error)
   }
 
-  async buyItem(itemId: string): Promise<{ coins: number; items: Record<string, number> }> {
+  /**
+   * 樂園的時光幣錢包（2026-10-10 合用）。樂園的帳本沒裝、或這支函式還沒套進資料庫，就回 null，
+   * 畫面照舊用遊戲自己的銅幣。第一次打開時伺服器會把舊銅幣一次換算進去。
+   */
+  private timeMode: boolean | null = null
+  private async wallet(): Promise<{ coins: number; today: number; cap: number; per: number } | null> {
+    if (this.timeMode === false) return null
+    const { data, error } = await this.db.rpc('guardian_wallet')
+    if (error) {
+      // 函式不存在（PGRST202）就當沒有樂園；其他錯誤（網路）這次先用銅幣，下次再問
+      if (error.code === 'PGRST202') this.timeMode = false
+      return null
+    }
+    const w = data as { park: boolean; coins: number; today: number; cap: number; per: number }
+    this.timeMode = !!w?.park
+    return w?.park ? w : null
+  }
+
+  async buyItem(itemId: string, name?: string): Promise<{ coins: number; items: Record<string, number> }> {
+    if (this.timeMode) {
+      const { data, error } = await this.db.rpc('guardian_buy', { p_item: itemId, p_name: name ?? null })
+      fail('購買失敗', error)
+      const r = data as { coins: number; items: Record<string, number> }
+      return { coins: r.coins, items: r.items ?? {} }
+    }
     const { data, error } = await this.db.rpc('buy_item', { p_item: itemId })
     fail('買不成', error)
     const row = (data as { coins: number; items: Record<string, number> }[] | null)?.[0]

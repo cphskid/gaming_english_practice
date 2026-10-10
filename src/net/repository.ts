@@ -50,7 +50,8 @@ export interface Repository {
    * 買東西。**只送品項 id**——價格、等級門檻、餘額全部由後端查。
    * 前端說「這個賣一塊」是不算數的。回傳買完之後的角色，畫面直接用。
    */
-  buyItem(itemId: string): Promise<{ coins: number; items: Record<string, number> }>
+  /** name 只是給樂園帳本寫「買了什麼」用的，價格與能不能買都是資料庫查 */
+  buyItem(itemId: string, name?: string): Promise<{ coins: number; items: Record<string, number> }>
 
   /** 穿脫裝飾品。回傳穿好之後的清單。 */
   equipItem(itemId: string, on: boolean): Promise<string[]>

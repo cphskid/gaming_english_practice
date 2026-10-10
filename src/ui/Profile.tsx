@@ -30,7 +30,8 @@ import { levelFromExp } from '@/core/progress'
 export function Badge({
   def, got, size = 56, hue, tier = 0,
 }: { def: AchDef; got: boolean; size?: number; hue: string; tier?: number }) {
-  const paths = BADGE_ICONS[def.id] ?? []
+  // 全破・第二章、第三章沒有自己的圖示，跟第一章用同一個（之前是空白的）
+  const paths = BADGE_ICONS[def.id] ?? BADGE_ICONS[def.id.replace(/-\d+$/, '')] ?? []
   const ring = got && def.tiers && tier > 0 ? ' t' + tier : ''
   return (
     <span className={'badge' + (got ? ' got' : '') + ring}
