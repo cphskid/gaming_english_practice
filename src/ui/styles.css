@@ -196,13 +196,21 @@ button{font-family:inherit}
 .td-park .td-tray{display:none}
 .td-park .td-cv{image-rendering:auto}
 .td-park .td-stage{background:#2f8fc4}
-.td-park .td-hud{background:linear-gradient(#fff8e6,#f4e1b6);border:3px solid #d29a32;color:#4a2e14;
+:is(.td-park,.kr-hud) .td-hud{background:linear-gradient(#fff8e6,#f4e1b6);border:3px solid #d29a32;color:#4a2e14;
   box-shadow:inset 0 2px 0 rgba(255,255,255,.7),0 3px 0 #a8731f}
-.td-park .td-hp{color:#c9362e} .td-park .td-coin{color:#1f7fb8}
-.td-park .td-wave,.td-park .td-qhint{color:#8a6a40}
-.td-park .td-say{background:#3a9ad9;box-shadow:0 3px 0 #23679a}
-.td-park .td-buff{background:#e4f4ff;border-color:#8cc8ef;color:#23506e}
-.td-park .td-buff b{color:#1f7fb8}
+:is(.td-park,.kr-hud) .td-hp{color:#c9362e} :is(.td-park,.kr-hud) .td-coin{color:#1f7fb8}
+:is(.td-park,.kr-hud) .td-wave,:is(.td-park,.kr-hud) .td-qhint{color:#8a6a40}
+:is(.td-park,.kr-hud) .td-say{background:#3a9ad9;box-shadow:0 3px 0 #23679a}
+:is(.td-park,.kr-hud) .td-buff{background:#e4f4ff;border-color:#8cc8ef;color:#23506e}
+:is(.td-park,.kr-hud) .td-buff b{color:#1f7fb8}
+:is(.td-park,.kr-hud) .tw-bar{background:linear-gradient(#fff8e6,#f4e1b6);border:3px solid #d29a32;color:#4a2e14;
+  box-shadow:inset 0 2px 0 rgba(255,255,255,.7),0 3px 0 #a8731f}
+:is(.td-park,.kr-hud) .tw-line{background:#fffaf0;border-color:#e2c27f;color:#4a2e14;box-shadow:0 2px 0 #d6b46e}
+:is(.td-park,.kr-hud) .tw-line.on{background:#ffe9a8;border-color:#d29a32;box-shadow:0 0 0 2px #f5c242,0 2px 0 #a8731f}
+:is(.td-park,.kr-hud) .tw-up{background:#6cbf3f;border-color:#3f8a25;color:#fff;box-shadow:0 3px 0 #3f8a25}
+:is(.td-park,.kr-hud) .tw-up:disabled{background:#e9dcc0;border-color:#cdb68a;color:#8a6a40;box-shadow:none}
+:is(.td-park,.kr-hud) .tw-crystal{color:#1f7fb8}
+:is(.td-park,.kr-hud) .tw-foe{color:#8a6a40}
 .td-ring{position:absolute;width:0;height:0;z-index:5}
 .td-rb{position:absolute;transform:translate(-50%,-50%);width:60px;height:60px;border-radius:50%;
   border:3px solid #d29a32;background:radial-gradient(circle at 40% 35%,#fffaf0,#f1d9a4);
@@ -1110,3 +1118,79 @@ input.pin{width:7.5em;font-size:20px;letter-spacing:.3em;text-align:center;paddi
   .wm-exp{width:70px}
 }
 @media (prefers-reduced-motion:reduce){ .wm-here{animation:none} }
+
+/*
+  提案二的「功能頁」共用版型（2026-10-10，先用在對戰頁，之後魔王團戰、英雄營、商店跟著換）。
+  跟選關大地圖同一套：深藍夜空底、奶油色木框狀態列、內容是奶油色卡片。
+  每一區用 <details> 做成收得起來的木牌標題：常用的預設打開、說明文字預設收著，畫面才乾淨。
+*/
+.screen.kr{justify-content:flex-start;gap:10px;padding:8px 12px 18px;
+  background:radial-gradient(ellipse at 50% 30%,#2b4a5e,#14212b 75%);color:#4a2e14}
+.kr-top{display:flex;align-items:center;gap:10px;width:100%;max-width:760px;padding:5px 12px;border-radius:14px;flex:none;
+  background:linear-gradient(#fbecc8,#ecd29a);border:3px solid #9b6a2c;box-shadow:0 3px 0 #6b4618;color:#4a2e14}
+.kr-top h2{font-size:19px;font-weight:900;letter-spacing:.06em}
+.kr-top .spacer{flex:1}
+.kr-badge{width:42px;height:42px;object-fit:contain;margin:-8px 0;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35))}
+.kr-back{border:2px solid #b8873f;background:#fff6dc;color:#5a3a18;font-weight:800;font-size:13.5px;
+  padding:6px 14px;border-radius:99px;cursor:pointer;box-shadow:0 2px 0 #b8873f}
+.kr-back:active{transform:translateY(2px);box-shadow:none}
+.kr-body{display:flex;flex-direction:column;gap:10px;width:100%;max-width:760px}
+.kr-card{background:linear-gradient(#fffaf0,#f7e8c6);border:3px solid #d6b46e;border-radius:14px;color:#4a2e14;
+  box-shadow:0 3px 0 #b08a45}
+button.kr-card{cursor:pointer;font:inherit}
+.kr-sec{border-radius:14px;background:rgba(255,246,220,.1);border:2px solid rgba(214,180,110,.35)}
+.kr-sec>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:12px;
+  background:linear-gradient(#a8742e,#7e5320);color:#fff3d0;font-weight:900;font-size:15.5px;
+  border:2px solid #f2c46a;box-shadow:0 2px 0 #4d3010;text-shadow:0 1px 0 #4d3010}
+.kr-sec>summary::-webkit-details-marker{display:none}
+.kr-sec>summary small{font-size:12px;font-weight:700;color:#ffe2a0}
+.kr-sec>summary::after{content:'▾';margin-left:auto;transition:transform .15s}
+.kr-sec:not([open])>summary::after{transform:rotate(-90deg)}
+.kr-sec>*:not(summary){margin:10px;width:auto}
+.kr .vs-live,.kr .vs-foes,.kr .vs-ghosts,.kr .vs-h,.kr .vs-sub,.kr .vs-intro{max-width:none}
+.kr .vs-sub{color:#e9d9b6}
+.kr .kr-sec .vs-sub{margin:10px 10px 0}
+.kr .vs-sub.err{color:#ffb4b0}
+.kr .muted{color:#8a6a40}
+.kr .kr-card .muted{color:#8a6a40}
+.kr .vs-sub.muted{color:#cdb98f}
+.kr .vs-foe,.kr .vs-ghost{padding:9px 12px}
+.kr .vs-seek{border-color:#d29a32;background:linear-gradient(#fff3cf,#f2d48e);padding:12px 16px}
+.kr .vs-seek .ic{font-size:30px}
+.kr .vs-seek .txt b{font-size:20px;color:#7a1a14}
+.kr .vs-seek .txt small{color:#7a5a30}
+.kr .vs-seek.on{border-color:#6cbf3f}
+.kr .vs-foe .go,.kr .vs-ghost .go{background:#6cbf3f;color:#fff;border:2px solid #3f8a25;box-shadow:0 2px 0 #3f8a25}
+.kr .vs-intro{background:#fff8e6;border-radius:12px;padding:12px 14px;color:#4a2e14}
+.kr .vs-intro .muted{color:#7a5a30}
+.kr .vs-person,.kr .vs-invite{max-width:none}
+/* 魔王團戰的清單、等待室套 .kr */
+.kr .lede{color:#e9d9b6;max-width:none}
+.kr .kr-sec .lede{color:#e9d9b6}
+.kr .board{max-width:none}
+.kr .rank{background:linear-gradient(#fffaf0,#f7e8c6);border:3px solid #d6b46e;border-radius:14px;color:#4a2e14;box-shadow:0 3px 0 #b08a45}
+.kr .rank.me{border-color:#d29a32;background:linear-gradient(#fff3cf,#f2d48e)}
+.kr .rank .nm small,.kr .rank .sc b{color:#9a5a10}
+.kr .rank .sc small{color:#8a6a40}
+.kr .bosstier{max-width:none;margin:0 0 6px}
+.kr .bosstier>summary{list-style:none;cursor:pointer}
+.kr .bosstier>summary::-webkit-details-marker{display:none}
+.kr .bosstier>summary h3{display:flex;align-items:baseline;flex-wrap:wrap;gap:0;margin:6px 0;color:#ffe2a0}
+.kr .bosstier>summary h3::after{content:'▾';margin-left:auto;color:#f2c46a}
+.kr .bosstier:not([open])>summary h3::after{content:'▸'}
+.kr .bosstier h3 small{color:#cdb98f}
+.kr .bosstier.tier-rare h3{color:#8cc8ff}
+.kr .bosstier.tier-legend h3{color:#ffc94a}
+.kr .bosstier.tier-myth h3{color:#ff8aa4}
+.kr .bossgrid{max-width:none}
+.kr .bosspick{background:linear-gradient(#fffaf0,#f7e8c6);border:3px solid #d6b46e;border-radius:14px;color:#4a2e14;box-shadow:0 3px 0 #b08a45}
+.kr .bosspick small{color:#8a6a40}
+.kr .bosspick .fam,.kr .bosscard .fam{color:#9a5a10}
+.kr .bosspick.on{border-color:var(--boss);box-shadow:0 0 0 3px var(--boss),0 3px 0 #b08a45}
+.kr .bosscard{max-width:none;background:linear-gradient(#fffaf0,#f7e8c6);color:#4a2e14;border-radius:14px}
+.kr .bosscard small{color:#7a5a30}
+.kr .raid-openbar{background:linear-gradient(#fbecc8,#ecd29a);border:3px solid #9b6a2c;border-radius:14px;box-shadow:0 -2px 10px rgba(0,0,0,.35);color:#4a2e14}
+.kr .raid-openbar .lede{color:#7a5a30}
+.kr .raid-openbar .btn.ghost{color:#5a3a18;border-color:#b8873f;background:#fff6dc}
+.kr .pinshow{color:#ffd76a}
+.kr .btn.ghost{color:#5a3a18;border-color:#b8873f;background:#fff6dc}

@@ -108,6 +108,7 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
   const link = ctx.raid!
   const boss = BOSS_BY_ID.get(link.bossId) ?? BOSSES[0]
   root.innerHTML = SHELL
+  root.classList.add('kr-hud')
   const $ = <T extends Element>(s: string) => root.querySelector(s) as T
   const cv = $<HTMLCanvasElement>('.td-cv')
   const c2d = cv.getContext('2d')!
@@ -895,19 +896,28 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
     c2d.translate(cx, BOARD.y + BOARD.h / 2); c2d.scale(sc, sc)
     c2d.translate(-cx, -(BOARD.y + BOARD.h / 2))
     c2d.fillStyle = 'rgba(0,0,0,.3)'; roundRect(x, BOARD.y + 5, BOARD.w, BOARD.h, 11); c2d.fill()
-    c2d.fillStyle = t.good > 0 ? '#3f7a34' : t.bad > 0 ? '#8c3730' : '#2b2117'
-    roundRect(x, BOARD.y, BOARD.w, BOARD.h, 11); c2d.fill()
-    c2d.strokeStyle = t.good > 0 ? '#a8e07a' : t.bad > 0 ? '#ff9a94' : color
-    c2d.lineWidth = 4; c2d.stroke()
-    c2d.fillStyle = '#fff'
+    // 提案二畫風（2026-10-10）：奶油色木牌、深咖啡描邊，左右同色的釘片對上兵身上的旗子
+    const y = BOARD.y
+    c2d.fillStyle = t.good > 0 ? '#5f9c3e' : t.bad > 0 ? '#b0473d' : '#5a3a1c'
+    roundRect(x, y, BOARD.w, BOARD.h, 12); c2d.fill()
+    const g = c2d.createLinearGradient(0, y, 0, y + BOARD.h)
+    g.addColorStop(0, t.good > 0 ? '#e6f7cf' : t.bad > 0 ? '#ffe0da' : '#fff6e0')
+    g.addColorStop(1, t.good > 0 ? '#c4e6a0' : t.bad > 0 ? '#f6b9b0' : '#f0d9a6')
+    c2d.fillStyle = g
+    roundRect(x + 4, y + 4, BOARD.w - 8, BOARD.h - 8, 9); c2d.fill()
+    c2d.strokeStyle = 'rgba(60,36,14,.6)'; c2d.lineWidth = 2
+    for (const px of [x + 14, x + BOARD.w - 14]) {
+      c2d.fillStyle = color; c2d.beginPath(); c2d.arc(px, y + BOARD.h / 2, 7, 0, 7); c2d.fill(); c2d.stroke()
+    }
+    c2d.fillStyle = '#3b2412'
     c2d.font = 'bold 30px system-ui, "Segoe UI", sans-serif'
     c2d.textAlign = 'center'; c2d.textBaseline = 'middle'
     c2d.fillText(t.word.word, cx, BOARD.y + BOARD.h / 2 + 1)
     if (t.unit < 0) {
       // 打魔王本人的牌子標一個小角，跟打小兵的分得出來
       c2d.font = 'bold 13px system-ui'
-      c2d.fillStyle = color
-      c2d.fillText('魔王', x + 24, BOARD.y + 12)
+      c2d.fillStyle = '#b0473d'
+      c2d.fillText('魔王', x + 40, BOARD.y + 14)
     }
     c2d.restore()
   }

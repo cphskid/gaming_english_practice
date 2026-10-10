@@ -135,5 +135,8 @@
  "p-sound": "td-park/p-sound.webp",
  "p-star": "td-park/p-star.webp",
  "p-stump": "td-park/p-stump.webp",
- "p-tree": "td-park/p-tree.webp"
+ "p-tree": "td-park/p-tree.webp",
+ "vs-field": "td-park/vs/field.webp",
+ "vs-castle-red": "td-park/vs/castle-red.webp",
+ "vs-archery-red": "td-park/vs/archery-red.webp"
 }

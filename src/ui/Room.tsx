@@ -103,6 +103,8 @@ export function bossLocked(b: BossDef, cleared: Set<string> | null): number | nu
   return chapterCleared(ch, LEVELS, cleared) ? null : ch
 }
 const CH = ['', '一', '二', '三']
+/** 提案二畫風的小圖（public/td-park） */
+const PARK_ART = `${import.meta.env.BASE_URL}td-park/`.replace(/([^:])\/{2,}/g, '$1/')
 
 /** 誰開的。老師那場要一眼認得出來，不然小朋友會跑去跟同學那場。 */
 const hostLabel = (r: { byTeacher: boolean; hostName: string }) =>
@@ -178,11 +180,11 @@ function BossGrid({ pick, onPick, stat, cleared }: {
         const list = BOSSES.filter((b) => b.tier === t.id)
         const lock = bossLocked(list[0], cleared)
         return (
-          <div key={t.id} className={'bosstier tier-' + t.id}>
-            <h3>
+          <details key={t.id} className={'bosstier tier-' + t.id} open={!lock}>
+            <summary><h3>
               {t.name}<small>　{t.words}{t.id === 'myth' ? '，半血會變身' : ''}</small>
               {lock && <small className="lockmsg">　🔒 第{CH[lock]}章全破才能打</small>}
-            </h3>
+            </h3></summary>
             <div className="bossgrid">
               {list.map((b) => (
                 <button key={b.id} className={'bosspick' + (pick === b.id ? ' on' : '') + (lock ? ' locked' : '')}
@@ -197,7 +199,7 @@ function BossGrid({ pick, onPick, stat, cleared }: {
                 </button>
               ))}
             </div>
-          </div>
+          </details>
         )
       })}
     </>
@@ -234,18 +236,21 @@ export function RoomList({ rooms, stat, cleared, onJoin, onOpen, onBack }: {
   }
 
   return (
-    <div className="screen wide">
-      <div className="topbar">
-        <span className="who">👹 魔王團戰</span>
+    <div className="screen kr">
+      <div className="kr-top">
+        <img className="kr-badge" src={PARK_ART + 'p-btn-raid.webp'} alt="" />
+        <h2>魔王團戰</h2>
         <span className="spacer" />
-        <button className="btn ghost small" onClick={onBack}>回去</button>
+        <button className="kr-back" onClick={onBack}>回地圖</button>
       </div>
+      <div className="kr-body">
       <p className="lede left">
         {MIN_PLAYERS} 到 {MAX_PLAYERS} 個人一起打一隻魔王，三分鐘內把牠的血打光。
         每個人守一座城，城被攻破就先答對題目修好，再繼續出兵。
       </p>
 
-      <h2 className="sec">現在開著的<small>　按一下就進去</small></h2>
+      <details className="kr-sec" open>
+      <summary>現在開著的 <small>按一下就進去</small></summary>
       {rooms.some((r) => r.fresh) && (
         <p className="lede left small">✨＝還沒跟你一起打完過魔王的同學。跟新隊友打完，「廣結善緣」徽章會升階。</p>
       )}
@@ -279,9 +284,12 @@ export function RoomList({ rooms, stat, cleared, onJoin, onOpen, onBack }: {
           </RoomRow>
         ))}
       </div>
+      </details>
 
-      <h2 className="sec">我要開一場<small>　先選一隻魔王</small></h2>
+      <details className="kr-sec" open>
+      <summary>我要開一場 <small>先選一隻魔王</small></summary>
       <BossGrid pick={pick} onPick={setPick} stat={stat} cleared={cleared} />
+      </details>
       {/*
         開場的按鈕黏在畫面底部。魔王分四級之後格子有二十個，按鈕被擠到很下面，
         電腦橫的畫面一屏看不到——小朋友點了魔王以為就會開，點了「沒反應」
@@ -301,6 +309,7 @@ export function RoomList({ rooms, stat, cleared, onJoin, onOpen, onBack }: {
         <p className="lede small">
           {priv ? '私人房要打密碼才進得來，把密碼告訴你要找的同學。' : '公開房同班的人都進得來。'}
         </p>
+      </div>
       </div>
     </div>
   )
@@ -340,15 +349,17 @@ export function RoomLobby({ room, onStart, onLeave }: {
   }
 
   return (
-    <div className="screen wide">
-      <div className="topbar">
-        <span className="who">👹 {hostLabel({
+    <div className="screen kr">
+      <div className="kr-top">
+        <img className="kr-badge" src={PARK_ART + 'p-btn-raid.webp'} alt="" />
+        <h2>{hostLabel({
           byTeacher: room.byTeacher,
           hostName: room.members.find((m) => m.host)?.nickname ?? '',
-        })}</span>
+        })}</h2>
         <span className="spacer" />
-        <button className="btn ghost small" onClick={onLeave}>先不玩了</button>
+        <button className="kr-back" onClick={onLeave}>先不玩了</button>
       </div>
+      <div className="kr-body">
 
       <div className="bosscard" style={{ ['--boss' as string]: b.color }}>
         <BossFace b={b} size={64} />
@@ -388,6 +399,7 @@ export function RoomLobby({ room, onStart, onLeave }: {
             onKick={() => act(() => repo.kickFromRoom(room.id, m.studentId))} />
         ))}
         {room.members.length === 0 && <p className="lede">還沒有人進來。</p>}
+      </div>
       </div>
     </div>
   )

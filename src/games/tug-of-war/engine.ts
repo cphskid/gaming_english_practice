@@ -146,7 +146,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   const img = ART
   let terrain: HTMLCanvasElement | null = null
   // 戰場先畫在暫存畫布上再整張貼；圖後到的話得把它作廢重畫。
-  const unArt = onArt((k) => { if (TERRAIN_KEYS.includes(k)) terrain = null })
+  const unArt = onArt((k) => { if (TERRAIN_KEYS.includes(k) || k === 'vs-field') terrain = null })
   let artKick = performance.now()
   let raf = 0
   let paused = false
@@ -295,7 +295,24 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     img[legionUnitArt(legion, line, LINES[line].art, rank)] ?? img[LINES[line].art + ctx.color] ?? img[LINES[line].art]
   const myUnit = (u: Unit, rank: number) => lineArt(u.line, rank)
   /** 戰場的底圖有沒有到。沒到的話 loop 會每三秒再敲一次 loadArt。 */
-  const fieldKey = legion.field === 'castle' ? legion.prefix + 'wall' : 'tiles'
+  /**
+   * 新畫風（2026-10-10 守護異世界改版，提案二 Kingdom Rush 手繪描邊）。
+   * 穿預設王國軍的人換成手繪戰場、藍城堡／紅城堡；豬、海盜那幾套軍團還是自己的城堡室內。
+   * 兵暫時還是像素小兵：三兵種的手繪動作表要等產圖額度回來再補（見 art/guardian/gen_vs.py）。
+   */
+  const PARK = !legion.id
+  /** 對手那邊是不是也畫新畫風的紅城堡（電腦、或對方也穿王國軍） */
+  const FOE_PARK = PARK && !foeLegion.id
+  if (PARK) root.classList.add('td-park')
+  const fieldKey = PARK ? 'vs-field' : legion.field === 'castle' ? legion.prefix + 'wall' : 'tiles'
+  /**
+   * 這個戰場要抓的圖（載圖加速原則，docs/image-loading.md）：新畫風只要戰場、城堡、塔，
+   * 加上兵（u_ 開頭）與對手軍團那一套；不再一進來就把守塔、雪地那 150 張一起抓。
+   */
+  const wantArt = (k: string) => k.startsWith('vs-') || k === 'p-castle' || k === 'p-archery' ||
+    k.startsWith('u_') || k === 'frost' || k === 'heart' || k === 'crystal' ||
+    (!!foeLegion.prefix && k.startsWith(foeLegion.prefix))
+  const kickArt = () => void (PARK ? loadArt(wantArt) : loadArt())
 
   /**
    * 飄字用的道具圖示。畫布沒辦法直接畫 CSS 的 <img>，所以自己留一份。
@@ -1032,7 +1049,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     // 真人對戰不能暫停——對方那邊還在打。按了「離開」在問確定嗎的時候戰場照跑。
     if (!S.done && (!paused || liveOn)) update(dt)
     // 戰場的圖還沒到就每三秒再敲一次，在戰場裡也救得回來，不用退出去重進。
-    if (!img[fieldKey] && now - artKick > 3000) { artKick = now; void loadArt() }
+    if (!img[fieldKey] && now - artKick > 3000) { artKick = now; kickArt() }
     draw()
     syncUI()
     syncBar()
@@ -1041,6 +1058,15 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
 
   // ------------------------------------------------------------------ 畫面
   function buildTerrain() {
+    if (PARK) {
+      // 一整張畫好的戰場（public/td-park/vs/field.webp，路中心剛好在 ROAD_Y）
+      if (!img['vs-field']?.complete) return
+      const c = document.createElement('canvas')
+      c.width = W; c.height = H
+      c.getContext('2d')!.drawImage(img['vs-field'], 0, 0, W, H)
+      terrain = c
+      return
+    }
     if (legion.field === 'castle') return buildCastleHall()
     const c = document.createElement('canvas')
     c.width = W; c.height = H
@@ -1206,13 +1232,19 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
 
   function drawCastle(side: 'me' | 'foe') {
     const x = side === 'me' ? R.homeMe : R.homeFoe
-    const im = side === 'me' ? mine('castle') : theirs('castle')
-    shadow(x, ROAD_Y - 4, 62)
+    const park = side === 'me' ? PARK : FOE_PARK
+    const im = park ? img[side === 'me' ? 'p-castle' : 'vs-castle-red'] : side === 'me' ? mine('castle') : theirs('castle')
+    // 新畫風的城堡比較大（含底下那塊草皮），血條和名牌跟著往上挪
+    const top = park ? ROAD_Y - 170 : ROAD_Y - 124
+    if (!park) shadow(x, ROAD_Y - 4, 62)
     c2d.save()
     if (side === 'foe') { c2d.translate(x * 2, 0); c2d.scale(-1, 1) }
-    if (im?.complete) c2d.drawImage(im, x - 75, ROAD_Y - 124, 150, 120)
+    if (im?.complete) {
+      if (park) c2d.drawImage(im, x - 105, top, 210, 210 * im.height / im.width)
+      else c2d.drawImage(im, x - 75, ROAD_Y - 124, 150, 120)
+    }
     c2d.restore()
-    bar(x - 44, ROAD_Y - 138, 88, 8,
+    bar(x - 44, top - 14, 88, 8,
       Math.max(0, S.battle.castleHp[side]) / R.castleHp, side === 'me' ? '#6fbf4a' : '#d4504a')
     // 電腦對手直接寫在它的城堡上。上面那條的對手名字在手機橫拿時放不下（會被藏起來），
     // 只靠開場那一下提示，小朋友打到一半會忘記對面是電腦。
@@ -1223,9 +1255,9 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       c2d.textAlign = 'center'; c2d.textBaseline = 'middle'
       const w = c2d.measureText(tag).width + 18
       c2d.fillStyle = 'rgba(40,24,20,.78)'
-      roundRect(x - w / 2, ROAD_Y - 190, w, 22, 11); c2d.fill()
+      roundRect(x - w / 2, top - 52, w, 22, 11); c2d.fill()
       c2d.fillStyle = '#ffd9d4'
-      c2d.fillText(tag, x, ROAD_Y - 178)
+      c2d.fillText(tag, x, top - 40)
       c2d.restore()
     }
   }
@@ -1245,11 +1277,16 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
 
   function drawTower(side: 'me' | 'foe') {
     const x = towerX(side)
-    const im = side === 'me' ? mine('archery') : theirs('archery')
+    const park = side === 'me' ? PARK : FOE_PARK
+    const im = park ? img[side === 'me' ? 'p-archery' : 'vs-archery-red'] : side === 'me' ? mine('archery') : theirs('archery')
     shadow(x, ROAD_Y - 6, 40)
     c2d.save()
     if (side === 'foe') { c2d.translate(x * 2, 0); c2d.scale(-1, 1) }
-    if (im?.complete) c2d.drawImage(im, x - 52, ROAD_Y - 116, 104, 112)
+    if (im?.complete) {
+      // 手繪箭塔是瘦高的一座（98×240），站在路的上緣
+      if (park) c2d.drawImage(im, x - 33, ROAD_Y - 156, 66, 162)
+      else c2d.drawImage(im, x - 52, ROAD_Y - 116, 104, 112)
+    }
     c2d.restore()
   }
 
@@ -1288,8 +1325,26 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
 
     // 上面一條推進度，左邊是我、右邊是對手
     const y = 26, x0 = 150, w = W - 300
-    bar(x0, y, w, 14, 1, 'rgba(0,0,0,.35)')
     const p = pushed(S.battle, R)
+    if (PARK) {
+      // 新畫風：木框裡左藍右紅，兩邊的交界就是前線推到哪
+      c2d.fillStyle = '#5a3a1c'; roundRect(x0 - 5, y - 5, w + 10, 24, 12); c2d.fill()
+      c2d.fillStyle = '#c9362e'; roundRect(x0, y, w, 14, 7); c2d.fill()
+      c2d.save(); roundRect(x0, y, w, 14, 7); c2d.clip()
+      c2d.fillStyle = '#2f8fd8'; c2d.fillRect(x0, y, w * p, 14)
+      c2d.fillStyle = 'rgba(255,255,255,.3)'; c2d.fillRect(x0, y, w, 5)
+      c2d.restore()
+      c2d.fillStyle = '#fff6e0'; c2d.beginPath(); c2d.arc(x0 + w * p, y + 7, 9, 0, 7); c2d.fill()
+      c2d.strokeStyle = '#5a3a1c'; c2d.lineWidth = 3; c2d.stroke()
+      c2d.font = 'bold 15px system-ui, sans-serif'
+      c2d.textAlign = 'center'; c2d.textBaseline = 'middle'
+      c2d.lineWidth = 4; c2d.strokeStyle = 'rgba(40,24,10,.75)'
+      c2d.strokeText('前線 ' + Math.round(p * 100) + '%', W / 2, y + 32)
+      c2d.fillStyle = '#fff6e0'
+      c2d.fillText('前線 ' + Math.round(p * 100) + '%', W / 2, y + 32)
+      return
+    }
+    bar(x0, y, w, 14, 1, 'rgba(0,0,0,.35)')
     c2d.fillStyle = '#6fbf4a'; c2d.fillRect(x0, y, w * p, 14)
     c2d.fillStyle = 'rgba(255,255,255,.5)'
     c2d.fillRect(x0 + w / 2 - 1, y - 4, 2, 22)
@@ -1315,11 +1370,28 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     c2d.translate(cx, BOARD.y + BOARD.h / 2); c2d.scale(sc, sc)
     c2d.translate(-cx, -(BOARD.y + BOARD.h / 2))
     c2d.fillStyle = 'rgba(0,0,0,.3)'; roundRect(x, BOARD.y + 5, BOARD.w, BOARD.h, 11); c2d.fill()
+    if (PARK) {
+      // 新畫風：奶油色木牌、深咖啡描邊，左右兩塊同色的釘片對上兵身上的旗子
+      const y = BOARD.y
+      c2d.fillStyle = t.good > 0 ? '#5f9c3e' : t.bad > 0 ? '#b0473d' : '#5a3a1c'
+      roundRect(x, y, BOARD.w, BOARD.h, 12); c2d.fill()
+      const g = c2d.createLinearGradient(0, y, 0, y + BOARD.h)
+      g.addColorStop(0, t.good > 0 ? '#e6f7cf' : t.bad > 0 ? '#ffe0da' : '#fff6e0')
+      g.addColorStop(1, t.good > 0 ? '#c4e6a0' : t.bad > 0 ? '#f6b9b0' : '#f0d9a6')
+      c2d.fillStyle = g
+      roundRect(x + 4, y + 4, BOARD.w - 8, BOARD.h - 8, 9); c2d.fill()
+      c2d.fillStyle = color
+      for (const px of [x + 14, x + BOARD.w - 14]) { c2d.beginPath(); c2d.arc(px, y + BOARD.h / 2, 7, 0, 7); c2d.fill() }
+      c2d.strokeStyle = 'rgba(60,36,14,.6)'; c2d.lineWidth = 2
+      for (const px of [x + 14, x + BOARD.w - 14]) { c2d.beginPath(); c2d.arc(px, y + BOARD.h / 2, 7, 0, 7); c2d.stroke() }
+      c2d.fillStyle = '#3b2412'
+    } else {
     c2d.fillStyle = t.good > 0 ? '#3f7a34' : t.bad > 0 ? '#8c3730' : '#2b2117'
     roundRect(x, BOARD.y, BOARD.w, BOARD.h, 11); c2d.fill()
     c2d.strokeStyle = t.good > 0 ? '#a8e07a' : t.bad > 0 ? '#ff9a94' : color
     c2d.lineWidth = 4; c2d.stroke()
     c2d.fillStyle = '#fff'
+    }
     c2d.font = 'bold 30px system-ui, "Segoe UI", sans-serif'
     c2d.textAlign = 'center'; c2d.textBaseline = 'middle'
     c2d.fillText(t.label, cx, BOARD.y + BOARD.h / 2 + 1)
@@ -1476,7 +1548,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   }
 
   function draw() {
-    if (!terrain && img.tiles) buildTerrain()
+    if (!terrain && (PARK ? img['vs-field'] : img.tiles)) buildTerrain()
     if (terrain) c2d.drawImage(terrain, 0, 0)
     else drawLoadingField()
 
@@ -1569,7 +1641,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     if (w) speak(w.word)
   })
 
-  void loadArt()
+  kickArt()
 
   // 開發模式下把內部狀態開出來，自動測試才打得完一場。
   // 正式版 build 會整段消失（import.meta.env.DEV 在 production 是 false）。
