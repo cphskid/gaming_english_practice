@@ -6,6 +6,7 @@ import { PLATE_RULES, layoutPlates as runPlateLayout, plateY } from './plates'
 import { iconImg, iconUrl } from '@/data/icons'
 import { legionById } from '@/data/legions'
 import { createHero } from '../hero'
+import { DECOR, PARK_TERRAIN_KEYS, SPRITES, buildParkTerrain, drawFrame } from './park'
 
 const W = 1088
 const H = 576
@@ -129,6 +130,8 @@ const SHELL = `
 <div class="td-stage">
   <canvas class="td-cv" width="1088" height="576"></canvas>
   <div class="td-toast"></div>
+  <div class="td-ring" hidden></div>
+  <div class="td-calls"></div>
   <div class="td-tray">
     <button class="td-card td-sel" data-kind="archery"><b>${iconImg('bow', 15)} 箭塔 <i>40</i></b><span>射程內的怪會被它射中</span></button>
     <button class="td-card" data-kind="barracks"><b>${iconImg('shield', 15)} 軍營 <i>30</i></b><span>派士兵擋路，替你爭取時間</span></button>
@@ -163,6 +166,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   const elSell = $<HTMLButtonElement>('.td-sell')
   const elToast = $<HTMLElement>('.td-toast')
   const elBuffs = $<HTMLElement>('.td-buffs')
+  const elRing = $<HTMLElement>('.td-ring')
+  const elCalls = $<HTMLElement>('.td-calls')
 
   // 素材是一張一張進來的，ART 這個物件會就地長大，所以拿參考就好，不用重新指派。
   const img = ART
@@ -171,9 +176,17 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
    * 地圖、城堡、軍營都不動——豬軍團的地形是側視的，做不出守塔的俯視彎路。
    */
   const legion = legionById(ctx.legion)
+  /**
+   * 樂園畫風（2026-10-10 改版試玩樣板，見 park.ts）。先只套第一章，
+   * 第二、三章的雪地、乾草原還沒產圖。規則完全不動，只換畫面和蓋塔、開波的操作方式。
+   */
+  const PARK = level.chapter === 1
+  if (PARK) root.classList.add('td-park')
   let terrain: HTMLCanvasElement | null = null
   // 地形先畫在暫存畫布上再整張貼；地形用到的圖後到的話得把它作廢重畫。
-  const unArt = onArt((k) => { if (TERRAIN_KEYS.includes(k)) terrain = null })
+  const unArt = onArt((k) => {
+    if (TERRAIN_KEYS.includes(k) || PARK_TERRAIN_KEYS.includes(k) || k === 'p-flowers' || k === 'p-bush') terrain = null
+  })
 
   // 各章的外觀（2026-09-25）：第二章雪地、第三章乾草原。圖是同一套調色出來的，
   // 鍵名後面接 _snow / _meadow；那一張還沒下載到（或第一章）就用原本的，畫面不會空掉。
@@ -231,7 +244,9 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
    * 答對時由他出一發跟一座箭塔一樣的傷害（在 volley 裡算）；其他時候只演動畫。見 games/hero.ts。
    */
   const HERO_HOME = { x: GATE.x - 44, y: GATE.y + 22 + 26 }
-  const hero = createHero(ctx.job, HERO_HOME.x, HERO_HOME.y, 58, -1)
+  const hero = PARK
+    ? createHero(ctx.job, HERO_HOME.x, HERO_HOME.y, 66, -1, 'park')
+    : createHero(ctx.job, HERO_HOME.x, HERO_HOME.y, 58, -1)
   /** 這隻怪在不在英雄守的範圍裡：從城門到怪身體 */
   const heroReaches = (e: Enemy) => Math.hypot(GATE.x - e.x, GATE.y - (e.y - 22)) <= HERO.reach
   /** 有沒有任何一座箭塔打得到牠 */
@@ -809,10 +824,12 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   function draw() {
-    if (!terrain && img.tiles) buildTerrain()
+    if (!terrain && PARK) terrain = buildParkTerrain(layout, img, W, H)
+    else if (!terrain && img.tiles) buildTerrain()
     if (terrain) c2d.drawImage(terrain, 0, 0)
     else drawLoadingField()
 
+    if (PARK) drawPlots()
     if (S.phase === 'build') drawBuildHints()
     drawFrost() // 地面那一層要壓在人和塔底下，所以畫在排序之前
 
@@ -879,7 +896,44 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     }
   }
 
+  /** 樂園畫風：每個空塔位一直都看得到一塊石板空地（Kingdom Rush 的塔位） */
+  function drawPlots() {
+    const im = img['p-plot']
+    if (!im?.complete) return
+    const w = 74, h = (im.height / im.width) * w
+    SLOTS.forEach((s, i) => {
+      if (S.towers.some((t) => t.slot === i)) return
+      c2d.drawImage(im, s.x - w / 2, s.y + 6 - h * 0.78, w, h)
+    })
+  }
+
   function drawBuildHints() {
+    if (PARK) {
+      // 空塔位一圈金光在呼吸，提醒「這裡可以點」；選中的塔才畫射程
+      const k = 0.5 + 0.5 * Math.sin(S.t * 4)
+      SLOTS.forEach((s, i) => {
+        if (S.towers.some((t) => t.slot === i)) return
+        c2d.strokeStyle = `rgba(255,214,90,${0.35 + 0.4 * k})`; c2d.lineWidth = 3
+        c2d.beginPath(); c2d.ellipse(s.x, s.y - 4, 34 + 3 * k, 15 + 1.5 * k, 0, 0, 7); c2d.stroke()
+      })
+      if (S.selected !== null) {
+        const s = SLOTS[S.selected]
+        const t = S.towers.find((x) => x.slot === S.selected)
+        const spec = TOWERS[t ? t.kind : 'archery']
+        if (spec.range) {
+          c2d.save()
+          c2d.fillStyle = 'rgba(255,240,180,.14)'; c2d.strokeStyle = 'rgba(255,224,138,.9)'; c2d.lineWidth = 2.5
+          c2d.setLineDash([8, 6])
+          c2d.beginPath(); c2d.arc(s.x, s.y - 20, spec.range, 0, 7); c2d.fill(); c2d.stroke()
+          c2d.restore()
+        }
+      }
+      c2d.save()
+      c2d.setLineDash([4, 6]); c2d.strokeStyle = 'rgba(159,208,255,.5)'; c2d.lineWidth = 2
+      c2d.beginPath(); c2d.arc(GATE.x, GATE.y, HERO.reach, 0, 7); c2d.stroke()
+      c2d.restore()
+      return
+    }
     SLOTS.forEach((s, i) => {
       if (S.towers.some((t) => t.slot === i)) return
       const spec = TOWERS[S.picked]
@@ -915,6 +969,15 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   function drawDecor(d: { k: string; x: number; y: number }) {
+    if (PARK) {
+      const m = DECOR[d.k]
+      const im = m && img[m.k]
+      if (!im?.complete) return
+      const w = (im.width / im.height) * m.h
+      shadow(d.x, d.y - 3, w * 0.36)
+      c2d.drawImage(im, d.x - w / 2, d.y - m.h + 4, w, m.h)
+      return
+    }
     const im = skinned(d.k)
     if (!im?.complete) return
     shadow(d.x, d.y - 3, im.width * 0.3)
@@ -934,6 +997,14 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   function drawCastle() {
+    if (PARK) {
+      // 城堡圖底下自帶一圈草地圓盤，圓盤的中心大約在圖高 85% 的地方，對到原本城堡的腳
+      const im = img['p-castle']
+      if (!im?.complete) return
+      const w = 196, h = (im.height / im.width) * w
+      c2d.drawImage(im, layout.castle.x - w / 2 + 4, layout.castle.y + 26 - h, w, h)
+      return
+    }
     const im = art(CASTLE_KEY) ?? art('castle')
     if (!im?.complete) return
     shadow(layout.castle.x, layout.castle.y - 6, 62)
@@ -943,6 +1014,15 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   function drawTower(t: Tower, s: Point) {
+    if (PARK && !(t.kind === 'archery' && legion.prefix)) {
+      const im = img['p-' + t.kind]
+      if (!im?.complete) return
+      // 塔自帶一小圈草地，腳對到塔位
+      const h = t.kind === 'archery' ? 116 : 84
+      const w = (im.width / im.height) * h
+      c2d.drawImage(im, s.x - w / 2, s.y + 12 - h, w, h)
+      return
+    }
     const im = art(t.kind)
     if (!im?.complete) return
     shadow(s.x, s.y - 4, 34)
@@ -950,6 +1030,20 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   function drawSoldier(sd: Soldier) {
+    if (PARK && !legion.prefix) {
+      const sp = SPRITES.soldier
+      const im = img[sp.k]
+      if (im?.complete) {
+        shadow(sd.x, sd.y + 2, 16)
+        // 有怪貼著就揮劍（第 4、5、6 格輪流），沒有就站崗呼吸。士兵面向左邊——怪從左邊來
+        const fighting = S.enemies.some((e) => e.blocked && Math.hypot(e.x - sd.x, e.y - sd.y) < 46)
+        const f = fighting ? 3 + (Math.floor(S.t * 6) % 3) : 0
+        const bob = fighting ? 0 : Math.sin(S.t * 3 + sd.x) * 0.8
+        drawFrame(c2d, im, sp.frames, sp.anchor, f, sd.x, sd.y + 4 + bob, 58, true)
+      }
+      bar(sd.x - 17, sd.y - 58, 34, 5, sd.hp / TOWERS.barracks.soldierHp!, '#6fbf4a')
+      return
+    }
     const w = art('warrior')
     if (w?.complete) {
       shadow(sd.x, sd.y + 2, 20)
@@ -988,8 +1082,19 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     shadow(e.x + sh, e.y + 1, 21 * e.scale)
     c2d.save()
     c2d.translate(e.x + sh, e.y); c2d.scale(sc, sc); c2d.translate(-(e.x + sh), -e.y)
-    // 圖框下緣有透明留白，腳大約在 73% 的位置，要往下挪才會真的踩在地上
-    if (im?.complete) c2d.drawImage(im, (e.frame | 0) % 7 * 64, 0, 64, 64, e.x + sh - 42, e.y - 62, 84, 84)
+    const sp = PARK ? SPRITES[e.art] : undefined
+    const pim = sp && img[sp.k]
+    if (sp && pim?.complete) {
+      // 走路是第 2、1、3、1 格輪流；剛被打中（答對的那隻）換成縮一下的那格。
+      // 面向看牠接下來往哪裡走：路往左彎的那一段要翻面。
+      const ahead = pointAt(PATHS[e.path], e.dist + 6)
+      const flip = ahead.x < e.x - 0.5
+      const f = e.good > 0 || (e.shake > 0 && e.bad <= 0) ? 3 : [1, 0, 2, 0][Math.floor(e.frame / 1.75) % 4]
+      drawFrame(c2d, pim, sp.frames, sp.anchor, f, e.x + sh, e.y + 4, 60, flip)
+    } else if (im?.complete) {
+      // 圖框下緣有透明留白，腳大約在 73% 的位置，要往下挪才會真的踩在地上
+      c2d.drawImage(im, (e.frame | 0) % 7 * 64, 0, 64, 64, e.x + sh - 42, e.y - 62, 84, 84)
+    }
     if (e.bad > 0) {
       c2d.globalAlpha = Math.min(0.55, e.bad)
       c2d.fillStyle = '#d43c32'
@@ -1005,7 +1110,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       if (fi) c2d.drawImage(fi, e.x + sh - 9, e.y - 65, 18, 18)
     }
     c2d.restore()
-    bar(e.x + sh - 22 * e.scale, e.y - 46 * e.scale, 44 * e.scale, 5, e.hp / e.maxHp, e.boss ? '#ff7a3c' : '#d4504a')
+    bar(e.x + sh - 22 * e.scale, e.y - (PARK ? 64 : 46) * e.scale, 44 * e.scale, 5, e.hp / e.maxHp, e.boss ? '#ff7a3c' : '#d4504a')
     if (e.blocked) {
       c2d.font = '15px sans-serif'; c2d.textAlign = 'center'; c2d.textBaseline = 'alphabetic'
       c2d.fillText('⚔️', e.x + 30, e.y - 30)
@@ -1029,13 +1134,18 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     c2d.save()
     c2d.translate(cx, py + PLATE_H / 2); c2d.scale(sc, sc); c2d.translate(-cx, -(py + PLATE_H / 2))
     c2d.fillStyle = 'rgba(0,0,0,.28)'; roundRect(x, py + 3, w, PLATE_H, 9); c2d.fill()
-    c2d.fillStyle = e.good > 0 ? '#3f7a34' : e.bad > 0 ? '#8c3730' : '#2f2519'
+    // 樂園版的字牌是奶油色金邊（跟狀態列同一套），字是深咖啡；答對變綠、答錯變紅照舊
+    c2d.fillStyle = PARK
+      ? (e.good > 0 ? '#d8f3c2' : e.bad > 0 ? '#ffd9d4' : '#fff6dc')
+      : (e.good > 0 ? '#3f7a34' : e.bad > 0 ? '#8c3730' : '#2f2519')
     roundRect(x, py, w, PLATE_H, 9); c2d.fill()
-    c2d.strokeStyle = e.good > 0 ? '#a8e07a' : e.bad > 0 ? '#ff9a94' : '#8a6b45'
+    c2d.strokeStyle = PARK
+      ? (e.good > 0 ? '#5fae3c' : e.bad > 0 ? '#d4574c' : '#d29a32')
+      : (e.good > 0 ? '#a8e07a' : e.bad > 0 ? '#ff9a94' : '#8a6b45')
     c2d.lineWidth = 2.5; c2d.stroke()
-    c2d.strokeStyle = 'rgba(255,255,255,.16)'; c2d.lineWidth = 1.5
+    c2d.strokeStyle = PARK ? 'rgba(255,255,255,.8)' : 'rgba(255,255,255,.16)'; c2d.lineWidth = 1.5
     c2d.beginPath(); c2d.moveTo(x + 8, py + 4); c2d.lineTo(x + w - 8, py + 4); c2d.stroke()
-    c2d.fillStyle = '#fff'; c2d.font = PLATE_FONT
+    c2d.fillStyle = PARK ? '#4a2e14' : '#fff'; c2d.font = PLATE_FONT
     c2d.textAlign = 'center'; c2d.textBaseline = 'middle'
     c2d.fillText(e.word.word, cx, py + PLATE_H / 2 + 1)
     c2d.restore()
@@ -1050,7 +1160,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     let im = popIcons.get(name)
     if (!im) {
       im = new Image()
-      im.src = iconUrl(name as 'frost')
+      // 樂園版有新產的愛心和水晶；寒霜等道具圖示還沒產，照舊用像素圖示
+      im.src = PARK && (name === 'heart' || name === 'crystal') ? pUrl(name) : iconUrl(name as 'frost')
       popIcons.set(name, im)
     }
     return im.complete && im.naturalWidth > 0 ? im : null
@@ -1058,8 +1169,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
 
   // ---------------------------------------------------------------- UI
   function syncUI() {
-    elHp.innerHTML = iconImg('heart', 15) + ' ' + Math.max(0, S.hp)
-    elCoin.innerHTML = iconImg('crystal', 15) + ' ' + S.crystals
+    elHp.innerHTML = hudIcon('heart', 15) + ' ' + Math.max(0, S.hp)
+    elCoin.innerHTML = hudIcon('crystal', 15) + ' ' + S.crystals
     elWave.textContent = `第 ${S.wave} / ${rules.waves.length} 波`
     const build = S.phase === 'build'
     elTray.hidden = !build
@@ -1071,6 +1182,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       const back = refundOf(TOWERS[sel.kind].cost, sel.builtAtWave < S.wave)
       elSell.innerHTML = `拆除 ${TOWERS[sel.kind].name}（退 ${back} ${iconImg('crystal', 13)}）`
     }
+    if (PARK) { syncCalls(); if (!build) closeRing() }
   }
 
   /**
@@ -1148,8 +1260,14 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       return
     }
     for (let i = 0; i < SLOTS.length; i++) {
-      if (Math.hypot(SLOTS[i].x - x, SLOTS[i].y - 16 - y) < 42) return tapSlot(i)
+      if (Math.hypot(SLOTS[i].x - x, SLOTS[i].y - 16 - y) < 42) {
+        if (!PARK) return tapSlot(i)
+        // 樂園版：點塔位跳出圓盤選單（Kingdom Rush 那一套），再點一次同一格就收起來
+        if (ringSlot === i) { closeRing(); S.selected = null; return syncUI() }
+        return openRing(i)
+      }
     }
+    if (PARK) closeRing()
     S.selected = null
     syncUI()
   }
@@ -1169,6 +1287,113 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   elSell.addEventListener('click', sellSelected)
   elSay.addEventListener('click', () => { if (S.target) speak(S.target.word.word) })
 
+  // ---------------------------------------------------------------- 樂園版：圓盤選單與開波鈕
+  const pUrl = (k: string) => `${import.meta.env.BASE_URL}td-park/p-${k}.webp`.replace(/([^:])\/{2,}/g, '$1/')
+  /** 狀態列的小圖。樂園版換成新產的那幾張，其他章照舊用像素圖示。 */
+  function hudIcon(name: 'heart' | 'crystal', size: number) {
+    return PARK ? `<img class="ic-img" src="${pUrl(name)}" width="${size}" height="${size}" alt="">` : iconImg(name, size)
+  }
+
+  /** 畫布座標 → 戰場（.td-stage）裡的 CSS 位置。畫布會被縮放、置中，所以每次都重算。 */
+  function toStage(x: number, y: number) {
+    const r = cv.getBoundingClientRect()
+    const st = (cv.parentElement as HTMLElement).getBoundingClientRect()
+    return { left: r.left - st.left + (x * r.width) / W, top: r.top - st.top + (y * r.height) / H, k: r.width / W }
+  }
+
+  let ringSlot: number | null = null
+  /**
+   * 圓盤選單：空塔位跳兩顆（箭塔、軍營），已經蓋了的跳一顆拆除。
+   * 只是換一種點法，背後還是同一個 tapSlot／sellSelected，所以規則、價錢、退費都一樣。
+   */
+  function openRing(idx: number) {
+    ringSlot = idx
+    S.selected = idx
+    const t = S.towers.find((x) => x.slot === idx)
+    const p = toStage(SLOTS[idx].x, SLOTS[idx].y - 34)
+    elRing.style.left = p.left + 'px'
+    elRing.style.top = p.top + 'px'
+    // 手機上畫布縮得很小，鈕跟著縮，但不小於大拇指按得到的 42px
+    const sz = Math.max(42, Math.min(60, 60 * p.k))
+    const u = sz / 60
+    const btn = (act: string, pic: string, label: string, dx: number, dy: number, off = false) =>
+      `<button class="td-rb${off ? ' off' : ''}" data-act="${act}" style="left:${dx * u}px;top:${dy * u}px;width:${sz}px;height:${sz}px">`
+      + `<img src="${pUrl(pic)}" alt=""><span>${label}</span></button>`
+    if (t) {
+      const back = refundOf(TOWERS[t.kind].cost, t.builtAtWave < S.wave)
+      elRing.innerHTML = btn('sell', 'hammer', `拆除 +${back}`, 0, -46)
+    } else {
+      elRing.innerHTML =
+        btn('archery', 'bow', `箭塔 ${TOWERS.archery.cost}`, -42, -34, S.crystals < TOWERS.archery.cost)
+        + btn('barracks', 'shield', `軍營 ${TOWERS.barracks.cost}`, 42, -34, S.crystals < TOWERS.barracks.cost)
+    }
+    elRing.hidden = false
+    ctx.audio.play('ui-tap')
+    syncUI()
+  }
+  function closeRing() {
+    ringSlot = null
+    elRing.hidden = true
+  }
+  elRing.addEventListener('pointerdown', (ev) => ev.stopPropagation())
+  elRing.addEventListener('click', (ev) => {
+    const b = (ev.target as HTMLElement).closest<HTMLButtonElement>('.td-rb')
+    if (!b || ringSlot === null) return
+    ctx.audio.unlock()
+    const idx = ringSlot
+    const act = b.dataset.act!
+    closeRing()
+    if (act === 'sell') { S.selected = idx; sellSelected(); return }
+    S.picked = act
+    S.selected = null
+    tapSlot(idx)
+  })
+
+  /**
+   * 開波鈕：每條路進場的地方放一顆骷髏盾牌（Kingdom Rush 的「召喚下一波」）。
+   * 只在備戰時出現，點哪一顆都一樣，就是開始這一波。
+   */
+  const ENTRIES = (() => {
+    const out: Point[] = []
+    for (const pts of PATHS) {
+      const L = pathLength(pts)
+      for (let d = 0; d < L; d += 4) {
+        const p = pointAt(pts, d)
+        if (p.x >= 34) {
+          if (!out.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 70)) out.push(p)
+          break
+        }
+      }
+    }
+    return out
+  })()
+  let callsSig = ''
+  function syncCalls() {
+    const show = S.phase === 'build'
+    const r = cv.getBoundingClientRect()
+    const sig = show + ':' + S.wave + ':' + Math.round(r.width) + 'x' + Math.round(r.height) + ':' + Math.round(r.left) + ',' + Math.round(r.top)
+    if (sig === callsSig) return
+    callsSig = sig
+    elCalls.innerHTML = show
+      ? ENTRIES.map((p) => {
+        const q = toStage(p.x, p.y)
+        const sz = Math.max(40, Math.min(58, 58 * q.k))
+        return `<button class="td-call" style="left:${q.left}px;top:${q.top}px;width:${sz}px;height:${sz}px" aria-label="開始第 ${S.wave} 波">`
+          + `<img src="${pUrl('skull')}" alt=""><span>第 ${S.wave} 波</span></button>`
+      }).join('')
+      : ''
+  }
+  elCalls.addEventListener('pointerdown', (ev) => ev.stopPropagation())
+  elCalls.addEventListener('click', (ev) => {
+    if (!(ev.target as HTMLElement).closest('.td-call')) return
+    ctx.audio.unlock(); ctx.audio.play('ui-tap')
+    closeRing()
+    startWave()
+  })
+  // 視窗一變大小，畫布就跟著縮放，鈕的位置要重算；圓盤直接收起來
+  const ro = new ResizeObserver(() => { if (PARK) { closeRing(); callsSig = ''; syncCalls() } })
+  ro.observe(cv)
+
   // ---------------------------------------------------------------- 主迴圈
   let last = performance.now()
   let artKick = last
@@ -1179,7 +1404,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     if (S.phase !== 'done' && !paused) update(dt)
     // 地圖的圖還沒到就每三秒再敲一次。loadArt 正在跑就跟著同一趟，
     // 上一趟放棄了才會重開，所以在關卡裡也救得回來，不用退出去重進。
-    if (!img.tiles && now - artKick > 3000) { artKick = now; void loadArt() }
+    if (!img[PARK ? 'p-ground' : 'tiles'] && now - artKick > 3000) { artKick = now; void loadArt() }
     syncBuffs()
     draw()
     raf = requestAnimationFrame(loop)
@@ -1208,6 +1433,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     destroy() {
       dead = true
       unArt()
+      ro.disconnect()
       cancelAnimationFrame(raf)
       cv.removeEventListener('pointerdown', onPointerDown)
       try { speechSynthesis.cancel() } catch { /* 有些瀏覽器沒有 */ }

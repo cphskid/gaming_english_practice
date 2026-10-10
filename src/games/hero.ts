@@ -1,5 +1,6 @@
 import type { Job } from '@/core/types'
 import HERO_ART from '@/data/hero-art.json'
+import HERO_ART_PARK from '@/data/hero-art-park.json'
 
 /**
  * 戰場上的「你本人」（2026-09-25，Chuck 選的英雄方案）。
@@ -19,23 +20,30 @@ import HERO_ART from '@/data/hero-art.json'
 type Anim = 'idle' | 'run' | 'attack' | 'attack2'
 interface ArtMeta { w: number; h: number; foot: number; cx: number; body: number; anims: Record<Anim, number> }
 const META = HERO_ART as Record<Job, ArtMeta>
+/**
+ * 樂園畫風的英雄（2026-10-10 改版，自產圖，見 games/tower-defense/park.ts）。
+ * 一張動作表切的，idle 只有一格，靠程式上下輕輕呼吸。
+ */
+const META_PARK = HERO_ART_PARK as Record<Job, ArtMeta>
+export type HeroSkin = 'pixel' | 'park'
 
 /** 動畫條快取。**沒載好就不畫**——畫沒載完的圖會丟例外，整個迴圈會停住。 */
 const SHEETS = new Map<string, HTMLImageElement>()
-function sheet(job: Job, anim: Anim): HTMLImageElement | null {
+function sheet(job: Job, anim: Anim, skin: HeroSkin = 'pixel'): HTMLImageElement | null {
   const key = job + '/' + anim
-  let im = SHEETS.get(key)
+  const src = skin === 'park' ? 'td-park/heroes/' + key + '.webp' : 'heroes/' + key + '.png'
+  let im = SHEETS.get(src)
   if (!im) {
     im = new Image()
-    im.src = import.meta.env.BASE_URL + 'heroes/' + key + '.png'
-    SHEETS.set(key, im)
+    im.src = import.meta.env.BASE_URL + src
+    SHEETS.set(src, im)
   }
   return im.complete && im.naturalWidth > 0 ? im : null
 }
 
 /** 先把圖抓起來，進戰場的時候就不會第一刀是空的 */
-export function preloadHero(job: Job) {
-  for (const a of ['idle', 'run', 'attack'] as Anim[]) sheet(job, a)
+export function preloadHero(job: Job, skin: HeroSkin = 'pixel') {
+  for (const a of ['idle', 'run', 'attack'] as Anim[]) sheet(job, a, skin)
 }
 
 const FPS: Record<Anim, number> = { idle: 9, run: 14, attack: 16, attack2: 16 }
@@ -74,8 +82,9 @@ export interface Hero {
  * @param height 身體畫多高（像素）。兩套原圖一個 51 一個 86，所以用身高換算倍率，兩個職業站起來才一樣高。
  * @param face 平常面向哪邊：1 朝右、-1 朝左
  */
-export function createHero(job: Job, homeX: number, homeY: number, height: number, face: 1 | -1 = 1): Hero {
-  const m = META[job] ?? META.knight
+export function createHero(job: Job, homeX: number, homeY: number, height: number, face: 1 | -1 = 1, skin: HeroSkin = 'pixel'): Hero {
+  const park = skin === 'park'
+  const m = (park ? META_PARK : META)[job] ?? (park ? META_PARK : META).knight
   const sc = height / m.body
   let x = homeX, y = homeY
   let dir: 1 | -1 = face
@@ -175,7 +184,7 @@ export function createHero(job: Job, homeX: number, homeY: number, height: numbe
   }
 
   function blit(c: CanvasRenderingContext2D, a: Anim, f: number, px: number, py: number, flip: boolean) {
-    const im = sheet(job, a)
+    const im = sheet(job, a, skin)
     if (!im) return
     const w = m.w * sc, h = m.h * sc
     c.save()
@@ -187,7 +196,8 @@ export function createHero(job: Job, homeX: number, homeY: number, height: numbe
 
   function draw(c: CanvasRenderingContext2D) {
     const smooth = c.imageSmoothingEnabled
-    c.imageSmoothingEnabled = false
+    // 像素圖要關掉平滑才銳利；樂園的圖是一般插畫，縮小要平滑
+    c.imageSmoothingEnabled = park
     // 腳下一圈淡影子，跟其他人物一樣
     c.fillStyle = 'rgba(0,0,0,.22)'
     c.beginPath(); c.ellipse(x, y - 2, 20, 6, 0, 0, 7); c.fill()
@@ -196,7 +206,9 @@ export function createHero(job: Job, homeX: number, homeY: number, height: numbe
       blit(c, g.anim, g.frame, g.x, g.y, g.flip)
     }
     c.globalAlpha = 1
-    blit(c, anim, frameNow(), x, y, dir < 0)
+    // 樂園畫風的待機只有一格，上下呼吸才不像一張貼紙
+    const breathe = park && anim === 'idle' ? Math.sin(t * 3) * 1.2 : 0
+    blit(c, anim, frameNow(), x, y + breathe, dir < 0)
     c.imageSmoothingEnabled = smooth
   }
 

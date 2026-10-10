@@ -187,6 +187,42 @@ button{font-family:inherit}
 .tw-up i{font-style:normal;font-size:11px;color:#fff;opacity:.9}
 .tw-up:disabled{background:var(--panel2);border-color:var(--line);opacity:.5;cursor:default}
 .tw-crystal{text-align:center;font-size:12px;font-weight:800;color:var(--gold)}
+/*
+  樂園畫風（2026-10-10 改版試玩樣板，第一章）：Kingdom Rush 式的操作。
+  蓋塔改成點塔位跳圓盤選單、開波改成路口的骷髏鈕，所以右邊那一欄蓋塔面板整個拿掉，
+  畫布多出一截寬度。面板的 DOM 還在（自動測試會用到），只是不顯示。
+  狀態列換成樂園那種奶油色金邊的面板。
+*/
+.td-park .td-tray{display:none}
+.td-park .td-cv{image-rendering:auto}
+.td-park .td-stage{background:#2f8fc4}
+.td-park .td-hud{background:linear-gradient(#fff8e6,#f4e1b6);border:3px solid #d29a32;color:#4a2e14;
+  box-shadow:inset 0 2px 0 rgba(255,255,255,.7),0 3px 0 #a8731f}
+.td-park .td-hp{color:#c9362e} .td-park .td-coin{color:#1f7fb8}
+.td-park .td-wave,.td-park .td-qhint{color:#8a6a40}
+.td-park .td-say{background:#3a9ad9;box-shadow:0 3px 0 #23679a}
+.td-park .td-buff{background:#e4f4ff;border-color:#8cc8ef;color:#23506e}
+.td-park .td-buff b{color:#1f7fb8}
+.td-ring{position:absolute;width:0;height:0;z-index:5}
+.td-rb{position:absolute;transform:translate(-50%,-50%);width:60px;height:60px;border-radius:50%;
+  border:3px solid #d29a32;background:radial-gradient(circle at 40% 35%,#fffaf0,#f1d9a4);
+  box-shadow:0 3px 0 #a8731f,0 6px 14px rgba(0,0,0,.3);cursor:pointer;padding:0;
+  animation:td-pop .16s ease-out}
+.td-rb img{width:74%;height:74%;display:block;margin:auto}
+.td-rb span{position:absolute;left:50%;top:100%;transform:translate(-50%,3px);white-space:nowrap;
+  background:#4a2e14;color:#ffe9b0;font-size:12px;font-weight:800;padding:1px 7px;border-radius:99px}
+.td-rb.off{filter:grayscale(.85);opacity:.75}
+.td-rb:active{transform:translate(-50%,-46%)}
+@keyframes td-pop{from{transform:translate(-50%,-50%) scale(.4);opacity:0}}
+.td-calls{position:absolute;inset:0;pointer-events:none;z-index:4}
+.td-call{position:absolute;transform:translate(-50%,-50%);pointer-events:auto;cursor:pointer;
+  width:58px;height:58px;border:none;background:none;padding:0;animation:td-call 1.1s ease-in-out infinite}
+.td-call img{width:100%;height:100%;filter:drop-shadow(0 3px 4px rgba(0,0,0,.4))}
+.td-call span{position:absolute;left:50%;top:100%;transform:translate(-50%,-2px);white-space:nowrap;
+  background:#b8352d;color:#fff;font-size:12px;font-weight:800;padding:1px 8px;border-radius:99px;
+  box-shadow:0 2px 0 #7d211b}
+@keyframes td-call{50%{transform:translate(-50%,-50%) scale(1.1)}}
+@media (prefers-reduced-motion:reduce){ .td-call,.td-rb{animation:none} }
 .td-toast{position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(18,28,16,.92);
   padding:6px 15px;border-radius:99px;font-size:13px;font-weight:700;opacity:0;transition:.25s;
   pointer-events:none;z-index:4;white-space:nowrap}
