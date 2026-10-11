@@ -388,11 +388,13 @@ button{font-family:inherit}
 .job:disabled{opacity:.6;cursor:default}
 .job-top{display:flex;align-items:center;gap:8px}
 /* 會動的英雄。方框比身體大很多（攻擊特效也算在裡面），所以台子裁掉兩邊 */
-.job-stage{height:74px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden;
+.job-stage{height:84px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden;
   border-radius:10px;background:linear-gradient(#0000 55%, rgba(111,191,74,.25) 55%)}
 .hero-idle{display:block;flex:none;background-repeat:no-repeat;image-rendering:pixelated;
   animation-name:hero-idle;animation-iteration-count:infinite}
 @keyframes hero-idle{from{background-position-x:0}to{background-position-x:var(--end)}}
+.hero-idle.park{image-rendering:auto;animation:hero-bob 2.4s ease-in-out infinite;transform:translateX(var(--dx))}
+@keyframes hero-bob{50%{transform:translateX(var(--dx)) translateY(-2px) scaleY(1.015)}}
 .job-icon{display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:22%;
   box-shadow:inset 0 -2px 0 rgba(0,0,0,.25)}
 .job-icon svg{width:76%;height:76%;fill:#fff}

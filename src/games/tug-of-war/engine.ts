@@ -3,6 +3,7 @@ import { makeFeeder } from '@/core/opponent'
 import { iconImg, iconUrl } from '@/data/icons'
 import { ART, TERRAIN_KEYS, loadArt, onArt } from '../tower-defense/art'
 import { drawFrame } from '../tower-defense/park'
+import { castleKey, fieldKey as legionField, iconKey, legionSlug, otherLegionKey, towerKey, unitAnchor, unitKey } from '../legion-art'
 import { legionById, legionUnitArt } from '@/data/legions'
 import {
   LINES, LINE_COST, LINE_IDS, MAX_TIER, RULES, nextCost, newBattle, pushed, statsOf, step,
@@ -147,7 +148,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   const img = ART
   let terrain: HTMLCanvasElement | null = null
   // 戰場先畫在暫存畫布上再整張貼；圖後到的話得把它作廢重畫。
-  const unArt = onArt((k) => { if (TERRAIN_KEYS.includes(k) || k === 'vs-field') terrain = null })
+  const unArt = onArt((k) => { if (TERRAIN_KEYS.includes(k) || k === 'vs-field' || k.endsWith('-field')) terrain = null })
   let artKick = performance.now()
   let raf = 0
   let paused = false
@@ -156,7 +157,8 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
    * 你本人（職業英雄），站在自己城堡和箭塔中間，答對時出手。
    * **只有外觀**：兵推的傷害與平衡一點都沒動（Chuck 2026-09-25：對戰先只做外觀）。
    */
-  const hero = createHero(ctx.job, R.homeMe + 52, ROAD_Y + 24, 58, 1)
+  // 英雄用提案二手繪那一套（跟守塔同一套，hero.ts 的 'park' 外觀）
+  const hero = createHero(ctx.job, R.homeMe + 52, ROAD_Y + 24, 64, 1, 'park')
 
   const S = {
     battle: newBattle(R),
@@ -279,8 +281,6 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
    * 之後好友對戰兩邊可能都是豬，所以敵我另外靠腳下的色圈分（見 drawUnit）。
    */
   const foeSuffix = ctx.color === '_red' && !legion.id ? '_black' : '_red'
-  const mine = (key: string) =>
-    img[legion.prefix + key + ctx.color] ?? img[legion.prefix + key] ?? img[key + ctx.color] ?? img[key]
   /**
    * 對手那一套。同學的分身穿他自己的軍團（兩邊都是豬也沒關係，腳下的色圈分得出敵我）；
    * 電腦、或是對手穿王國軍，就是紅色（我方也紅的話黑色）。
@@ -298,21 +298,23 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   /** 戰場的底圖有沒有到。沒到的話 loop 會每三秒再敲一次 loadArt。 */
   /**
    * 新畫風（2026-10-10 守護異世界改版，提案二 Kingdom Rush 手繪描邊）。
-   * 穿預設王國軍的人換成手繪戰場、藍城堡／紅城堡；豬、海盜那幾套軍團還是自己的城堡室內。
-   * 兵是三兵種的手繪動作表（art/guardian/cut_vs_units.py）：藍的我方、紅的對方。
+   * 2026-10-11 起七套軍團都有手繪版（src/games/legion-art.ts）：兵、城堡、塔，室內系的軍團有自己的戰場。
+   * 王國軍藍的是我方、紅的是對方；其他軍團兩邊長一樣，靠腳下色圈分。
+   * 舊的像素畫法留著當圖沒到時的備胎（PARK 永遠是 true，下面那些 !park 分支只剩備胎用）。
    */
-  const PARK = !legion.id
-  /** 對手那邊是不是也畫新畫風的紅城堡（電腦、或對方也穿王國軍） */
-  const FOE_PARK = PARK && !foeLegion.id
-  if (PARK) root.classList.add('td-park')
-  const fieldKey = PARK ? 'vs-field' : legion.field === 'castle' ? legion.prefix + 'wall' : 'tiles'
+  const PARK = true
+  const FOE_PARK = true
+  root.classList.add('td-park')
+  const FIELD = legionField(legion)
+  const fieldKey = FIELD
+  const fieldIm = () => img[FIELD] ?? img['vs-field']
   /**
    * 這個戰場要抓的圖（載圖加速原則，docs/image-loading.md）：新畫風只要戰場、城堡、塔，
    * 加上兵（u_ 開頭）與對手軍團那一套；不再一進來就把守塔、雪地那 150 張一起抓。
    */
-  const wantArt = (k: string) => k.startsWith('vs-') || k === 'p-castle' || k === 'p-archery' ||
-    k.startsWith('u_') || k === 'frost' || k === 'heart' || k === 'crystal' ||
-    (!!foeLegion.prefix && k.startsWith(foeLegion.prefix))
+  const slugs = [legionSlug(legion), legionSlug(foeLegion)]
+  const wantArt = (k: string) => (k.startsWith('vs-') && !otherLegionKey(k, slugs)) || k === 'p-castle' || k === 'p-archery' ||
+    k === 'frost' || k === 'heart' || k === 'crystal'
   const kickArt = () => void (PARK ? loadArt(wantArt) : loadArt())
 
   /**
@@ -719,7 +721,8 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   let barKey = ''
   function syncBarLines() {
     const tier = S.battle.tier.me
-    const key = tier + ':' + elLines.map((b) => (lineArt(b.dataset.line as Line, tier) ? 1 : 0) + (PARK && img['vs-icon-' + LINES[b.dataset.line as Line].art.slice(2)] ? 1 : 0)).join('')
+    const icon = (line: Line) => img[iconKey(unitKey(legion, line, LINES[line].art, tier))]
+    const key = tier + ':' + elLines.map((b) => (lineArt(b.dataset.line as Line, tier) ? 1 : 0) + (icon(b.dataset.line as Line) ? 1 : 0)).join('')
     if (key === barKey) return
     barKey = key
     for (const b of elLines) {
@@ -727,7 +730,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       b.querySelector('b')!.textContent = statsOf(line, tier).name
       const pic = b.querySelector<HTMLElement>('.tw-pic')!
       // 新畫風：選兵鈕畫手繪兵的站姿（動作表第一格裁好的小圖）
-      const im = (PARK && img['vs-icon-' + LINES[line].art.slice(2)]) || lineArt(line, tier)
+      const im = icon(line) || lineArt(line, tier)
       pic.style.backgroundImage = im ? `url("${im.src}")` : ''
     }
   }
@@ -1062,10 +1065,11 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   function buildTerrain() {
     if (PARK) {
       // 一整張畫好的戰場（public/td-park/vs/field.webp，路中心剛好在 ROAD_Y）
-      if (!img['vs-field']?.complete) return
+      const f = fieldIm()
+      if (!f?.complete) return
       const c = document.createElement('canvas')
       c.width = W; c.height = H
-      c.getContext('2d')!.drawImage(img['vs-field'], 0, 0, W, H)
+      c.getContext('2d')!.drawImage(f, 0, 0, W, H)
       terrain = c
       return
     }
@@ -1189,20 +1193,14 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   }
 
   /**
-   * 新畫風的兵：一張 6 格的動作表，0 站、1-2 走、3-5 攻擊。
-   * anchor 是腳底在格子裡的橫向位置（各兵種量過，拿長槍的人偏左）。
+   * 新畫風的兵：一張 6 格的動作表，0 站、1-2 走、3-5 攻擊（legion-art.ts）。
+   * anchor 是腳底在格子裡的橫向位置（量過的）。王國軍的對手換紅的那張。
    */
-  const STRIP: Record<string, { key: string; anchor: number }> = {
-    u_spear: { key: 'vs-u-spear', anchor: 0.34 },
-    u_bow: { key: 'vs-u-bow', anchor: 0.25 },
-    u_shield: { key: 'vs-u-shield', anchor: 0.47 },
-  }
-  /** 這個兵用不用手繪動作表；不用的話回 undefined，照舊畫像素小兵 */
-  function stripOf(u: Unit) {
-    if (!(u.side === 'me' ? PARK : FOE_PARK)) return undefined
-    const s = STRIP[LINES[u.line].art]
-    const im = s && img[s.key + (u.side === 'foe' ? '-red' : '')]
-    return im?.complete && im.naturalWidth ? { im, anchor: s.anchor } : undefined
+  function stripOf(u: Unit, rank: number) {
+    const l = u.side === 'me' ? legion : foeLegion
+    const key = unitKey(l, u.line, LINES[u.line].art, rank)
+    const im = img[key + (u.side === 'foe' && !l.id ? '-red' : '')]
+    return im?.complete && im.naturalWidth ? { im, anchor: unitAnchor(key) } : undefined
   }
   function drawStrip(st: { im: HTMLImageElement; anchor: number }, u: Unit, x: number, y: number, sc: number, flip: boolean) {
     const t = performance.now() / 1000 + u.id * 0.37
@@ -1212,7 +1210,8 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
 
   function drawUnit(u: Unit) {
     const spec = statsOf(u.line, u.rank)
-    const st = stripOf(u)
+    const st = stripOf(u, u.rank)
+    const stF = stripOf(u, 1)
     const y = laneY(u)
     const im = u.side === 'me' ? myUnit(u, u.rank) : theirUnit(u, u.rank)
     // 隨從一律畫一階的樣子：豬軍團三階是大砲，後面跟的還是丟箱子的小豬
@@ -1228,7 +1227,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       const fx = u.x + back * i * 17
       const fy = y + (i % 2 === 0 ? 7 : -7)
       shadow(fx, fy + 2, 15 * spec.size)
-      if (st) drawStrip(st, u, fx, fy, spec.size * 0.72, flip)
+      if (stF) drawStrip(stF, u, fx, fy, spec.size * 0.72, flip)
       else drawFigure(follower, fx, fy, spec.size * 0.72, flip)
     }
     shadow(u.x, y + 2, 20 * spec.size)
@@ -1260,7 +1259,8 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   function drawCastle(side: 'me' | 'foe') {
     const x = side === 'me' ? R.homeMe : R.homeFoe
     const park = side === 'me' ? PARK : FOE_PARK
-    const im = park ? img[side === 'me' ? 'p-castle' : 'vs-castle-red'] : side === 'me' ? mine('castle') : theirs('castle')
+    const l = side === 'me' ? legion : foeLegion
+    const im = img[castleKey(l, side === 'foe')] ?? img[side === 'me' ? 'p-castle' : 'vs-castle-red']
     // 新畫風的城堡比較大（含底下那塊草皮），血條和名牌跟著往上挪
     const top = park ? ROAD_Y - 170 : ROAD_Y - 124
     if (!park) shadow(x, ROAD_Y - 4, 62)
@@ -1305,13 +1305,15 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   function drawTower(side: 'me' | 'foe') {
     const x = towerX(side)
     const park = side === 'me' ? PARK : FOE_PARK
-    const im = park ? img[side === 'me' ? 'p-archery' : 'vs-archery-red'] : side === 'me' ? mine('archery') : theirs('archery')
+    const l = side === 'me' ? legion : foeLegion
+    const im = img[towerKey(l, side === 'foe')] ?? img[side === 'me' ? 'p-archery' : 'vs-archery-red']
     shadow(x, ROAD_Y - 6, 40)
     c2d.save()
     if (side === 'foe') { c2d.translate(x * 2, 0); c2d.scale(-1, 1) }
     if (im?.complete) {
       // 手繪箭塔是瘦高的一座（98×240），站在路的上緣
-      if (park) c2d.drawImage(im, x - 33, ROAD_Y - 156, 66, 162)
+      // 軍團的塔（木箱堆、木桶塔）比較寬，照圖本身的比例畫、腳一樣站在路的上緣
+      if (park) { const w = Math.min(120, 162 * im.width / im.height); c2d.drawImage(im, x - w / 2, ROAD_Y - 156, w, 162) }
       else c2d.drawImage(im, x - 52, ROAD_Y - 116, 104, 112)
     }
     c2d.restore()
@@ -1575,7 +1577,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   }
 
   function draw() {
-    if (!terrain && (PARK ? img['vs-field'] : img.tiles)) buildTerrain()
+    if (!terrain && (PARK ? fieldIm() : img.tiles)) buildTerrain()
     if (terrain) c2d.drawImage(terrain, 0, 0)
     else drawLoadingField()
 

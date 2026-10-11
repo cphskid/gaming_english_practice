@@ -6,6 +6,7 @@ import { PLATE_RULES, layoutPlates as runPlateLayout, plateY } from './plates'
 import { iconImg, iconUrl } from '@/data/icons'
 import { legionById } from '@/data/legions'
 import { createHero } from '../hero'
+import { towerKey, unitAnchor, unitKey } from '../legion-art'
 import { DECOR, PARK_FALLBACK, mapUrl, PARK_TERRAIN_KEYS, SPRITES, buildParkTerrain, drawFrame } from './park'
 
 const W = 1088
@@ -198,7 +199,10 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
    * 只有底圖抓不到時才要——有底圖就不跟它搶頻寬。
    */
   let mapFailed = false
-  const parkKeys = (k: string) => k.startsWith('p-') && (mapFailed || !MAP_NAME || !PARK_FALLBACK.has(k)) &&
+  /** 穿別的軍團時，軍營士兵和箭塔換那一套的手繪圖（legion-art.ts） */
+  const LG_SOLDIER = legion.id ? unitKey(legion, 'recognize', 'u_spear', 1) : ''
+  const LG_TOWER = legion.id ? towerKey(legion, false) : 'p-archery'
+  const parkKeys = (k: string) => k === LG_SOLDIER || k === LG_TOWER || k.startsWith('p-') && (mapFailed || !MAP_NAME || !PARK_FALLBACK.has(k)) &&
     // 別章的城堡和怪不用抓
     !((k.endsWith('-snow') || k.endsWith('-meadow')) && !k.endsWith(PSUF || '#'))
   const MAP_NAME = PARK && level.skin.map ? level.skin.map.replace(/M$/, '') : ''
@@ -1077,8 +1081,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   function drawTower(t: Tower, s: Point) {
-    if (PARK && !(t.kind === 'archery' && legion.prefix)) {
-      const im = img['p-' + t.kind]
+    if (PARK) {
+      const im = (t.kind === 'archery' ? img[LG_TOWER] : undefined) ?? img['p-' + t.kind]
       if (!im?.complete) return
       // 塔自帶一小圈草地，腳對到塔位
       const h = t.kind === 'archery' ? 116 : 84
@@ -1093,8 +1097,9 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   function drawSoldier(sd: Soldier) {
-    if (PARK && !legion.prefix) {
-      const sp = SPRITES.soldier
+    if (PARK) {
+      const lg = LG_SOLDIER ? img[LG_SOLDIER] : undefined
+      const sp = lg ? { k: LG_SOLDIER, frames: 6, anchor: unitAnchor(LG_SOLDIER) } : SPRITES.soldier
       const im = img[sp.k]
       if (im?.complete) {
         shadow(sd.x, sd.y + 2, 16)

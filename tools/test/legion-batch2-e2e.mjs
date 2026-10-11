@@ -70,7 +70,7 @@ try {
     console.log('── ' + p.name)
     await page.goto(BASE, { waitUntil: 'networkidle' })
     await page.setViewportSize({ width: 390, height: 844 })
-    await page.getByRole('button', { name: '我的角色', exact: true }).click()
+    await page.getByRole('button', { name: '英雄營', exact: true }).click()
     await page.waitForSelector('.hero')
     await page.locator('.pick', { hasText: p.name }).click()
     await page.waitForTimeout(300)

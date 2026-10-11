@@ -5,6 +5,7 @@ import { legionById, legionUnitArt } from '@/data/legions'
 import { ART, loadArt } from '../tower-defense/art'
 import { SPRITES, drawFrame } from '../tower-defense/park'
 import PARK_BOSS from '@/data/raid-art-park.json'
+import { castleKey, iconKey, legionSlug, otherLegionKey, unitAnchor, unitKey } from '../legion-art'
 import {
   BOSS, LINES, MAX_TIER, RAID, RAID_MYTH, frontMinions, nextCost, statsOf,
   type Line, type RHit, type RUnit, type RaidState,
@@ -120,12 +121,6 @@ function loadPark(src: string): HTMLImageElement {
   return im
 }
 const ready = (im: HTMLImageElement | undefined): im is HTMLImageElement => !!im && im.complete && im.naturalWidth > 0
-/** 對戰手繪兵（預設王國軍才用）：動作表 key 與腳底位置，跟兵推 engine 的 STRIP 一樣 */
-const UNIT_STRIP: Record<string, { key: string; anchor: number }> = {
-  u_spear: { key: 'vs-u-spear', anchor: 0.34 },
-  u_bow: { key: 'vs-u-bow', anchor: 0.25 },
-  u_shield: { key: 'vs-u-shield', anchor: 0.47 },
-}
 
 export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
   const link = ctx.raid!
@@ -234,17 +229,17 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
     const color = u.owner === me ? ctx.color : ''
     return img[key] ?? img[LINES[u.line].art + color] ?? img[LINES[u.line].art]
   }
-  /** 這個兵用不用手繪動作表（那一家穿預設王國軍、圖也到了） */
-  const unitStrip = (u: RUnit) => {
+  /** 這個兵的手繪動作表（legion-art.ts；七套軍團都有，圖還沒到就回 undefined 畫像素備胎） */
+  const unitStrip = (u: RUnit, rank: number) => {
     const l = legions[u.owner] ?? legions[0]
-    if (l.id) return undefined
-    const st = UNIT_STRIP[LINES[u.line].art]
-    const im = st && img[st.key]
-    return ready(im) ? { im, anchor: st.anchor } : undefined
+    const key = unitKey(l, u.line, LINES[u.line].art, rank)
+    const im = img[key]
+    return ready(im) ? { im, anchor: unitAnchor(key) } : undefined
   }
   const castleImg = (seat: number) => {
     const l = legions[seat] ?? legions[0]
-    if (!l.id && ready(img['p-castle'])) return img['p-castle']
+    const pc = img[castleKey(l, false)] ?? img['p-castle']
+    if (ready(pc)) return pc
     const color = seat === me ? ctx.color : ''
     return img[l.prefix + 'castle'] ?? img['castle' + color] ?? img['castle']
   }
@@ -429,7 +424,7 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
   let barKey = ''
   function syncBarLines() {
     const tier = mySeat().tier
-    const parkIcon = (line: Line) => (legions[me]?.id ? undefined : img['vs-icon-' + LINES[line].art.slice(2)])
+    const parkIcon = (line: Line) => img[iconKey(unitKey(legions[me] ?? legions[0], line, LINES[line].art, tier))]
     const pics = elLines.map((b) => parkIcon(b.dataset.line as Line) ?? unitImg({ owner: me, line: b.dataset.line as Line } as RUnit, tier))
     const key = tier + ':' + pics.map((im) => (im && im.complete && im.naturalWidth ? im.src : '')).join(',')
     if (key === barKey) return
@@ -866,7 +861,7 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
     const st = S.s.seats[seat]
     const sc = n <= 2 ? 0.75 : n <= 4 ? 0.6 : 0.5
     const im = castleImg(seat)
-    const w = 150 * sc, h = im === img['p-castle'] && im ? w * im.naturalHeight / im.naturalWidth : 120 * sc
+    const w = 150 * sc, h = im && im === (img[castleKey(legions[seat] ?? legions[0], false)] ?? img['p-castle']) ? w * im.naturalHeight / im.naturalWidth : 120 * sc
     shadow(CASTLE_X, y + 6, w * 0.4)
     c2d.save()
     if (st.down) c2d.globalAlpha = 0.45
@@ -937,17 +932,18 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
     const sc = spec.size * unitScale
     const im = unitImg(u, u.rank)
     const follower = unitImg(u, 1)
-    const st = unitStrip(u)
-    const strip = (x: number, yy: number, k: number) => {
+    const st = unitStrip(u, u.rank)
+    const stF = unitStrip(u, 1)
+    const strip = (s2: { im: HTMLImageElement; anchor: number }, x: number, yy: number, k: number) => {
       const t = S.anim + u.id * 0.37
       const f = u.fighting ? 3 + Math.floor(t * 6) % 3 : 1 + Math.floor(t * 5) % 2
-      drawFrame(c2d, st!.im, 6, st!.anchor, f, x, yy + 3, 76 * k, true)
+      drawFrame(c2d, s2.im, 6, s2.anchor, f, x, yy + 3, 76 * k, true)
     }
     for (let i = u.rank - 1; i >= 1; i--) {
       const fx = u.x + i * 14 * unitScale
       const fy = y + (i % 2 === 0 ? 5 : -5)
       shadow(fx, fy + 2, 13 * sc)
-      if (st) strip(fx, fy, sc * 0.72)
+      if (stF) strip(stF, fx, fy, sc * 0.72)
       else drawFigure(follower, fx, fy, sc * 0.72, true)
     }
     shadow(u.x, y + 2, 18 * sc)
@@ -957,7 +953,7 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
     c2d.beginPath(); c2d.ellipse(u.x, y + 2, 18 * sc, 18 * sc * 0.34, 0, 0, 7); c2d.stroke()
     c2d.restore()
     // 我方的兵往左走（朝魔王），所以圖要翻過來
-    if (st) strip(u.x, y, sc)
+    if (st) strip(st, u.x, y, sc)
     else drawFigure(im, u.x, y, sc, true)
     if (u.hurt > 0) {
       c2d.globalAlpha = Math.min(0.5, u.hurt * 3)
@@ -1170,7 +1166,9 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
     if (w) speak(w.word)
   })
 
-  void loadArt()
+  // 只抓這一場用得到的軍團（載圖加速原則）
+  const slugs = legions.map(legionSlug)
+  void loadArt((k) => !otherLegionKey(k, slugs))
 
   if (import.meta.env.DEV) {
     ;(window as unknown as { __raid?: unknown }).__raid = {
