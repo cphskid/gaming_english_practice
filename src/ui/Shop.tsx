@@ -47,7 +47,7 @@ function thumb(i: ItemDef) {
   if (i.slot === 'avatar') {
     return <span className="mugbox" style={{ width: 34, height: 34 }}><img src={avatarSrc(i.id)} alt="" /></span>
   }
-  return <Icon name={i.icon as IconName} size={20} />
+  return <Icon name={i.icon as IconName} size={40} />
 }
 
 export function Shop({
