@@ -183,6 +183,7 @@ button{font-family:inherit}
 .tw-line.on{border-color:var(--gold);background:#5d4832}
 /* 選兵鈕上的那隻兵。素材每張都是 112 方框、腳底在第 70 列，所以往上裁掉空白 */
 .tw-pic{width:44px;height:32px;background:no-repeat center -46px / 124px 124px;image-rendering:pixelated}
+.td-park .tw-pic{height:40px;background-position:center bottom;background-size:contain;image-rendering:auto}
 .tw-up{background:var(--leaf);border-color:#4c8a33}
 .tw-up i{font-style:normal;font-size:11px;color:#fff;opacity:.9}
 .tw-up:disabled{background:var(--panel2);border-color:var(--line);opacity:.5;cursor:default}
@@ -1202,5 +1203,27 @@ button.kr-card{cursor:pointer;font:inherit}
 .kr .item{background:linear-gradient(#fffaf0,#f7e8c6);border:3px solid #d6b46e;border-radius:14px;color:#4a2e14;box-shadow:0 3px 0 #b08a45}
 .kr .item .i-desc,.kr .item .i-tag,.kr .item .i-modes,.kr .lg-head small{color:#7a5a30}
 .kr .item .i-go{color:#9a5a10}
+/* 英雄營（2026-10-10 改版）：角色卡、職業卡、軍團與道具小牌都換成奶油木牌 */
+.kr .hero{background:linear-gradient(#fffaf0,#f7e8c6);border:3px solid #d6b46e;border-radius:14px;color:#4a2e14;box-shadow:0 3px 0 #b08a45}
+.kr .hero-txt b{color:#4a2e14}
+.kr .hero-txt span{color:#7a5a30}
+.kr .hero-txt .i-tag{color:#9a5a10}
+.kr .hero-txt a{color:#2a6fb8;font-weight:800}
+.kr .jobs{max-width:none;width:auto}
+.kr .job{min-width:0}
+.kr .job{background:linear-gradient(#fffaf0,#f7e8c6);border:3px solid #d6b46e;color:#4a2e14;box-shadow:0 3px 0 #b08a45}
+.kr .job.on{border-color:#d29a32;background:linear-gradient(#fff3cf,#f2d48e);box-shadow:0 0 0 3px #f2c046,0 3px 0 #b08a45}
+.kr .job-blurb{color:#7a5a30}
+.kr .pick{background:#fff8e6;border:2px solid #d6b46e;color:#4a2e14}
+.kr .pick.on{border-color:#d29a32;background:#fff0c2;box-shadow:0 0 0 2px #f2c046}
+.kr .pick small{color:#8a6a40}
+.kr .pick.locked{opacity:.7}
+.kr .pick-note{color:#e9d9b6}
 .kr .lg-shelf{margin:10px}
 .kr .lg-head small{color:#e9d9b6}
+
+/* 樂園時空旅人的大頭（跟樂園 css/park.css 的 .av .doll.head 同一個裁法） */
+.trav-head{position:relative;display:block;width:100%;height:100%;overflow:hidden;border-radius:inherit;
+  background:radial-gradient(circle at 50% 35%,#fffaf0,#ffe7bd)}
+.mugbox .trav-head img{position:absolute;left:-50%;top:-12.5%;width:200%;height:auto;aspect-ratio:448/600;
+  max-width:none;border-radius:0;background:none;object-fit:fill;image-rendering:auto}

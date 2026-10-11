@@ -2,6 +2,7 @@ import type { GameContext, GameHandle, LiveMove, Move, Opponent, Word } from '@/
 import { makeFeeder } from '@/core/opponent'
 import { iconImg, iconUrl } from '@/data/icons'
 import { ART, TERRAIN_KEYS, loadArt, onArt } from '../tower-defense/art'
+import { drawFrame } from '../tower-defense/park'
 import { legionById, legionUnitArt } from '@/data/legions'
 import {
   LINES, LINE_COST, LINE_IDS, MAX_TIER, RULES, nextCost, newBattle, pushed, statsOf, step,
@@ -298,7 +299,7 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   /**
    * 新畫風（2026-10-10 守護異世界改版，提案二 Kingdom Rush 手繪描邊）。
    * 穿預設王國軍的人換成手繪戰場、藍城堡／紅城堡；豬、海盜那幾套軍團還是自己的城堡室內。
-   * 兵暫時還是像素小兵：三兵種的手繪動作表要等產圖額度回來再補（見 art/guardian/gen_vs.py）。
+   * 兵是三兵種的手繪動作表（art/guardian/cut_vs_units.py）：藍的我方、紅的對方。
    */
   const PARK = !legion.id
   /** 對手那邊是不是也畫新畫風的紅城堡（電腦、或對方也穿王國軍） */
@@ -718,14 +719,15 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
   let barKey = ''
   function syncBarLines() {
     const tier = S.battle.tier.me
-    const key = tier + ':' + elLines.map((b) => (lineArt(b.dataset.line as Line, tier) ? 1 : 0)).join('')
+    const key = tier + ':' + elLines.map((b) => (lineArt(b.dataset.line as Line, tier) ? 1 : 0) + (PARK && img['vs-icon-' + LINES[b.dataset.line as Line].art.slice(2)] ? 1 : 0)).join('')
     if (key === barKey) return
     barKey = key
     for (const b of elLines) {
       const line = b.dataset.line as Line
       b.querySelector('b')!.textContent = statsOf(line, tier).name
       const pic = b.querySelector<HTMLElement>('.tw-pic')!
-      const im = lineArt(line, tier)
+      // 新畫風：選兵鈕畫手繪兵的站姿（動作表第一格裁好的小圖）
+      const im = (PARK && img['vs-icon-' + LINES[line].art.slice(2)]) || lineArt(line, tier)
       pic.style.backgroundImage = im ? `url("${im.src}")` : ''
     }
   }
@@ -1186,8 +1188,31 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
     c2d.restore()
   }
 
+  /**
+   * 新畫風的兵：一張 6 格的動作表，0 站、1-2 走、3-5 攻擊。
+   * anchor 是腳底在格子裡的橫向位置（各兵種量過，拿長槍的人偏左）。
+   */
+  const STRIP: Record<string, { key: string; anchor: number }> = {
+    u_spear: { key: 'vs-u-spear', anchor: 0.34 },
+    u_bow: { key: 'vs-u-bow', anchor: 0.25 },
+    u_shield: { key: 'vs-u-shield', anchor: 0.47 },
+  }
+  /** 這個兵用不用手繪動作表；不用的話回 undefined，照舊畫像素小兵 */
+  function stripOf(u: Unit) {
+    if (!(u.side === 'me' ? PARK : FOE_PARK)) return undefined
+    const s = STRIP[LINES[u.line].art]
+    const im = s && img[s.key + (u.side === 'foe' ? '-red' : '')]
+    return im?.complete && im.naturalWidth ? { im, anchor: s.anchor } : undefined
+  }
+  function drawStrip(st: { im: HTMLImageElement; anchor: number }, u: Unit, x: number, y: number, sc: number, flip: boolean) {
+    const t = performance.now() / 1000 + u.id * 0.37
+    const f = u.fighting ? 3 + Math.floor(t * 6) % 3 : 1 + Math.floor(t * 5) % 2
+    drawFrame(c2d, st.im, 6, st.anchor, f, x, y + 3, 76 * sc, flip)
+  }
+
   function drawUnit(u: Unit) {
     const spec = statsOf(u.line, u.rank)
+    const st = stripOf(u)
     const y = laneY(u)
     const im = u.side === 'me' ? myUnit(u, u.rank) : theirUnit(u, u.rank)
     // 隨從一律畫一階的樣子：豬軍團三階是大砲，後面跟的還是丟箱子的小豬
@@ -1203,11 +1228,13 @@ export function mountTugOfWar(root: HTMLElement, ctx: GameContext): GameHandle {
       const fx = u.x + back * i * 17
       const fy = y + (i % 2 === 0 ? 7 : -7)
       shadow(fx, fy + 2, 15 * spec.size)
-      drawFigure(follower, fx, fy, spec.size * 0.72, flip)
+      if (st) drawStrip(st, u, fx, fy, spec.size * 0.72, flip)
+      else drawFigure(follower, fx, fy, spec.size * 0.72, flip)
     }
     shadow(u.x, y + 2, 20 * spec.size)
     footRing(u.x, y + 2, 20 * spec.size, u.side)
-    drawFigure(im, u.x, y, spec.size, flip)
+    if (st) drawStrip(st, u, u.x, y, spec.size, flip)
+    else drawFigure(im, u.x, y, spec.size, flip)
 
     // 軍階標記：二階一槓、三階兩槓、四階一顆星。畫在縮放之外，高度跟血條一樣固定，
     // 跟著體型縮放的話四階那顆星會被推到頭頂上方老遠。

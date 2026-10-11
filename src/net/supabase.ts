@@ -192,6 +192,7 @@ export class SupabaseRepository implements Repository {
     // join_class 會順便開好角色，所以正常不會是 null
     if (!row) throw new Error('讀取角色失敗：找不到這個學生的存檔')
     const w = await this.wallet()
+    const look = w ? await this.look() : null
     return {
       studentId,
       job: row.job,
@@ -199,6 +200,7 @@ export class SupabaseRepository implements Repository {
       exp: row.exp,
       coins: w ? w.coins : row.coins,
       ...(w ? { time: { today: w.today, cap: w.cap, per: w.per } } : {}),
+      ...(look ? { look } : {}),
       items: row.items ?? {},
       equipped: row.equipped ?? [],
       pinned: row.pinned ?? [],
@@ -242,6 +244,14 @@ export class SupabaseRepository implements Repository {
     const w = data as { park: boolean; coins: number; today: number; cap: number; per: number }
     this.timeMode = !!w?.park
     return w?.park ? w : null
+  }
+
+  /** 樂園的時空旅人（頭像改用它，2026-10-10）。還沒建旅人、或樂園沒裝換裝那份 SQL，就回 null。 */
+  private async look(): Promise<Record<string, string | null> | null> {
+    const { data, error } = await this.db.rpc('park_traveller_me')
+    if (error) return null
+    const t = data as { created?: boolean; look?: Record<string, string | null> } | null
+    return t?.created && t.look ? t.look : null
   }
 
   async buyItem(itemId: string, name?: string): Promise<{ coins: number; items: Record<string, number> }> {

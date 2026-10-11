@@ -523,6 +523,8 @@ export interface Character {
    * today 是今天從這個遊戲換到的。商店價格＝銅幣價 ÷ per（無條件進位）。
    */
   time?: { today: number; cap: number; per: number }
+  /** 樂園的時空旅人穿什麼（時光幣模式才有）。有的話頭像畫旅人的大頭，不畫遊戲自己的像素頭像。 */
+  look?: Record<string, string | null>
   /** 道具與裝飾品，key 是 item id，value 是數量 */
   items: Record<string, number>
   /** 目前穿戴的外觀 */

@@ -138,5 +138,14 @@
  "p-tree": "td-park/p-tree.webp",
  "vs-field": "td-park/vs/field.webp",
  "vs-castle-red": "td-park/vs/castle-red.webp",
- "vs-archery-red": "td-park/vs/archery-red.webp"
+ "vs-archery-red": "td-park/vs/archery-red.webp",
+ "vs-u-spear": "td-park/vs/u-spear.webp",
+ "vs-u-spear-red": "td-park/vs/u-spear-red.webp",
+ "vs-u-bow": "td-park/vs/u-bow.webp",
+ "vs-u-bow-red": "td-park/vs/u-bow-red.webp",
+ "vs-u-shield": "td-park/vs/u-shield.webp",
+ "vs-u-shield-red": "td-park/vs/u-shield-red.webp",
+ "vs-icon-spear": "td-park/vs/icon-spear.webp",
+ "vs-icon-bow": "td-park/vs/icon-bow.webp",
+ "vs-icon-shield": "td-park/vs/icon-shield.webp"
 }
