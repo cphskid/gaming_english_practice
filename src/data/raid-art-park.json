@@ -1,0 +1,122 @@
+{
+ "worm": {
+  "frames": 6,
+  "w": 391,
+  "h": 256,
+  "anchor": 0.468
+ },
+ "king": {
+  "frames": 6,
+  "w": 409,
+  "h": 256,
+  "anchor": 0.335
+ },
+ "wizard": {
+  "frames": 6,
+  "w": 462,
+  "h": 256,
+  "anchor": 0.371
+ },
+ "mimic": {
+  "frames": 6,
+  "w": 420,
+  "h": 256,
+  "anchor": 0.433
+ },
+ "minotaur": {
+  "frames": 6,
+  "w": 367,
+  "h": 256,
+  "anchor": 0.365
+ },
+ "demon": {
+  "frames": 6,
+  "w": 393,
+  "h": 256,
+  "anchor": 0.439
+ },
+ "shadow": {
+  "frames": 6,
+  "w": 353,
+  "h": 256,
+  "anchor": 0.412
+ },
+ "lich": {
+  "frames": 6,
+  "w": 387,
+  "h": 256,
+  "anchor": 0.301
+ },
+ "cthulhu": {
+  "frames": 6,
+  "w": 376,
+  "h": 256,
+  "anchor": 0.376
+ },
+ "frost": {
+  "frames": 6,
+  "w": 405,
+  "h": 256,
+  "anchor": 0.457
+ },
+ "badger": {
+  "frames": 6,
+  "w": 384,
+  "h": 256,
+  "anchor": 0.342
+ },
+ "gorilla": {
+  "frames": 6,
+  "w": 388,
+  "h": 256,
+  "anchor": 0.36
+ },
+ "frog": {
+  "frames": 6,
+  "w": 344,
+  "h": 256,
+  "anchor": 0.379
+ },
+ "penguin": {
+  "frames": 6,
+  "w": 460,
+  "h": 256,
+  "anchor": 0.402
+ },
+ "rex": {
+  "frames": 6,
+  "w": 393,
+  "h": 256,
+  "anchor": 0.571
+ },
+ "golem": {
+  "frames": 6,
+  "w": 358,
+  "h": 256,
+  "anchor": 0.426
+ },
+ "reaper": {
+  "frames": 6,
+  "w": 320,
+  "h": 256,
+  "anchor": 0.38
+ },
+ "skelwiz": {
+  "frames": 6,
+  "w": 386,
+  "h": 256,
+  "anchor": 0.352
+ },
+ "winged": {
+  "frames": 6,
+  "w": 314,
+  "h": 256,
+  "anchor": 0.486
+ },
+ "flydemon": {
+  "frames": 6,
+  "w": 364,
+  "h": 256,
+  "anchor": 0.467
+ }
+}

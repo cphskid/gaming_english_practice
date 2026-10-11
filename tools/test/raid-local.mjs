@@ -61,7 +61,7 @@ try {
   await page.screenshot({ path: `${OUT}/raid-list.png`, fullPage: true })
   ok('魔王團戰那一頁出來了（raid-list.png）')
 
-  if (BOSS) await page.locator('.bosspick', { has: page.locator(`img[src$="/${BOSS}/face.png"]`) }).click()
+  if (BOSS) await page.locator('.bosspick', { has: page.locator(`img[src$="f-${BOSS}.webp"]`) }).click()
   else await page.locator('.bosspick').nth(1).click()
   await page.getByRole('button', { name: '🔒 私人房' }).click()
   await page.fill('input.pin', '0427')

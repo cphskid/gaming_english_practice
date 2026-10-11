@@ -113,7 +113,9 @@ const hostLabel = (r: { byTeacher: boolean; hostName: string }) =>
 export function BossFace({ b, size = 44 }: { b: BossDef; size?: number }) {
   return (
     <span className="bossface" style={{ width: size, height: size, borderColor: b.color }}>
-      <img src={raidUrl(`${b.id}/face.png`)} alt="" />
+      {/* 新畫風大頭（2026-10-11），載不到退回像素那張 */}
+      <img src={`${PARK_ART}raid/f-${b.id}.webp`} alt=""
+        onError={(e) => { const im = e.currentTarget; if (!im.src.endsWith('face.png')) im.src = raidUrl(`${b.id}/face.png`) }} />
     </span>
   )
 }

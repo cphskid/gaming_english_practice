@@ -183,7 +183,7 @@ button{font-family:inherit}
 .tw-line.on{border-color:var(--gold);background:#5d4832}
 /* 選兵鈕上的那隻兵。素材每張都是 112 方框、腳底在第 70 列，所以往上裁掉空白 */
 .tw-pic{width:44px;height:32px;background:no-repeat center -46px / 124px 124px;image-rendering:pixelated}
-.td-park .tw-pic{height:40px;background-position:center bottom;background-size:contain;image-rendering:auto}
+:is(.td-park,.kr-hud) .tw-pic{height:40px;background-position:center bottom;background-size:contain;image-rendering:auto}
 .tw-up{background:var(--leaf);border-color:#4c8a33}
 .tw-up i{font-style:normal;font-size:11px;color:#fff;opacity:.9}
 .tw-up:disabled{background:var(--panel2);border-color:var(--line);opacity:.5;cursor:default}

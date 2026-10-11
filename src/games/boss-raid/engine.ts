@@ -3,6 +3,8 @@ import { iconImg } from '@/data/icons'
 import { BOSS_BY_ID, BOSSES, raidUrl, type BossDef } from '@/data/bosses'
 import { legionById, legionUnitArt } from '@/data/legions'
 import { ART, loadArt } from '../tower-defense/art'
+import { SPRITES, drawFrame } from '../tower-defense/park'
+import PARK_BOSS from '@/data/raid-art-park.json'
 import {
   BOSS, LINES, MAX_TIER, RAID, RAID_MYTH, frontMinions, nextCost, statsOf,
   type Line, type RHit, type RUnit, type RaidState,
@@ -94,14 +96,35 @@ interface Target {
 }
 
 /** 魔王的動畫圖（一條橫的格子）。一張一張載，沒到就先不畫那個動作。 */
-function loadBossArt(b: BossDef): Record<string, HTMLImageElement> {
-  const out: Record<string, HTMLImageElement> = {}
+function loadBossArt(b: BossDef, out: Record<string, HTMLImageElement> = {}): Record<string, HTMLImageElement> {
   for (const a of Object.keys(b.art.anims)) {
     const im = new Image()
     im.onload = () => { out[a] = im }
     im.src = raidUrl(`${b.id}/${a}.png`)
   }
   return out
+}
+
+/**
+ * 新畫風（2026-10-11 提案二 KR 手繪）：一隻魔王一條 6 格（0-1 待機、2 蓄力、3 重擊、4 受傷、5 倒下），
+ * 戰場一張 1088×576。圖在 public/td-park/raid/（art/guardian/gen_raid.py、cut_raid.py）。
+ * 圖還沒到就照舊畫像素的那一套。
+ */
+const PARK_DIR = `${import.meta.env.BASE_URL}td-park/raid/`.replace(/([^:])\/{2,}/g, '$1/')
+const PARK_BOSS_ART = PARK_BOSS as Record<string, { frames: number; w: number; h: number; anchor: number }>
+/** 新畫風的魔王畫多高（整格，含特效的留白） */
+const PARK_BOSS_H = 270
+function loadPark(src: string): HTMLImageElement {
+  const im = new Image()
+  im.src = PARK_DIR + src
+  return im
+}
+const ready = (im: HTMLImageElement | undefined): im is HTMLImageElement => !!im && im.complete && im.naturalWidth > 0
+/** 對戰手繪兵（預設王國軍才用）：動作表 key 與腳底位置，跟兵推 engine 的 STRIP 一樣 */
+const UNIT_STRIP: Record<string, { key: string; anchor: number }> = {
+  u_spear: { key: 'vs-u-spear', anchor: 0.34 },
+  u_bow: { key: 'vs-u-bow', anchor: 0.25 },
+  u_shield: { key: 'vs-u-shield', anchor: 0.47 },
 }
 
 export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
@@ -132,9 +155,16 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
   const seats = link.seats
   const n = seats.length
   const ls = new RaidLockstep(seats.map((s) => s.rate), link.seed, R)
-  const bossArt = loadBossArt(boss)
+  // 新畫風的圖到不了才去抓像素那一套（載圖加速原則：不要兩套一起抓）
+  const parkSpec = PARK_BOSS_ART[boss.id]
+  const parkBoss = parkSpec ? loadPark(`b-${boss.id}.webp`) : undefined
+  const bossArt: Record<string, HTMLImageElement> = parkBoss ? {} : loadBossArt(boss)
+  if (parkBoss) parkBoss.onerror = () => void loadBossArt(boss, bossArt)
   const bg = new Image()
-  bg.src = raidUrl(`bg/${boss.bg}.png`)
+  const parkBg = loadPark(`bg-${boss.bg}.webp`)
+  parkBg.onerror = () => { bg.src = raidUrl(`bg/${boss.bg}.png`) }
+  /** 魔王現在畫多高：新畫風固定高度，像素版照原圖放大 */
+  const bossH = () => ready(parkBoss) ? PARK_BOSS_H * 0.82 : boss.art.h * boss.scale
   let raf = 0
   let last = performance.now()
   const t0 = performance.now()
@@ -204,8 +234,17 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
     const color = u.owner === me ? ctx.color : ''
     return img[key] ?? img[LINES[u.line].art + color] ?? img[LINES[u.line].art]
   }
+  /** 這個兵用不用手繪動作表（那一家穿預設王國軍、圖也到了） */
+  const unitStrip = (u: RUnit) => {
+    const l = legions[u.owner] ?? legions[0]
+    if (l.id) return undefined
+    const st = UNIT_STRIP[LINES[u.line].art]
+    const im = st && img[st.key]
+    return ready(im) ? { im, anchor: st.anchor } : undefined
+  }
   const castleImg = (seat: number) => {
     const l = legions[seat] ?? legions[0]
+    if (!l.id && ready(img['p-castle'])) return img['p-castle']
     const color = seat === me ? ctx.color : ''
     return img[l.prefix + 'castle'] ?? img['castle' + color] ?? img['castle']
   }
@@ -251,7 +290,7 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
 
   /** 魔王身上掛木牌旗子的三個點（小兵不夠三隻時，剩下的牌子是打魔王本人） */
   function bossSpot(i: number): { x: number; y: number } {
-    const top = bossFoot() - boss.art.h * boss.scale * 0.8
+    const top = bossFoot() - bossH() * 0.8
     return { x: R.bossX + [-10, 40, 10][i], y: top + [30, 90, 150][i] }
   }
   /** 魔王腳底：站在最下面那條路再低一點，但不准踩進木牌 */
@@ -390,8 +429,9 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
   let barKey = ''
   function syncBarLines() {
     const tier = mySeat().tier
-    const pics = elLines.map((b) => unitImg({ owner: me, line: b.dataset.line as Line } as RUnit, tier))
-    const key = tier + ':' + pics.map((im) => (im && im.complete && im.naturalWidth ? 1 : 0)).join('')
+    const parkIcon = (line: Line) => (legions[me]?.id ? undefined : img['vs-icon-' + LINES[line].art.slice(2)])
+    const pics = elLines.map((b) => parkIcon(b.dataset.line as Line) ?? unitImg({ owner: me, line: b.dataset.line as Line } as RUnit, tier))
+    const key = tier + ':' + pics.map((im) => (im && im.complete && im.naturalWidth ? im.src : '')).join(',')
     if (key === barKey) return
     barKey = key
     elLines.forEach((b, i) => {
@@ -631,7 +671,7 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
   function onHit(h: RHit) {
     if (h.who === 'boss' && h.from === undefined && h.seat === undefined) {
       // 答對那一槍打到魔王（strikeAt）
-      S.pops.push({ x: R.bossX + 30, y: bossFoot() - boss.art.h * boss.scale * 0.5, text: `-${R.strikeBoss}`, color: '#ffd76a', life: 0.7 })
+      S.pops.push({ x: R.bossX + 30, y: bossFoot() - bossH() * 0.5, text: `-${R.strikeBoss}`, color: '#ffd76a', life: 0.7 })
     }
     if (h.who === BOSS && h.killed) {
       S.puffs.push({ x: h.x, y: LANES.mid, life: 0.4 })
@@ -698,13 +738,16 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
   }
 
   function drawField() {
-    c2d.imageSmoothingEnabled = false
-    if (bg.complete && bg.naturalWidth) c2d.drawImage(bg, 0, 0, W, H)
+    const park = ready(parkBg)
+    c2d.imageSmoothingEnabled = !park ? false : true
+    if (park) c2d.drawImage(parkBg, 0, 0, W, H)
+    else if (bg.complete && bg.naturalWidth) c2d.drawImage(bg, 0, 0, W, H)
     else { c2d.fillStyle = '#2a2335'; c2d.fillRect(0, 0, W, H) }
     c2d.imageSmoothingEnabled = true
-    // 底下壓暗一層，字牌和兵才跳得出來（背景都是很花的像素畫）
+    // 底下壓暗一層，字牌和兵才跳得出來（像素背景很花，壓重一點；手繪的中間是空地，輕輕壓就好）
     const g = c2d.createLinearGradient(0, 0, 0, H)
-    g.addColorStop(0, 'rgba(10,8,20,.35)'); g.addColorStop(0.5, 'rgba(10,8,20,.1)'); g.addColorStop(1, 'rgba(10,8,20,.45)')
+    const k = park ? 0.4 : 1
+    g.addColorStop(0, `rgba(10,8,20,${0.35 * k})`); g.addColorStop(0.5, `rgba(10,8,20,${0.1 * k})`); g.addColorStop(1, `rgba(10,8,20,${0.45 * k})`)
     c2d.fillStyle = g; c2d.fillRect(0, 0, W, H)
     // 一人一條路
     for (let i = 0; i < n; i++) {
@@ -717,7 +760,49 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
   }
 
   /** 魔王本人。動作照狀態選：倒下 > 重擊 > 受傷 > 待機。 */
+  /** 新畫風的魔王：一條 6 格。倒下那一格慢慢淡出。 */
+  function drawParkBoss(im: HTMLImageElement) {
+    const s = S.s
+    const sp = parkSpec!
+    let f = Math.floor(S.anim * 2.5) % 2
+    let alpha = 1
+    if (S.deathAt) {
+      f = 5
+      alpha = Math.max(0, 1 - Math.max(0, S.anim - S.deathAt - 0.6) / 1.2)
+    } else if (s.bossSwing > 0) {
+      f = (1 - s.bossSwing / 0.6) < 0.45 ? 2 : 3
+    } else if (s.bossHurt > 0 && Math.floor(S.anim * 3) % 4 === 0) {
+      f = 4
+    }
+    const rage = s.enraged ? 1.15 : 1
+    const h = PARK_BOSS_H * rage
+    const intro = Math.min(1, (performance.now() - t0) / 1000 / 1.2)
+    const slide = (1 - intro) * -260
+    const bob = f < 2 ? Math.sin(S.anim * 2.4) * 2 : 0
+    shadow(R.bossX + slide, bossFoot(), h * 0.3)
+    if (s.enraged) {
+      const k = 0.5 + 0.5 * Math.sin(S.anim * 6)
+      c2d.save()
+      c2d.fillStyle = `rgba(230,40,30,${0.12 + 0.1 * k})`
+      c2d.beginPath(); c2d.ellipse(R.bossX + slide, bossFoot() - h * 0.35, h * 0.32 + 8 * k, h * 0.45 + 8 * k, 0, 0, 7); c2d.fill()
+      c2d.restore()
+    }
+    c2d.save()
+    c2d.globalAlpha = alpha
+    drawFrame(c2d, im, sp.frames, sp.anchor, f, R.bossX + slide, bossFoot() + 6 + bob, h, false)
+    c2d.restore()
+    if (s.bossSwing > 0.3) {
+      const k = (0.6 - s.bossSwing) / 0.3
+      c2d.save()
+      c2d.strokeStyle = `rgba(255,120,80,${1 - k})`
+      c2d.lineWidth = 6
+      c2d.beginPath(); c2d.ellipse(R.bossX, LANES.mid + 10, R.bossReach * k + 20, (R.bossReach * k + 20) * 0.45, 0, 0, 7); c2d.stroke()
+      c2d.restore()
+    }
+  }
+
   function drawBoss() {
+    if (ready(parkBoss)) return drawParkBoss(parkBoss)
     const s = S.s
     const a = boss.art
     const sc = boss.scale
@@ -781,7 +866,7 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
     const st = S.s.seats[seat]
     const sc = n <= 2 ? 0.75 : n <= 4 ? 0.6 : 0.5
     const im = castleImg(seat)
-    const w = 150 * sc, h = 120 * sc
+    const w = 150 * sc, h = im === img['p-castle'] && im ? w * im.naturalHeight / im.naturalWidth : 120 * sc
     shadow(CASTLE_X, y + 6, w * 0.4)
     c2d.save()
     if (st.down) c2d.globalAlpha = 0.45
@@ -829,7 +914,13 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
       const sc = unitScale * 1.05
       shadow(u.x, y + 2, 18 * sc)
       c2d.save()
-      if (im?.complete) {
+      const sp = SPRITES[(u.id % 2) ? 'goblinPurple' : 'goblinRed']
+      const pim = img[sp.k]
+      if (ready(pim)) {
+        // 新畫風的哥布林：走 1、0、2、0，打架 4、5 輪流
+        const f = u.fighting ? 4 + (Math.floor(S.anim * 6 + u.id) % 2) : [1, 0, 2, 0][Math.floor(S.anim * 6 + u.id) % 4]
+        drawFrame(c2d, pim, sp.frames, sp.anchor, f, u.x, y + 3, 62 * sc, false)
+      } else if (im?.complete) {
         const fr = u.fighting ? 5 + (Math.floor(S.anim * 6) % 2) : Math.floor(S.anim * 10 + u.id) % 7
         c2d.drawImage(im, fr * 64, 0, 64, 64, u.x - 42 * sc, y - 62 * sc, 84 * sc, 84 * sc)
       }
@@ -846,11 +937,18 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
     const sc = spec.size * unitScale
     const im = unitImg(u, u.rank)
     const follower = unitImg(u, 1)
+    const st = unitStrip(u)
+    const strip = (x: number, yy: number, k: number) => {
+      const t = S.anim + u.id * 0.37
+      const f = u.fighting ? 3 + Math.floor(t * 6) % 3 : 1 + Math.floor(t * 5) % 2
+      drawFrame(c2d, st!.im, 6, st!.anchor, f, x, yy + 3, 76 * k, true)
+    }
     for (let i = u.rank - 1; i >= 1; i--) {
       const fx = u.x + i * 14 * unitScale
       const fy = y + (i % 2 === 0 ? 5 : -5)
       shadow(fx, fy + 2, 13 * sc)
-      drawFigure(follower, fx, fy, sc * 0.72, true)
+      if (st) strip(fx, fy, sc * 0.72)
+      else drawFigure(follower, fx, fy, sc * 0.72, true)
     }
     shadow(u.x, y + 2, 18 * sc)
     c2d.save()
@@ -859,7 +957,8 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
     c2d.beginPath(); c2d.ellipse(u.x, y + 2, 18 * sc, 18 * sc * 0.34, 0, 0, 7); c2d.stroke()
     c2d.restore()
     // 我方的兵往左走（朝魔王），所以圖要翻過來
-    drawFigure(im, u.x, y, sc, true)
+    if (st) strip(u.x, y, sc)
+    else drawFigure(im, u.x, y, sc, true)
     if (u.hurt > 0) {
       c2d.globalAlpha = Math.min(0.5, u.hurt * 3)
       c2d.fillStyle = '#d43c32'
