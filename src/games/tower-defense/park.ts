@@ -21,15 +21,19 @@ export const PARK_FALLBACK = new Set(['p-ground', 'p-road', 'p-sea', 'p-tree', '
 /** 新畫風畫面要先抓的那一份：p- 開頭、但不含程式畫地圖用的 */
 export const isParkKey = (k: string) => k.startsWith('p-') && !PARK_FALLBACK.has(k)
 
-/** 每關畫好的底圖（public/td-park/maps/<版面>.webp）。上下翻的版面（結尾 M）用同一張。 */
-export function mapUrl(layoutName: string): string {
-  return `${import.meta.env.BASE_URL}td-park/maps/${layoutName.replace(/M$/, '')}.webp`.replace(/([^:])\/{2,}/g, '$1/')
+/**
+ * 每關畫好的底圖（public/td-park/maps/<版面>.webp）。上下翻的版面（結尾 M）用同一張。
+ * 第二、三章同一個版面另外畫雪地、草原各一張：<版面>-snow.webp、<版面>-meadow.webp（2026-10-11）。
+ */
+export function mapUrl(layoutName: string, tileset = ''): string {
+  const suf = tileset === 'snow' || tileset === 'meadow' ? '-' + tileset : ''
+  return `${import.meta.env.BASE_URL}td-park/maps/${layoutName.replace(/M$/, '')}${suf}.webp`.replace(/([^:])\/{2,}/g, '$1/')
 }
 const prefetched = new Map<string, HTMLImageElement>()
 /** 先把某一關的底圖抓進瀏覽器快取：選關畫面閒著的時候、點開關卡卡片的那一刻 */
-export function prefetchMap(level: { chapter: number; skin: { map?: string } }) {
-  if (level.chapter !== 1 || !level.skin.map) return
-  const u = mapUrl(level.skin.map)
+export function prefetchMap(level: { chapter: number; skin: { map?: string; tileset?: string } }) {
+  if (!level.skin.map) return
+  const u = mapUrl(level.skin.map, level.skin.tileset)
   if (prefetched.has(u)) return
   const im = new Image(); im.decoding = 'async'; im.src = u
   prefetched.set(u, im)
@@ -53,6 +57,11 @@ export const DECOR: Record<string, { k: string; h: number }> = {
 export const SPRITES: Record<string, { k: string; frames: number; anchor: number }> = {
   goblinRed: { k: 'p-goblin', frames: 6, anchor: 0.45 },
   goblinPurple: { k: 'p-ogre', frames: 6, anchor: 0.42 },
+  // 第二章雪地（冰哥布林、雪怪）、第三章草原（鬣狗強盜、犀牛戰士）。鍵＝原本的 art 加 -snow / -meadow
+  'goblinRed-snow': { k: 'p-goblin-snow', frames: 6, anchor: 0.4 },
+  'goblinPurple-snow': { k: 'p-ogre-snow', frames: 6, anchor: 0.42 },
+  'goblinRed-meadow': { k: 'p-goblin-meadow', frames: 6, anchor: 0.33 },
+  'goblinPurple-meadow': { k: 'p-ogre-meadow', frames: 6, anchor: 0.56 },
   soldier: { k: 'p-soldier', frames: 6, anchor: 0.5 },
 }
 

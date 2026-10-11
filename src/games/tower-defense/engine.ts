@@ -179,10 +179,13 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
    */
   const legion = legionById(ctx.legion)
   /**
-   * 樂園畫風（2026-10-10 改版試玩樣板，見 park.ts）。先只套第一章，
-   * 第二、三章的雪地、乾草原還沒產圖。規則完全不動，只換畫面和蓋塔、開波的操作方式。
+   * 樂園畫風（2026-10-10 改版，見 park.ts）。規則完全不動，只換畫面和蓋塔、開波的操作方式。
+   * 2026-10-11 起三章都套：第二章雪地、第三章草原，底圖、城堡、兩種怪各有一套（鍵名接 -snow / -meadow）。
    */
-  const PARK = level.chapter === 1
+  const PARK = true
+  const PSUF = level.skin.tileset === 'snow' || level.skin.tileset === 'meadow' ? '-' + level.skin.tileset : ''
+  /** 這一章的新畫風圖：有 -snow / -meadow 版就用，沒有退回第一章那張 */
+  const pimg = (k: string) => (PSUF && img[k + PSUF]) || img[k]
   if (PARK) root.classList.add('td-park')
   let terrain: HTMLCanvasElement | null = null
   /**
@@ -195,7 +198,9 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
    * 只有底圖抓不到時才要——有底圖就不跟它搶頻寬。
    */
   let mapFailed = false
-  const parkKeys = (k: string) => k.startsWith('p-') && (mapFailed || !MAP_NAME || !PARK_FALLBACK.has(k))
+  const parkKeys = (k: string) => k.startsWith('p-') && (mapFailed || !MAP_NAME || !PARK_FALLBACK.has(k)) &&
+    // 別章的城堡和怪不用抓
+    !((k.endsWith('-snow') || k.endsWith('-meadow')) && !k.endsWith(PSUF || '#'))
   const MAP_NAME = PARK && level.skin.map ? level.skin.map.replace(/M$/, '') : ''
   const MAP_FLIP = !!level.skin.map?.endsWith('M')
   const mapIm = new Image()
@@ -204,11 +209,11 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     mapIm.onload = () => { mapReady = mapIm.naturalWidth > 0; terrain = null }
     // 底圖真的抓不到（斷線、檔案不見）才退回程式畫的地圖
     mapIm.onerror = () => { mapFailed = true; void loadArt(parkKeys) }
-    mapIm.src = mapUrl(MAP_NAME)
+    mapIm.src = mapUrl(MAP_NAME, level.skin.tileset)
   }
   /** 開打前一定要到的圖：地圖、城堡、兩種怪 */
   function parkReady() {
-    return (mapReady || mapFailed || !MAP_NAME) && !!img['p-castle'] && !!img['p-goblin'] && !!img['p-ogre']
+    return (mapReady || mapFailed || !MAP_NAME) && !!pimg('p-castle') && !!pimg('p-goblin') && !!pimg('p-ogre')
   }
   function buildMapTerrain(): HTMLCanvasElement {
     const cnv = document.createElement('canvas'); cnv.width = W; cnv.height = H
@@ -1057,7 +1062,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   function drawCastle() {
     if (PARK) {
       // 城堡圖底下自帶一圈草地圓盤，圓盤的中心大約在圖高 85% 的地方，對到原本城堡的腳
-      const im = img['p-castle']
+      const im = pimg('p-castle')
       if (!im?.complete) return
       const w = 190, h = (im.height / im.width) * w
       c2d.drawImage(im, layout.castle.x - w / 2 + 12, layout.castle.y + 26 - h, w, h)
@@ -1140,7 +1145,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     shadow(e.x + sh, e.y + 1, 21 * e.scale)
     c2d.save()
     c2d.translate(e.x + sh, e.y); c2d.scale(sc, sc); c2d.translate(-(e.x + sh), -e.y)
-    const sp = PARK ? SPRITES[e.art] : undefined
+    const sp = PARK ? (PSUF && img[SPRITES[e.art + PSUF]?.k] ? SPRITES[e.art + PSUF] : SPRITES[e.art]) : undefined
     const pim = sp && img[sp.k]
     if (sp && pim?.complete) {
       // 走路是第 2、1、3、1 格輪流；剛被打中（答對的那隻）換成縮一下的那格。
