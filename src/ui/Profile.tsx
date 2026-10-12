@@ -11,6 +11,7 @@ import { BADGE_ICONS } from './icons'
 import { avatarSrc } from '@/data/jobs'
 import { frameOf } from '@/data/cosmetics'
 import { levelFromExp } from '@/core/progress'
+import { ui } from './park-ui'
 
 /**
  * 個人檔案與徽章牆。
@@ -158,12 +159,14 @@ export function Profile({
   const detailRow = detail ? byId.get(detail) : undefined
 
   return (
-    <div className="screen wide">
-      <div className="topbar">
-        <span className="who">徽章牆</span>
+    <div className="screen wide kr">
+      <div className="kr-top">
+        <img className="kr-badge" src={ui('passport')} alt="" />
+        <h2>徽章牆</h2>
         <span className="spacer" />
-        <button className="btn ghost small" onClick={onBack}>回去</button>
+        <button className="kr-back" onClick={onBack}>回去</button>
       </div>
+      <div className="kr-body">
 
       <div className="profile-head panel">
         <span className={'mugbox' + (frame ? ' ' + frame.className : '')}
@@ -238,6 +241,7 @@ export function Profile({
           }}
           onClose={() => setDetail(null)} />
       )}
+      </div>
     </div>
   )
 }
@@ -389,12 +393,14 @@ export function PeerProfile({ studentId, onBack }: { studentId: string; onBack: 
     .map((id) => ({ id, tier: tiers[id] ?? 1 }))
 
   return (
-    <div className="screen wide">
-      <div className="topbar">
-        <span className="who">同學的徽章牆</span>
+    <div className="screen wide kr">
+      <div className="kr-top">
+        <img className="kr-badge" src={ui('passport')} alt="" />
+        <h2>同學的徽章牆</h2>
         <span className="spacer" />
-        <button className="btn ghost small" onClick={onBack}>回去</button>
+        <button className="kr-back" onClick={onBack}>回去</button>
       </div>
+      <div className="kr-body">
 
       {error && <p className="error">{error}</p>}
       {!p && !error && <p className="lede">正在看…</p>}
@@ -446,6 +452,7 @@ export function PeerProfile({ studentId, onBack }: { studentId: string; onBack: 
           ))}
         </>
       )}
+      </div>
     </div>
   )
 }

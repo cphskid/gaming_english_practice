@@ -1,11 +1,14 @@
 :root{
-  --sea:#20425f; --bg:#16232e; --panel:#3d2f24; --panel2:#4f3d2e; --line:#6b533d;
-  --ink:#f3ecd8; --muted:#a8b89a; --gold:#f2b229; --blood:#c9453d; --leaf:#6fbf4a; --sky:#4a7fd4;
-  --font:"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;
+  /* 2026-10-12 換成樂園那一套（樂園 css/park.css）：亮海、奶油卡、木頭邊、深咖啡字 */
+  --sea:#2f9fd8; --bg:#1d7fbf; --panel:#fff8e6; --panel2:#fffdf6; --line:#d9b77a;
+  --ink:#3a2412; --muted:#8a6a4a; --gold:#c98500; --blood:#d0453a; --leaf:#5cb835; --sky:#3a9ad9;
+  --cream:#fff4dc; --cream-2:#f6dfb4; --wood:#6b3f1f; --wood-2:#8a5429; --sun:#ffc23d;
+  --font:"Noto Sans TC","Fredoka","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-disp:"Fredoka","Noto Sans TC",system-ui,sans-serif;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body,#root{height:100%;margin:0}
-body{background:var(--bg);color:var(--ink);font-family:var(--font);overflow:hidden;user-select:none}
+body{background:var(--bg) url(/ui-park/sea.webp) center/cover fixed;color:var(--ink);font-family:var(--font);overflow:hidden;user-select:none}
 button{font-family:inherit}
 
 /*
@@ -1229,3 +1232,260 @@ button.kr-card{cursor:pointer;font:inherit}
   background:radial-gradient(circle at 50% 35%,#fffaf0,#ffe7bd)}
 .mugbox .trav-head img{position:absolute;left:-50%;top:-12.5%;width:200%;height:auto;aspect-ratio:448/600;
   max-width:none;border-radius:0;background:none;object-fit:fill;image-rendering:auto}
+
+
+/* ===========================================================================
+   樂園外觀（2026-10-12，0.35.0）。
+   Chuck：「整體版面的美術風格跟時光冒險樂園還是頗多差異」。
+   原本的底是深藍夜空、字是系統字、按鈕是扁平綠塊、開場是舊的浮空城。
+   這一段把它們換成樂園 css/park.css 那一套：海面當底、Noto Sans TC 粗體、
+   奶油色卡片配木頭邊、綠色膠囊鈕、木牌標題、齒輪設定、名牌＋時光幣。
+   放在最後面，蓋掉前面為深色底寫的顏色；戰場裡的東西前面 .td-park 已經是奶油色。
+=========================================================================== */
+.screen.wm,.screen.kr{background:none}
+h1,h2,h3{color:var(--wood)}
+
+/* 按鈕：綠色膠囊（樂園 button-green 那顆的 CSS 版）／奶油白鈕 */
+.btn{border:3px solid #2f7a1c;border-radius:999px;padding:11px 26px 12px;font-weight:900;color:#fff;
+  background:linear-gradient(#9be36a 0%,#5cbf33 48%,#3f9a24 100%);
+  text-shadow:0 2px 0 #2f7a1c;box-shadow:inset 0 3px 0 rgba(255,255,255,.45),0 4px 0 #2a6614,0 7px 12px rgba(10,50,90,.25)}
+.btn:active{transform:translateY(3px);box-shadow:inset 0 3px 0 rgba(255,255,255,.45),0 1px 0 #2a6614}
+.btn.ghost{background:#fff;border:3px solid var(--cream-2);color:var(--wood);text-shadow:none;font-weight:800;
+  box-shadow:0 3px 0 var(--cream-2)}
+.btn.danger{background:linear-gradient(#ff8a72,#d9412a);border-color:#8f2a17;text-shadow:0 2px 0 #8f2a17;box-shadow:0 4px 0 #8f2a17}
+.td-btn{border-radius:999px;border:2px solid #2f7a1c;background:linear-gradient(#9be36a,#3f9a24);text-shadow:0 1px 0 #2f7a1c}
+
+/* 卡片：奶油底＋金邊，跟樂園的 .fac／彈窗同一個調子 */
+.panel{background:linear-gradient(#fffdf6,#fff4dc);border:3px solid var(--line);border-radius:18px;color:var(--ink);
+  box-shadow:0 4px 0 #c99a4a,0 10px 18px rgba(10,50,90,.18)}
+/* 大一點的框（登入、結算、確認、更新說明）用樂園那張木框金邊面板 */
+.pk-card,.confirm-box.panel,.result.panel,.notice-box.panel{border-style:solid;border-width:30px;border-radius:0;
+  border-image:url(/ui-park/panel.webp) 150 fill / 30px stretch;background:none;box-shadow:none;
+  filter:drop-shadow(0 14px 20px rgba(10,40,70,.35));color:var(--ink)}
+.pk-card{padding:2px 6px 4px;width:100%;max-width:440px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.confirm{background:rgba(10,40,70,.45)}
+.confirm-box h2{font-weight:900}
+.form input,.row input,.row select,.roster .r select,input.pin,.feedback-box textarea,.fb-reply-input{
+  background:#fff;color:var(--ink);border:3px solid var(--cream-2);border-radius:14px}
+.form input:focus{outline:none;border-color:var(--sun);box-shadow:0 0 0 3px rgba(255,194,61,.35)}
+.form label{color:var(--wood);font-weight:700}
+.error{color:#9a2a1c;background:#ffe6e0;border-color:#f0a397}
+.note{color:#2f6a14;background:#e6f6dc;border-color:#a9d79b}
+.tabs{border:none;gap:8px;overflow:visible}
+.tabs button{border:3px solid var(--cream-2);border-radius:14px;background:#fff;color:#8a6a4a;font-weight:900;font-size:16px}
+.tabs button.on{background:var(--sun);border-color:var(--wood);color:var(--wood);box-shadow:0 3px 0 var(--wood)}
+.screen h2.sec{color:var(--wood)}
+
+/* 開場：海面＋樂園地圖上那座城堡島＋木牌標題 */
+.title-screen{background:none}
+.title-bg{background:url(/ui-park/sea.webp) center/cover var(--sea)}
+.pk-sign{position:relative;width:min(420px,86vw);margin:0 auto;text-shadow:none}
+.pk-sign>img{width:100%;display:block;filter:drop-shadow(0 6px 8px rgba(0,0,0,.3))}
+.pk-sign>div{position:absolute;left:14%;right:14%;top:34%;bottom:14%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#5a3418}
+.pk-sign h1{margin:0;font:900 clamp(26px,7vw,40px)/1 var(--font);letter-spacing:.12em;color:#5a3418;text-shadow:0 2px 0 rgba(255,255,255,.4)}
+.pk-sign small{font:700 clamp(11px,2.6vw,15px)/1.4 var(--f-disp);color:#8a5a2a;letter-spacing:.12em}
+.title-screen:not(.opened) .game-title{margin-top:0}
+.title-screen .game-title.small{width:min(300px,70vw)}
+.title-screen .game-title.small h1{font-size:clamp(22px,5vw,28px)}
+.title-isle{width:min(360px,62vw,40vh);height:auto;filter:drop-shadow(0 18px 18px rgba(8,50,90,.35));animation:pk-bob 6s ease-in-out infinite;margin:-10px 0 -18px}
+@keyframes pk-bob{50%{transform:translateY(-8px)}}
+.title-sub{margin:0;font:900 18px/1.3 var(--font);color:var(--cream);background:rgba(20,70,110,.5);padding:8px 18px;border-radius:99px}
+.start-btn{position:relative;margin-top:auto;font:700 30px/1 var(--f-disp);color:var(--wood);text-shadow:none;
+  background:linear-gradient(#fffaf0 0%,#ffe9bf 60%,#f4cf8f 100%);border:4px solid var(--wood);border-radius:999px;padding:14px 44px 16px;
+  box-shadow:inset 0 3px 0 rgba(255,255,255,.9),0 7px 0 var(--wood),0 14px 24px rgba(10,50,90,.35);animation:none}
+.start-btn::after{content:"";position:absolute;inset:-10px;border-radius:999px;border:3px solid rgba(255,240,190,.8);animation:pk-ping 2s ease-out infinite;pointer-events:none}
+@keyframes pk-ping{0%{transform:scale(.95);opacity:.9}100%{transform:scale(1.18);opacity:0}}
+.start-btn:active{transform:translateY(4px);box-shadow:inset 0 3px 0 rgba(255,255,255,.9),0 2px 0 var(--wood)}
+.teacher-link{color:var(--cream);text-shadow:0 1px 3px rgba(0,0,0,.5);font-weight:700}
+.login-card .teacher-link{color:var(--wood);text-shadow:none;text-decoration:underline;text-underline-offset:4px;margin:0}
+.login-card .form{padding:0;max-width:none}
+.login-card .tabs{width:100%}
+.login-card .tabs button{flex:1}
+.title-screen.opened p.lede,.login-card p.lede{color:#8a6a4a;text-shadow:none}
+.login-card .btn{width:100%;font-size:19px}
+@media (max-height:520px){ .title-isle{display:none} .title-screen .game-title.small{display:none} }
+@media (prefers-reduced-motion:reduce){ .title-isle,.start-btn::after{animation:none} }
+
+/* 一般功能頁（創角、設定、結算、排行、徽章…）：內容放在一張奶油大卡上 */
+.screen.pk-page{justify-content:safe center}
+.create-card{max-width:600px}
+.create-card h1{font-weight:900}
+.create-card .jobs{max-width:none}
+.screen:not(.wm):not(.kr):not(.title-screen):not(.pk-page)>h1{color:var(--cream);text-shadow:0 2px 0 rgba(20,60,100,.6)}
+.screen:not(.wm):not(.kr):not(.title-screen):not(.pk-page)>p.lede{color:var(--cream);text-shadow:0 1px 2px rgba(20,60,100,.7)}
+.screen:not(.wm):not(.kr):not(.title-screen):not(.pk-page)>h2.sec{color:var(--cream);text-shadow:0 2px 0 rgba(20,60,100,.6)}
+.job{background:#fff;border:3px solid var(--cream-2);color:var(--ink);box-shadow:0 3px 0 var(--cream-2)}
+.job.on{border-color:var(--sun);background:#fff4d0;box-shadow:0 0 0 3px rgba(255,194,61,.55),0 3px 0 #c99a4a}
+.job-stage{background:linear-gradient(#0000 55%,rgba(92,184,53,.22) 55%)}
+.av{background:#fff;border-color:var(--cream-2)}
+.av.on{border-color:var(--sun);background:#fff4d0}
+
+/* 選關大地圖：上面一條照樂園排（齒輪、名牌＋時光幣、右邊木頭功能列） */
+.wm-top{background:none;border:none;box-shadow:none;padding:0 4px;gap:10px;color:var(--ink)}
+.pk-back,.pk-gear{flex:none}
+.pk-back{font:700 16px/1 var(--font);color:var(--wood);background:var(--cream);border:3px solid var(--wood);border-radius:14px;
+  padding:9px 13px;box-shadow:0 4px 0 var(--wood);text-decoration:none;white-space:nowrap}
+.pk-gear{width:46px;height:46px;border:0;padding:0;background:none;cursor:pointer;filter:drop-shadow(0 3px 4px rgba(0,0,0,.3));transition:transform .3s}
+.pk-gear img{width:100%;height:100%;object-fit:contain}
+.pk-gear:hover{transform:rotate(30deg)}
+.pk-me{display:flex;align-items:center;gap:8px;padding:4px 14px 4px 4px;background:var(--cream);border:3px solid var(--wood);border-radius:999px;
+  box-shadow:0 4px 0 var(--wood),0 8px 14px rgba(0,0,0,.2);min-width:0}
+.pk-me .mugbox{border-radius:50%;border:2px solid var(--cream-2);overflow:hidden}
+.pk-me .wm-who b{font-size:17px;font-weight:900;color:var(--ink)}
+.pk-me .wm-who span{color:#8a6a4a}
+.wm-exp{background:var(--cream-2)}
+.pk-coin{margin-left:-2px;padding:4px 14px 4px 5px;background:var(--cream);border:3px solid var(--wood);border-radius:999px;
+  box-shadow:0 4px 0 var(--wood),0 8px 14px rgba(0,0,0,.2);font:900 19px/1 var(--f-disp);color:var(--wood)}
+.pk-coin img{width:28px;height:28px}
+.pk-dock{display:flex;gap:6px;padding:5px 8px;border-radius:20px;flex-wrap:nowrap;
+  background:linear-gradient(#8a5a2a,#5e3a18);box-shadow:inset 0 0 0 3px #c99a4a,0 6px 14px rgba(0,0,0,.3)}
+.wm-mini.pk-dock button{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:1px;width:64px;height:58px;
+  border:0;border-radius:14px;background:linear-gradient(#fff8e6,#f3dcb0);padding:4px 0;cursor:pointer;box-shadow:inset 0 -3px 0 #d9b77a;
+  transition:transform .2s cubic-bezier(.34,1.7,.5,1)}
+.wm-mini.pk-dock button img{width:34px;height:34px;object-fit:contain;filter:drop-shadow(0 2px 2px rgba(0,0,0,.2))}
+.wm-mini.pk-dock button b{font:900 12.5px/1.1 var(--font);color:#5a3418;white-space:nowrap}
+.wm-mini.pk-dock button:hover{transform:translateY(-3px)}
+/* 分章頁籤＝樂園島名的木牌 */
+.wm .wm-tab{border-radius:14px;border:3px solid #4a2a12;background:linear-gradient(var(--wood-2),var(--wood));color:var(--cream);
+  box-shadow:0 4px 0 #3b200c}
+.wm .wm-tab .chno{color:#f3d9a8}
+.wm .wm-tab .chnm{font-weight:900}
+.wm .wm-tab.on{background:linear-gradient(#ffd46a,var(--sun));border-color:var(--wood);color:var(--wood);transform:none;box-shadow:0 4px 0 var(--wood)}
+.wm .wm-tab.on .chno{color:#8a5a2a}
+.wm .wm-tab.locked{background:linear-gradient(#8a8f99,#666b75);border-color:#4b4f57;box-shadow:0 4px 0 #3e4148;opacity:1}
+.wm .wm-tab.locked .chst img{filter:brightness(1.6)}
+.wm .wm-map{border:6px solid var(--wood);box-shadow:inset 0 0 0 3px #c99a4a,0 0 0 3px #c99a4a,0 12px 26px rgba(8,50,90,.35);border-radius:22px}
+.wm-stars-total{background:var(--cream);border-color:var(--wood);border-radius:999px;box-shadow:0 3px 0 var(--wood)}
+.wm-big b{background:linear-gradient(var(--wood-2),var(--wood));border:3px solid #4a2a12;color:var(--cream);border-radius:12px;
+  box-shadow:0 3px 0 #3b200c;font-weight:900}
+.wm-card{border-style:solid;border-width:22px;border-radius:0;border-image:url(/ui-park/panel.webp) 150 fill / 22px stretch;background:none;
+  box-shadow:none;filter:drop-shadow(0 10px 16px rgba(10,40,70,.35));padding:2px 6px 6px;width:250px}
+.wm-x{right:-20px;top:-20px;width:36px;height:36px;font-size:0;background:url(/ui-park/close.webp) center/contain no-repeat;filter:drop-shadow(0 3px 4px rgba(0,0,0,.3))}
+.wm-cnm{color:var(--wood)}
+.wm-card .lvgo{background:linear-gradient(#9be36a 0%,#5cbf33 48%,#3f9a24 100%);box-shadow:inset 0 3px 0 rgba(255,255,255,.45),0 4px 0 #2a6614;font-size:19px;padding:10px 38px}
+.wm-locknote{background:var(--cream);border-color:var(--wood);box-shadow:0 4px 0 var(--wood)}
+.roomcall{background:var(--cream);border-color:var(--sun);box-shadow:0 4px 0 #c99a4a}
+.roomcall .go{color:var(--wood);border-color:var(--wood);background:var(--sun)}
+@media (max-width:640px){
+  .pk-dock{gap:4px;padding:4px 5px}
+  .wm-mini.pk-dock button{width:46px;height:46px;border-radius:11px}
+  .wm-mini.pk-dock button img{width:26px;height:26px}
+  .wm-mini.pk-dock button b{font-size:10.5px}
+  .pk-me{padding-right:8px}
+  .pk-me .wm-who b{font-size:14px;max-width:5.5em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pk-me .wm-who span{font-size:11px}
+  .pk-gear{width:36px;height:36px}
+  .pk-coin{font-size:15px;padding:3px 10px 3px 4px}
+  .pk-coin img{width:22px;height:22px}
+  .pk-back{font-size:13px;padding:7px 9px}
+}
+@media (max-height:480px){
+  .wm-mini.pk-dock button{height:44px;width:54px}
+  .wm-mini.pk-dock button img{width:24px;height:24px}
+  .pk-gear{width:36px;height:36px}
+  .pk-me .mugbox{width:32px!important;height:32px!important}
+}
+
+/* 功能頁（英雄營、對戰、團戰、軍械庫）：木牌標題＋左上「← 回地圖」，內容放在一張奶油大面板裡 */
+.kr-top{background:none;border:none;box-shadow:none;padding:0 2px;color:var(--ink)}
+.kr-top .kr-back:last-child{order:-1}
+.kr-top .kr-back:last-child::before{content:'← '}
+.kr-back{font:700 15px/1 var(--font);color:var(--wood);background:var(--cream);border:3px solid var(--wood);border-radius:14px;
+  padding:8px 13px;box-shadow:0 4px 0 var(--wood)}
+.kr-back:active{transform:translateY(3px);box-shadow:0 1px 0 var(--wood)}
+.kr-top h2{font-size:20px;color:var(--cream);background:linear-gradient(var(--wood-2),var(--wood));border:3px solid #4a2a12;
+  border-radius:14px;padding:7px 16px 8px 30px;margin-left:-30px;box-shadow:0 4px 0 #3b200c;letter-spacing:.08em}
+.kr-badge{position:relative;z-index:1;width:50px;height:50px;margin:-10px 0}
+.kr-top .coins{padding:4px 14px 4px 5px;background:var(--cream);border:3px solid var(--wood);border-radius:999px;box-shadow:0 4px 0 var(--wood);
+  font:900 18px/1 var(--f-disp);color:var(--wood)}
+.kr-top .coins .ic-img{width:24px!important;height:24px!important}
+.kr-body,.kr>.shopwrap{border-style:solid;border-width:26px;border-image:url(/ui-park/panel.webp) 150 fill / 26px stretch;
+  filter:drop-shadow(0 12px 18px rgba(10,40,70,.3));padding:0 2px}
+.kr-sec{background:none;border:none}
+.kr-sec>summary{border-radius:14px;border:3px solid #4a2a12;background:linear-gradient(var(--wood-2),var(--wood));color:var(--cream);
+  box-shadow:0 4px 0 #3b200c;text-shadow:none;font-size:16px}
+.kr-sec>summary small{color:#f3d9a8}
+.kr-sec>summary::after{color:var(--sun)}
+.kr-card,.kr .item,.kr .rank,.kr .bosspick,.kr .hero,.kr .job,.kr .bosscard{background:#fff;border:3px solid var(--cream-2);border-radius:18px;color:var(--ink);box-shadow:0 3px 0 var(--cream-2)}
+.kr .job.on,.kr .rank.me,.kr .vs-seek{background:#fff4d0;border-color:var(--sun);box-shadow:0 0 0 3px rgba(255,194,61,.45),0 3px 0 #c99a4a}
+.kr .pick{background:#fff;border:3px solid var(--cream-2)}
+.kr .pick.on{background:#fff4d0;border-color:var(--sun);box-shadow:0 0 0 2px rgba(255,194,61,.55)}
+/* 面板變亮了，原本寫給深色底的淺色字全部換回咖啡色 */
+.kr .vs-sub,.kr .kr-sec .lede,.kr .lede,.kr .pick-note,.kr .lg-head small,.kr .vs-sub.muted{color:#8a6a4a}
+.kr .bosstier>summary h3{color:var(--wood)}
+.kr .bosstier h3 small{color:#8a6a4a}
+.kr .bosstier.tier-rare h3{color:#2a6fb8}
+.kr .bosstier.tier-legend h3{color:#b87800}
+.kr .bosstier.tier-myth h3{color:#c23a62}
+.kr .bosstier>summary h3::after{color:var(--wood-2)}
+.kr .pinshow{color:var(--wood)}
+.kr .vs-seek .txt b{color:#a33a28}
+.kr .raid-openbar{background:var(--cream);border-color:var(--wood);box-shadow:0 -2px 10px rgba(0,0,0,.25)}
+.kr .btn.ghost{background:#fff;border-color:var(--cream-2);color:var(--wood)}
+.kr .vs-foe .go,.kr .vs-ghost .go{border-radius:999px;background:linear-gradient(#9be36a,#3f9a24);border:2px solid #2f7a1c;text-shadow:0 1px 0 #2f7a1c}
+@media (max-width:640px){
+  .kr-body,.kr>.shopwrap{border-width:16px;border-image-width:16px}
+  .kr-top h2{font-size:16px;padding:6px 10px 7px 24px;margin-left:-24px}
+  .kr-badge{width:40px;height:40px}
+  .kr-back{font-size:13px;padding:7px 9px}
+}
+
+/* 排行、徽章、設定、結算等一般 .screen 裡的列 */
+.result .row,.miss .m{background:#fff;border:2px solid var(--cream-2)}
+.result .row b{color:var(--wood)}
+.open button{background:#fff;border-color:var(--cream-2);color:var(--ink)}
+.open button.on{background:#fff4d0;border-color:var(--sun)}
+.chips button{background:#fff;border-color:var(--cream-2);color:#8a6a4a}
+.chips button.on{border-color:var(--sun);color:var(--wood);background:#fff4d0}
+.plate{background:#fff}
+.bar,.minibar{background:var(--cream-2)}
+.toggle{background:#cdb68a}
+.td-card.td-sel,.tw-line.on{background:#fff4d0}
+.bagitem{background:var(--cream);border:2px solid var(--wood);color:var(--ink);box-shadow:0 2px 0 var(--wood);border-radius:12px}
+.bagitem b{color:#b87800}
+.td-toast{background:rgba(58,36,18,.88);color:var(--cream)}
+.rotate{background:rgba(29,127,191,.95);color:#fff}
+.notice-block{background:rgba(10,40,70,.8)}
+.badge{border-color:#c9b48a}
+.fb-item{background:#fff;border:2px solid var(--cream-2)}
+.fb-reply{background:var(--cream)}
+.raid-openbar{background:var(--cream);border-top:3px solid var(--wood)}
+
+/* 戰場外圈：離開鈕跟樂園的「← 回到開場」同一顆 */
+.leave{background:var(--cream);border:3px solid var(--wood);color:var(--wood);border-radius:12px;box-shadow:0 3px 0 var(--wood);font-weight:800}
+.leavebar-name{color:#fff;font-weight:700;text-shadow:0 1px 2px rgba(10,40,70,.8)}
+.td-stage{background:rgba(29,127,191,.55)}
+
+/* 左下問題回報、右下測試站：樂園那兩顆 */
+.feedback-fab{background:var(--cream);border:3px solid var(--wood);color:var(--ink);font-weight:900;font-size:13px;border-radius:999px;
+  padding:6px 12px;box-shadow:0 3px 0 var(--wood)}
+.app-version{color:rgba(255,255,255,.75);text-shadow:0 1px 2px rgba(0,0,0,.4)}
+.app-version.staging{background:#e2553f;border-radius:10px;padding:4px 10px;box-shadow:0 3px 0 #a33a28;letter-spacing:.04em;text-shadow:none}
+.title-screen.opened .tabs{background:none}
+/* 測試站標籤移到左下「問題回報」旁邊，右下留給地圖上的三顆大鈕 */
+.app-version.staging{right:auto;left:126px;bottom:calc(8px + env(safe-area-inset-bottom))}
+.kr-sub{font:900 15px/1 var(--font);color:var(--wood);background:var(--cream);border:3px solid var(--wood);border-radius:999px;padding:6px 12px;box-shadow:0 3px 0 var(--wood);white-space:nowrap}
+/* 頁首底下那一行說明：直接放在海上看不清楚，給它一條半透明的底 */
+.kr>.lede,.kr>p.lede,.kr>.vs-sub{color:var(--cream);background:rgba(20,70,110,.55);padding:6px 14px;border-radius:14px;text-shadow:none;max-width:760px}
+.kr .kr-body>.form.panel,.kr .kr-body>.panel{max-width:none;width:100%}
+.kr .kr-body h2{color:var(--wood)}
+/* 戰場：底下透出樂園的海，畫布外面框一圈跟大地圖一樣的木框（用陰影畫，不能用 border，點擊座標會偏） */
+:is(.td-park,.kr-hud) .td-stage{background:none}
+:is(.td-park,.kr-hud) .td-cv{box-shadow:0 0 0 5px var(--wood),0 0 0 8px #c99a4a,0 12px 24px rgba(8,50,90,.35)}
+.td-guide,.td-start{font-family:var(--font)}
+.result .stars{color:#ffb400;text-shadow:0 2px 0 #b36b00}
+.result h2{font-weight:900}
+/* 手機直拿：上面那一條放不下就換行，名牌只留頭像，木牌標題不准斷字 */
+.kr-top h2{white-space:nowrap}
+@media (max-width:640px){
+  .wm-top{flex-wrap:wrap;row-gap:6px}
+  .pk-me .wm-who{display:none}
+  .pk-me{padding:3px}
+  .wm .wm-tab{padding:4px 8px}
+  .wm .wm-tab .chnm{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wm .wm-tab .chst{font-size:11px}
+  .kr-top{flex-wrap:wrap;row-gap:6px}
+  .kr-badge{display:none}
+  .kr-top h2{margin-left:0;padding-left:12px}
+  .kr-sub{display:none}
+}

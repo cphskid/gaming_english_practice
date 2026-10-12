@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ui } from './park-ui'
 
 /**
  * 學生的登入與註冊。**不收真實姓名、不收 email**——使用者是國小學生。
@@ -68,11 +69,11 @@ export function Login({
     if (msg) setError(msg)
   }
 
+  // 開場跟樂園同一片海、同一塊木牌，城堡就是樂園地圖上那座「守護異世界」島
   const title = (
-    <header className={'game-title' + (opened ? ' small' : '')}>
-      <h1 lang="en">World Guardians</h1>
-      <p className="zh">守護異世界</p>
-      <p className="sub">用語言魔力來冒險吧！</p>
+    <header className={'game-title pk-sign' + (opened ? ' small' : '')}>
+      <img src={ui('sign')} alt="" />
+      <div><small lang="en">World Guardians</small><h1>守護異世界</h1></div>
     </header>
   )
 
@@ -81,7 +82,9 @@ export function Login({
       <div className="screen title-screen">
         <div className="title-bg" aria-hidden="true" />
         {title}
-        <button className="start-btn" onClick={() => setOpened(true)}>點一下開始冒險</button>
+        <img className="title-isle" src={ui('castle-isle')} alt="" />
+        <p className="title-sub">用語言魔力來冒險吧！</p>
+        <button className="start-btn" onClick={() => setOpened(true)}>開始冒險</button>
         <button className="teacher-link" onClick={onStaff}>我是老師／家長 ›</button>
       </div>
     )
@@ -92,6 +95,7 @@ export function Login({
       <div className="title-bg" aria-hidden="true" />
       {title}
 
+      <div className="pk-card login-card">
       <div className="tabs">
         <button className={tab === 'login' ? 'on' : ''}
           onClick={() => { setTab('login'); setError(null) }}>我有帳號</button>
@@ -99,7 +103,7 @@ export function Login({
           onClick={() => { setTab('register'); setError(null) }}>第一次來</button>
       </div>
 
-      <form className="form panel" onSubmit={submit}>
+      <form className="form" onSubmit={submit}>
         {tab === 'register' && (
           <div>
             <label htmlFor="cls">班級代碼</label>
@@ -148,6 +152,7 @@ export function Login({
       </p>
 
       <button className="teacher-link" onClick={onStaff}>我是老師／家長 ›</button>
+      </div>
     </div>
   )
 }

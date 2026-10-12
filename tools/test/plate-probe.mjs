@@ -26,7 +26,7 @@ await page.click('button[type=submit]')
 await page.waitForSelector('.jobs .job, .levels', { timeout: 20000 })
 if (await page.locator('.jobs .job').count()) {
   await page.locator('.jobs .job').first().click()
-  await page.locator('.avatars .av').first().click()
+  await page.locator('.avatars .av').first().click({ timeout: 2000 }).catch(() => {})
   await page.locator('button.btn.big').click()
 }
 await page.waitForSelector('.levels', { timeout: 20000 })

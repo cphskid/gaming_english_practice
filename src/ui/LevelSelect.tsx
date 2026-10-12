@@ -10,6 +10,8 @@ import { BOSS_BY_ID } from '@/data/bosses'
 import { BossFace } from './Room'
 import { Avatar } from './Avatar'
 import WORLD from '@/data/world-stops.json'
+import { PARK_URL } from '@/net'
+import { ui } from './park-ui'
 
 /**
  * 選關大地圖（2026-10-10 改版，Kingdom Rush 那種戰役地圖）。
@@ -115,20 +117,26 @@ export function LevelSelect({
 
   return (
     <div className="screen wm">
+      {/* 上面那一條照樂園的排法：左邊齒輪（設定）、名牌＋時光幣，右邊一條木頭功能列 */}
       <div className="wm-top">
-        <Avatar character={character} size={40} />
-        <div className="wm-who">
-          <b>{student.nickname}</b>
-          <span>{JOB_NAME[character.job]}　Lv.{lv}</span>
-          <i className="wm-exp"><i style={{ width: `${Math.round((into / Math.max(1, need)) * 100)}%` }} /></i>
+        {PARK_URL && character.time && (
+          <a className="pk-back" href={PARK_URL}>← 回樂園</a>
+        )}
+        <button className="pk-gear" onClick={onSettings} aria-label="設定"><img src={ui('gear')} alt="" /></button>
+        <div className="pk-me">
+          <Avatar character={character} size={40} />
+          <div className="wm-who">
+            <b>{student.nickname}</b>
+            <span>{JOB_NAME[character.job]}　Lv.{lv}</span>
+            <i className="wm-exp"><i style={{ width: `${Math.round((into / Math.max(1, need)) * 100)}%` }} /></i>
+          </div>
         </div>
-        <span className="wm-coin"><img src={pic('coin')} alt="" />{character.coins}</span>
+        <span className="wm-coin pk-coin"><img src={pic('coin')} alt="" />{character.coins}</span>
         <span className="spacer" />
-        <nav className="wm-mini">
-          <button onClick={onBoard}>排行榜</button>
-          <button onClick={onProfile}>徽章</button>
-          <button onClick={onShop}>商店</button>
-          <button onClick={onSettings}>設定</button>
+        <nav className="wm-mini pk-dock">
+          <button onClick={onShop}><img src={ui('shop')} alt="" /><b>商店</b></button>
+          <button onClick={onBoard}><img src={ui('rank')} alt="" /><b>排行榜</b></button>
+          <button onClick={onProfile}><img src={ui('passport')} alt="" /><b>徽章</b></button>
         </nav>
       </div>
 

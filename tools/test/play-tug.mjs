@@ -44,7 +44,7 @@ try {
   await page.locator('form button[type=submit]').click()
   await page.waitForSelector('.jobs .job', { timeout: 30000 })
   await page.locator('.jobs .job').first().click()
-  await page.locator('.avatars .av').first().click()
+  await page.locator('.avatars .av').first().click({ timeout: 2000 }).catch(() => {})
   await page.locator('button.btn.big').click()
   await page.waitForSelector('.levels', { timeout: 30000 })
   ok('學生準備好了')

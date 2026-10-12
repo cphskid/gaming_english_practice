@@ -9,6 +9,7 @@ import { avatarSrc } from '@/data/jobs'
 import { frameOf } from '@/data/cosmetics'
 import { Icon } from './Icon'
 import type { IconName } from '@/data/icons'
+import { ui } from './park-ui'
 
 /**
  * 班內排行榜。
@@ -51,12 +52,15 @@ export function Leaderboard({ student, onOpen, onBack }: {
   )) : null
 
   return (
-    <div className="screen wide">
-      <div className="topbar">
-        <span className="who">🏆 {student.classCode || '還沒加入班級'}</span>
+    <div className="screen wide kr">
+      <div className="kr-top">
+        <img className="kr-badge" src={ui('rank')} alt="" />
+        <h2>排行榜</h2>
+        <span className="kr-sub">{student.classCode || '還沒加入班級'}</span>
         <span className="spacer" />
-        <button className="btn ghost small" onClick={onBack}>回去</button>
+        <button className="kr-back" onClick={onBack}>回去</button>
       </div>
+      <div className="kr-body">
 
       {stars && <WeeklyStars stars={stars} onOpen={onOpen} />}
 
@@ -113,6 +117,7 @@ export function Leaderboard({ student, onOpen, onBack }: {
           })}
         </div>
       )}
+      </div>
     </div>
   )
 }
