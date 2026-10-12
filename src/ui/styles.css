@@ -7,6 +7,8 @@
   --f-disp:"Fredoka","Noto Sans TC",system-ui,sans-serif;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* 雙擊不縮放（2026-10-12，跟樂園、開拓者同一行；零權重，元件自己的 touch-action 照樣有效） */
+:where(html,body,body *){touch-action:manipulation}
 html,body,#root{height:100%;margin:0}
 body{background:var(--bg) url(/ui-park/sea.webp) center/cover fixed;color:var(--ink);font-family:var(--font);overflow:hidden;user-select:none}
 button{font-family:inherit}
