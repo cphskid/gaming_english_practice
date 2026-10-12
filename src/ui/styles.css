@@ -3,7 +3,8 @@
   --sea:#2f9fd8; --bg:#1d7fbf; --panel:#fff8e6; --panel2:#fffdf6; --line:#d9b77a;
   --ink:#3a2412; --muted:#8a6a4a; --gold:#c98500; --blood:#d0453a; --leaf:#5cb835; --sky:#3a9ad9;
   --cream:#fff4dc; --cream-2:#f6dfb4; --wood:#6b3f1f; --wood-2:#8a5429; --sun:#ffc23d;
-  --font:"Noto Sans TC","Fredoka","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  /* 中文用裝置自己的黑體：Noto Sans TC 的網路字型一套 1.7MB，會跟遊戲圖搶頻寬（2026-10-12 量的） */
+  --font:"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;
   --f-disp:"Fredoka","Noto Sans TC",system-ui,sans-serif;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}

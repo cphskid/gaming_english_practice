@@ -39,6 +39,8 @@ import { FeedbackButton } from './Feedback'
 import { Changelog } from './Changelog'
 import { NoticeLayer } from './Notice'
 import { ParkGate } from './ParkGate'
+import { seedLook } from './looks'
+import { LEVELS } from '@/data/levels'
 
 type Screen =
   | 'login' | 'staff' | 'create' | 'select' | 'shop' | 'character' | 'board'
@@ -154,6 +156,7 @@ export function App() {
     ])
     setStudent(s)
     setCharacter(c)
+    seedLook(s.id, c.look)
     setProgress(new Map(p.map((x) => [x.levelId, x])))
     setStat(WordStat.fromEntries(stats))
     setTeacherOpen(new Set(open))
@@ -173,7 +176,12 @@ export function App() {
   useEffect(() => {
     // 2026-10-10 起只先抓新畫風那一份（見 docs/image-loading.md）。舊的像素圖不在這裡抓：
     // 只有還用得到它們的畫面（二三章、對戰、團戰）進去時才由那個畫面自己抓，不跟第一章的地圖搶頻寬。
-    if (screen === 'select') void loadArt(isParkKey)
+    // 2026-10-12：二、三章的雪地／草原怪和城堡只在打到那一章時才先抓（第一章的學生每次都多抓 300KB）
+    if (screen !== 'select') return
+    const nextLv = LEVELS.find((l) => !progress.get(l.id)?.clearedAt) ?? LEVELS[LEVELS.length - 1]
+    const suf = nextLv.chapter === 2 ? '-snow' : nextLv.chapter === 3 ? '-meadow' : '#'
+    void loadArt((k) => isParkKey(k) && (!(k.endsWith('-snow') || k.endsWith('-meadow')) || k.endsWith(suf)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen])
 
   /**

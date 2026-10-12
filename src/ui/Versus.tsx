@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { RULES } from '@/games/tug-of-war/battle'
 import { repo } from '@/net'
 import type { GhostRow, LiveLobby, LiveMatchInfo } from '@/net/repository'
-import { avatarSrc } from '@/data/jobs'
 import { legionById } from '@/data/legions'
+import { Face } from './Avatar'
 
 /** 「3 分鐘前」「昨天」這種講法。小朋友看不懂日期時間戳。 */
 function ago(at: number): string {
@@ -168,7 +168,7 @@ export function Versus({
       <div className="kr-body">
         {invites.map((p) => (
           <div key={p.id} className="kr-card vs-invite">
-            <span className="mugbox vs-mug"><img src={avatarSrc(p.avatar)} alt="" /></span>
+            <span className="mugbox vs-mug"><Face id={p.id} avatar={p.avatar} /></span>
             <span className="txt"><b>{p.nickname}</b> 邀你對戰！</span>
             <button className="btn small" onClick={() => void accept(p.id)}>接受</button>
             <button className="btn ghost small" onClick={() => setDismissed((d) => [...d, p.id])}>現在不要</button>
@@ -195,7 +195,7 @@ export function Versus({
             const g = ghostOf(p.id)
             return (
               <div key={p.id} className="kr-card vs-person">
-                <span className="mugbox vs-mug"><img src={avatarSrc(p.avatar)} alt="" /></span>
+                <span className="mugbox vs-mug"><Face id={p.id} avatar={p.avatar} /></span>
                 <span className="txt">
                   <b>{p.nickname}</b>
                   <small className="muted">
@@ -245,7 +245,7 @@ export function Versus({
             {ghosts?.map((g) => (
               <button key={g.studentId} className="kr-card vs-ghost" disabled={!!busy}
                 onClick={() => void challenge(g.studentId)}>
-                <span className="mugbox vs-mug"><img src={avatarSrc(g.avatar)} alt="" /></span>
+                <span className="mugbox vs-mug"><Face id={g.studentId} avatar={g.avatar} /></span>
                 <span className="txt">
                   <b>{g.nickname}的分身</b>
                   <small className="muted">

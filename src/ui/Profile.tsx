@@ -8,10 +8,10 @@ import {
   type AchCategory, type AchDef,
 } from '@/data/achievements'
 import { BADGE_ICONS } from './icons'
-import { avatarSrc } from '@/data/jobs'
 import { frameOf } from '@/data/cosmetics'
 import { levelFromExp } from '@/core/progress'
 import { ui } from './park-ui'
+import { Face } from './Avatar'
 
 /**
  * 個人檔案與徽章牆。
@@ -171,7 +171,7 @@ export function Profile({
       <div className="profile-head panel">
         <span className={'mugbox' + (frame ? ' ' + frame.className : '')}
           style={{ width: 64, height: 64 }}>
-          <img src={avatarSrc(character.avatar)} alt="" />
+          <Face avatar={character.avatar} look={character.look} />
           {frame?.badge && <i className="mugbadge">{frame.badge}</i>}
         </span>
         <div className="profile-who">
@@ -410,7 +410,7 @@ export function PeerProfile({ studentId, onBack }: { studentId: string; onBack: 
           <div className="profile-head panel">
             <span className={'mugbox' + (frame ? ' ' + frame.className : '')}
               style={{ width: 64, height: 64 }}>
-              <img src={avatarSrc(p.avatar)} alt="" />
+              <Face id={studentId} avatar={p.avatar} />
               {frame?.badge && <i className="mugbadge">{frame.badge}</i>}
             </span>
             <div className="profile-who">

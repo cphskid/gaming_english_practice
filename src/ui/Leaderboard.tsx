@@ -5,11 +5,11 @@ import { repo } from '@/net'
 import type { BadgeCount, LeaderRow, WeeklySlot, WeeklyStar } from '@/net/repository'
 import { Badge, BadgePlate, hueOf, rarityText } from './Profile'
 import { ACH_BY_ID, badgeLabel } from '@/data/achievements'
-import { avatarSrc } from '@/data/jobs'
 import { frameOf } from '@/data/cosmetics'
 import { Icon } from './Icon'
 import type { IconName } from '@/data/icons'
 import { ui } from './park-ui'
+import { Face } from './Avatar'
 
 /**
  * 班內排行榜。
@@ -92,7 +92,7 @@ export function Leaderboard({ student, onOpen, onBack }: {
                   {i < 3 ? <Icon name={MEDAL[i]} size={24} alt={`第 ${i + 1} 名`} /> : i + 1}
                 </span>
                 <span className={'mugbox' + (frame ? ' ' + frame.className : '')}>
-                  <img src={avatarSrc(r.avatar)} alt="" />
+                  <Face id={r.studentId} avatar={r.avatar} />
                   {frame?.badge && <i className="mugbadge">{frame.badge}</i>}
                 </span>
                 <span className="nm">
@@ -162,7 +162,7 @@ function WeeklyStars({ stars, onOpen }: { stars: WeeklyStar[]; onOpen: (id: stri
               }}>
               <span className="wk-name">{icon} {title}</span>
               <span className={'mugbox' + (frame ? ' ' + frame.className : '')}>
-                <img src={avatarSrc(s.avatar)} alt="" />
+                <Face id={s.studentId} avatar={s.avatar} />
                 {frame?.badge && <i className="mugbadge">{frame.badge}</i>}
               </span>
               <span className="wk-who">{s.nickname}{s.me && <small>（你）</small>}</span>

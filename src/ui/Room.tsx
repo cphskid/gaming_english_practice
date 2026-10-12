@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { avatarSrc } from '@/data/jobs'
 import { frameOf } from '@/data/cosmetics'
 import { BOSSES, BOSS_BY_ID, CATS, TIERS, bossTopic, bossWords, needChapter, raidUrl, type BossDef } from '@/data/bosses'
 import { LEVELS } from '@/data/levels'
@@ -7,6 +6,7 @@ import { chapterCleared } from '@/core/progress'
 import type { WordStat } from '@/core/wordStat'
 import { MIN_PLAYERS, MAX_PLAYERS } from '@/games/boss-raid/raid'
 import { repo, type RoomBrief, type RoomMember, type RoomState } from '@/net'
+import { Face } from './Avatar'
 
 /**
  * 房間：魔王團戰（2026-09-25 起，原本「一起打同一關守塔」拿掉了）。
@@ -131,7 +131,7 @@ function MemberRow({ m, playing, canKick, onKick }: {
   return (
     <div className={'rank' + (m.me ? ' me' : '')}>
       <span className={'mugbox' + (frame ? ' ' + frame.className : '')}>
-        <img src={avatarSrc(m.avatar)} alt="" />
+        <Face id={m.studentId} avatar={m.avatar} />
         {frame?.badge && <i className="mugbadge">{frame.badge}</i>}
       </span>
       <span className="nm">

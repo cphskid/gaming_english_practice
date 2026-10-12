@@ -2,6 +2,7 @@ import type { Character } from '@/core/types'
 import { avatarSrc } from '@/data/jobs'
 import { frameOf } from '@/data/cosmetics'
 import { PARK_URL } from '@/net'
+import { useLook } from './looks'
 
 /**
  * 頭像 ＋ 外框。**所有會出現頭像的地方都要用這個元件**，
@@ -22,6 +23,16 @@ export function Avatar({ character, size = 36 }: { character: Character; size?: 
       {frame?.badge && <i className="mugbadge" style={{ fontSize: Math.round(size * 0.42) }}>{frame.badge}</i>}
     </span>
   )
+}
+
+/**
+ * 頭像框裡面那張臉：有樂園旅人就畫旅人，沒有才用舊的像素頭像。
+ * 給 id 就去問那個人的旅人（同學）；自己的直接把 look 傳進來。
+ */
+export function Face({ id, avatar, look }: { id?: string; avatar: string; look?: Record<string, string | null> | null }) {
+  const asked = useLook(look ? null : id)
+  const l = look ?? asked
+  return l && PARK_URL ? <TravellerHead look={l} /> : <img src={avatarSrc(avatar)} alt="" />
 }
 
 /**

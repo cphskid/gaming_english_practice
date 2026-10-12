@@ -246,6 +246,13 @@ export class SupabaseRepository implements Repository {
     return w?.park ? w : null
   }
 
+  async classLooks(ids: string[]): Promise<Record<string, Record<string, string | null>>> {
+    if (!ids.length || this.timeMode === false) return {}
+    const { data, error } = await this.db.rpc('guardian_class_looks', { p_ids: ids })
+    if (error) return {}
+    return (data as Record<string, Record<string, string | null>>) ?? {}
+  }
+
   /** 樂園的時空旅人（頭像改用它，2026-10-10）。還沒建旅人、或樂園沒裝換裝那份 SQL，就回 null。 */
   private async look(): Promise<Record<string, string | null> | null> {
     const { data, error } = await this.db.rpc('park_traveller_me')

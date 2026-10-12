@@ -324,3 +324,29 @@ do $$ begin
 end $$;
 
 revoke all on function public.guardian_all_earned_stamps(uuid), public.guardian_play_coin_sources(uuid) from public, anon, authenticated;
+
+-- -----------------------------------------------------------------------------
+-- 2026-10-12 同學的時空旅人大頭：排行榜、對戰、團戰等待室、同學的徽章牆都改用樂園的頭像。
+-- 只回「自己」和「跟我在同一個樂園班」（或我教的班）的人；樂園排行榜本來就看得到同學的大頭。
+-- 一次最多 60 人。回 {student_id: look}，還沒建旅人的不列。
+-- -----------------------------------------------------------------------------
+create or replace function public.guardian_class_looks(p_ids uuid[])
+returns jsonb language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare v_me uuid := public.current_student_id();
+begin
+  if to_regclass('public.park_travellers') is null then return '{}'::jsonb; end if;
+  return coalesce((
+    select jsonb_object_agg(t.student_id, t.look)
+      from public.park_travellers t
+     where t.student_id = any (p_ids[1:60])
+       and (t.student_id = v_me
+            or exists (select 1 from public.park_class_members a
+                         join public.park_class_members b on b.class_code = a.class_code
+                        where a.student_id = t.student_id and b.student_id = v_me)
+            or exists (select 1 from public.park_class_members a
+                        where a.student_id = t.student_id and public.is_teacher_of(a.class_code)))
+  ), '{}'::jsonb);
+end;
+$$;
+revoke all on function public.guardian_class_looks(uuid[]) from public, anon;
+grant execute on function public.guardian_class_looks(uuid[]) to authenticated;

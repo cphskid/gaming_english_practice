@@ -1167,8 +1167,15 @@ export function mountBossRaid(root: HTMLElement, ctx: GameContext): GameHandle {
   })
 
   // 只抓這一場用得到的軍團（載圖加速原則）
+  // 2026-10-12：以前是「除了別的軍團，td-art.json 全抓」，連守塔的像素城堡、地形都抓，
+  // 2Mbps 下一場 139 張 1.4MB。現在只抓：這場的軍團兵與圖示（藍色那一份）、城堡、兩種小怪。
   const slugs = legions.map(legionSlug)
-  void loadArt((k) => !otherLegionKey(k, slugs))
+  const RAID_KEEP = new Set(['p-castle', 'p-goblin', 'p-ogre'])
+  const raidKey = (k: string) => RAID_KEEP.has(k) ||
+    (k.startsWith('vs-') && !otherLegionKey(k, slugs) && !k.endsWith('-red') && !/-(field|tower)$/.test(k))
+  void loadArt(raidKey)
+  // 新圖真的抓不到（斷線、檔案不見）才補抓舊的像素圖當備胎
+  setTimeout(() => { if (!img['p-castle'] || !img['p-goblin']) void loadArt((k) => !otherLegionKey(k, slugs)) }, 8000)
 
   if (import.meta.env.DEV) {
     ;(window as unknown as { __raid?: unknown }).__raid = {

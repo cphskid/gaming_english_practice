@@ -11,7 +11,7 @@ import { repo } from '@/net'
 import { AVATAR_TIERS, SHOP_AVATARS, avatarAfterJob, avatarSrc, jobAvatars } from '@/data/avatars'
 import type { Job } from '@/core/types'
 import { JobIcon, JobPicker } from './JobPicker'
-import { Avatar } from './Avatar'
+import { Avatar, Face } from './Avatar'
 import { Icon } from './Icon'
 import { PARK_URL } from '@/net'
 import type { IconName } from '@/data/icons'
@@ -220,7 +220,7 @@ export function MyCharacter({
               <button key={f.id} className={'pick' + (on ? ' on' : '') + (owned ? '' : ' locked')}
                 disabled={busy || !owned} onClick={() => void wear(f.id, true, f.name)}>
                 <span className={'mugbox ' + f.className} style={{ width: 26, height: 26 }}>
-                  <img src={avatarSrc(character.avatar)} alt="" />
+                  <Face avatar={character.avatar} look={character.look} />
                   {f.badge && <i className="mugbadge" style={{ fontSize: 11 }}>{f.badge}</i>}
                 </span>
                 {f.name}
