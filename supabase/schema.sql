@@ -4198,6 +4198,8 @@ begin
   return query
     select * from public.feedback f
      where (p_status is null or f.status = p_status)
+       -- 同一個資料庫的貓閣咖啡（catloft_submit_feedback）也寫這張表，game 一定是 catloft，它自己讀；這裡排掉
+       and coalesce(f.context ->> 'game', '') <> 'catloft'
        and (case when v_all and coalesce(p_hidden, false) then f.hidden_at is not null
                  else f.hidden_at is null end)
        and (v_all or (f.role = 'student' and f.class_code in
