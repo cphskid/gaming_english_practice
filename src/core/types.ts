@@ -159,7 +159,8 @@ export interface LevelData {
   maxWordLevel: WordLevel
   isBoss: boolean
   /** 外觀。每五關換一次配色，所以多關共用。 */
-  skin: { tileset: string }
+  /** map：關卡用哪張版面（layouts.ts 的鍵，結尾 M 是上下翻），新畫風拿它找整張畫好的底圖 */
+  skin: { tileset: string; map?: string }
   layout: Layout
   rules: LevelRules
 }
@@ -515,7 +516,15 @@ export interface Character {
   /** 頭像 id。空字串代表還沒創角，登入後會被帶去創角畫面。 */
   avatar: string
   exp: number
+  /** 錢。有 time 的時候是樂園的時光幣（2026-10-10 合用），沒有的時候是遊戲自己的銅幣（本機版）。 */
   coins: number
+  /**
+   * 時光幣模式（樂園的帳本有裝）。答題照舊算銅幣，伺服器每 per 枚換 1 枚時光幣，一天最多 cap 枚；
+   * today 是今天從這個遊戲換到的。商店價格＝銅幣價 ÷ per（無條件進位）。
+   */
+  time?: { today: number; cap: number; per: number }
+  /** 樂園的時空旅人穿什麼（時光幣模式才有）。有的話頭像畫旅人的大頭，不畫遊戲自己的像素頭像。 */
+  look?: Record<string, string | null>
   /** 道具與裝飾品，key 是 item id，value 是數量 */
   items: Record<string, number>
   /** 目前穿戴的外觀 */

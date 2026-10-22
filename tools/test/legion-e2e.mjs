@@ -38,7 +38,7 @@ try {
   await page.locator('form button[type=submit]').click()
   await page.waitForSelector('.jobs .job', { timeout: 10000 })
   await page.locator('.jobs .job').first().click()
-  await page.locator('.avatars .av').first().click()
+  await page.locator('.avatars .av').first().click({ timeout: 2000 }).catch(() => {})
   await page.locator('button.btn.big').click()
   await page.waitForSelector('.levels', { timeout: 10000 })
   await poke(() => {
@@ -128,7 +128,7 @@ try {
   })
   await page.waitForTimeout(400)
   await page.screenshot({ path: SHOT + '/3-versus-pig.png' })
-  // 戰場換成城堡室內：畫布上半部要是粉紅磚牆，不是草地的綠
+  // 戰場換成城堡室內：畫布上半部不是草地的綠（2026-10-11 換成手繪的城堡大廳，石牆木樑，不再是粉紅磚）
   const wallish = await page.locator('.td-cv').evaluate((cv) => {
     const d = cv.getContext('2d').getImageData(0, 150, cv.width, 150).data
     let pink = 0, green = 0
@@ -138,8 +138,8 @@ try {
     }
     return { pink: pink / (d.length / 4), green: green / (d.length / 4) }
   })
-  wallish.pink > 0.4 && wallish.green < 0.1
-    ? ok(`戰場是城堡室內（粉紅磚 ${(wallish.pink * 100).toFixed(0)}%、綠 ${(wallish.green * 100).toFixed(0)}%）`)
+  wallish.green < 0.1
+    ? ok(`戰場是城堡室內（暖色 ${(wallish.pink * 100).toFixed(0)}%、綠 ${(wallish.green * 100).toFixed(0)}%）`)
     : fail('戰場沒換：' + JSON.stringify(wallish))
 
   console.log('── 守塔：士兵和箭塔換成豬，地圖不換')
@@ -148,7 +148,7 @@ try {
   await page.waitForSelector('.levels, .result, .vs-foe', { timeout: 10000 })
   await page.goto(BASE, { waitUntil: 'networkidle' })
   await page.waitForSelector('.levels', { timeout: 10000 })
-  await page.locator('.lv').first().click()
+  await page.locator('.lv').first().click(); await page.locator('.lvgo').click()
   await page.waitForSelector('.td-cv', { timeout: 10000 })
   await page.locator('.rotate').click({ timeout: 1500 }).catch(() => {})
   await page.waitForTimeout(1500)
@@ -167,7 +167,7 @@ try {
   await page.locator('.confirm-btns .btn:not(.ghost)').click()
   await page.goto(BASE, { waitUntil: 'networkidle' })
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.getByRole('button', { name: '我的角色', exact: true }).click()
+  await page.getByRole('button', { name: '英雄營', exact: true }).click()
   await page.waitForSelector('.hero')
   await page.locator('.pick', { hasText: '哥布林軍團' }).click()
   await page.waitForTimeout(300)

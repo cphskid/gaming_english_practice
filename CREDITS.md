@@ -2,6 +2,8 @@
 
 ## 美術素材
 
+**樂園畫風（2026-10-10 起，自產）** — `public/td-park/` 的地形、塔、城堡、士兵、怪物、英雄與介面小圖，由 Gemini 3.1 Flash 產圖後去背切出（提示詞與切圖程式在時空冒險樂園專案的共用資料夾 `art/guardian/`）。是自己產的圖，可以放在公開 repo。海面 `p-sea.webp` 取自時空冒險樂園大門。
+
 > 只收 CC0 或允許再散布的素材。「可以用但禁止散布」的素材（Tiny Swords、多數付費包）放私有 repo `cphskid/gaming_english_assets` 的 `overlay/`，路徑照這個 repo 擺，再把路徑加進 `.gitignore`，詳見 `tools/private-assets.sh`。
 
 **Tiny Swords** — [Pixel Frog](https://pixelfrog-assets.itch.io/tiny-swords)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { count, MODE_LABEL } from '@/core/inventory'
+import { count, MODE_LABEL, priceOf } from '@/core/inventory'
 import { levelFromExp } from '@/core/progress'
 import type { Character } from '@/core/types'
 import type { ItemDef } from '@/core/inventory'
@@ -47,7 +47,7 @@ function thumb(i: ItemDef) {
   if (i.slot === 'avatar') {
     return <span className="mugbox" style={{ width: 34, height: 34 }}><img src={avatarSrc(i.id)} alt="" /></span>
   }
-  return <Icon name={i.icon as IconName} size={20} />
+  return <Icon name={i.icon as IconName} size={40} />
 }
 
 export function Shop({
@@ -87,48 +87,52 @@ export function Shop({
   }
 
   const buy = (id: string, name: string) => run(async () => {
-    const r = await repo.buyItem(id)
+    const r = await repo.buyItem(id, name)
     onChanged({ ...character, coins: r.coins, items: r.items })
     return `買了「${name}」`
   })
 
+  /** 時光幣模式（樂園合用）：這裡是英雄營軍械庫，只賣道具和軍團；頭像、外框改到樂園商店 */
+  const time = !!character.time
+  const P = (n: number) => priceOf(character, n)
   return (
-    <div className="screen wide">
-      <div className="topbar">
+    <div className={'screen wide' + (time ? ' kr' : '')}>
+      <div className={time ? 'kr-top' : 'topbar'}>
         <Avatar character={character} />
-        <span className="who">{JOB_NAME[character.job]}　Lv.{level}</span>
+        {time ? <h2>英雄營軍械庫</h2> : <span className="who">{JOB_NAME[character.job]}　Lv.{level}</span>}
         <span className="spacer" />
-        <span className="coins"><Icon name="coin" size={15} /> {character.coins}</span>
-        <button className="btn ghost small" onClick={onBack}>回去</button>
+        <span className="coins" title={time ? '時光幣（跟樂園共用）' : '銅幣'}><Icon name="coin" size={15} /> {character.coins}</span>
+        <button className={time ? 'kr-back' : 'btn ghost small'} onClick={onBack}>回去</button>
       </div>
+      {time && (
+        <p className="lede left small">用的是時光幣，跟樂園共用一個錢包。答對題目就會換到時光幣（一天最多 {character.time!.cap} 枚，今天換到 {character.time!.today} 枚）。頭像、外框這些外觀改到樂園的商店買。</p>
+      )}
 
       {error && <p className="error">{error}</p>}
       {note && <p className="note">{note}</p>}
 
       <div className="shopwrap">
-        <section>
-          <h2 className="sec">軍團<small>　一次換整套：兵推的兵、城堡、塔、戰場，守塔的士兵和箭塔</small></h2>
+        <Sec time={time} title="軍團" hint="一次換整套：兵推的兵、城堡、塔、戰場，守塔的士兵和箭塔" order={2}>
           {TIER_ORDER.map((tier) => (
-            <LegionShelf key={tier} tier={tier} level={level} coins={character.coins} badges={badges}
+            <LegionShelf key={tier} tier={tier} level={level} coins={character.coins} badges={badges} price={P}
               owned={(l) => !l.id || has(l.id)} busy={busy} onBuy={(l) => void buy(l.id, l.name)}
               onCharacter={onCharacter} />
           ))}
-        </section>
+        </Sec>
 
         {[
           { key: 'consumable', title: '道具', hint: '帶進關卡裡用，用掉就沒了' },
           // 頭像（2026-09-25）：每個職業送四張，其他的分三層在這裡賣
-          ...(['common', 'rare', 'legend'] as const).map((t) => ({
+          ...(time ? [] : ['common', 'rare', 'legend'] as const).map((t) => ({
             key: 'avatar-' + t, title: AVATAR_TIERS[t].name + '頭像',
             hint: AVATAR_TIERS[t].unlockLevel > 1
               ? `${AVATAR_TIERS[t].unlockLevel} 級開放，買了哪個職業都能用`
               : '買了哪個職業都能用',
           })),
           // 陣營顏色 2026-09-24 起免費送，不上架，在「我的角色」直接換
-          { key: 'frame', title: '頭像外框', hint: '套在頭像外面，同學也看得到' },
+          ...(time ? [] : [{ key: 'frame', title: '頭像外框', hint: '套在頭像外面，同學也看得到' }]),
         ].map((g) => (
-          <section key={g.key}>
-            <h2 className="sec">{g.title}<small>　{g.hint}</small></h2>
+          <Sec key={g.key} time={time} title={g.title} hint={g.hint} open order={g.key === 'consumable' ? 1 : 3}>
             <div className="items">
               {ITEMS.filter((i) => !i.achievementOnly && !i.free
                 && (g.key === 'consumable' ? i.kind === 'consumable'
@@ -137,7 +141,7 @@ export function Shop({
                 .map((i) => {
                   const locked = level < i.unlockLevel
                   const owned = has(i.id)
-                  const poor = character.coins < i.price
+                  const poor = character.coins < P(i.price)
                   return (
                     <div className={'item' + (locked ? ' locked' : '')} key={i.id}>
                       <span className="i-name">{thumb(i)} {i.name}</span>
@@ -155,17 +159,35 @@ export function Shop({
                         onClick={() => void buy(i.id, i.name)}>
                         {locked ? `${i.unlockLevel} 級解鎖`
                           : owned && i.kind === 'cosmetic' ? '已擁有'
-                            : <><Icon name="coin" size={13} /> {i.price}</>}
+                            : <><Icon name="coin" size={13} /> {P(i.price)}</>}
                       </button>
-                      {!locked && poor && !owned && <span className="i-poor">還差 {i.price - character.coins}</span>}
+                      {!locked && poor && !owned && <span className="i-poor">還差 {P(i.price) - character.coins}</span>}
                     </div>
                   )
                 })}
             </div>
-          </section>
+          </Sec>
         ))}
       </div>
     </div>
+  )
+}
+
+/**
+ * 商店的一區。時光幣模式（英雄營軍械庫）用收得起來的木牌標題：道具常買、預設打開排第一，
+ * 軍團那一長串預設收著。銅幣模式照舊。
+ */
+function Sec({ time, title, hint, open, order, children }: {
+  time: boolean; title: string; hint: string; open?: boolean; order: number; children: React.ReactNode
+}) {
+  if (!time) {
+    return <section><h2 className="sec">{title}<small>　{hint}</small></h2>{children}</section>
+  }
+  return (
+    <details className="kr-sec" open={open} style={{ order }}>
+      <summary>{title} <small>{hint}</small></summary>
+      {children}
+    </details>
   )
 }
 
@@ -177,11 +199,13 @@ export function Shop({
  * 之後加新軍團就是往某一層多放一張卡，這裡不用改。
  */
 function LegionShelf({
-  tier, level, coins, badges, owned, busy, onBuy, onCharacter,
+  tier, level, coins, badges, owned, busy, onBuy, onCharacter, price,
 }: {
   tier: keyof typeof TIERS
   level: number
   coins: number
+  /** 銅幣價 → 這個人看到的價（時光幣模式要換算） */
+  price: (n: number) => number
   /** 拿到的成就；還沒讀到是 null */
   badges: Set<string> | null
   owned: (l: LegionDef) => boolean
@@ -195,7 +219,7 @@ function LegionShelf({
     t.unlockLevel > 1 && `Lv${t.unlockLevel}`,
     t.needAchievement && `成就「${ACH_BY_ID.get(t.needAchievement)?.name ?? t.needAchievement}」`,
     t.badgeLater && '指定成就',
-    t.price > 0 && `${t.price} 金`,
+    t.price > 0 && `${price(t.price)} 幣`,
   ].filter(Boolean).join('＋')
   return (
     <div className="lg-shelf" style={{ borderColor: t.tint }}>
@@ -209,7 +233,7 @@ function LegionShelf({
         const need = legionNeed(l)
         const lowLevel = level < t.unlockLevel
         const noBadge = !!need && badges !== null && !badges.has(need)
-        const poor = coins < t.price
+        const poor = coins < price(t.price)
         return (
           <div className={'item lg-item' + (!mine && (lowLevel || noBadge) ? ' locked' : '')} key={l.id || 'default'}>
             <span className="i-name"><LegionThumb legion={l} /> {l.name}</span>
@@ -228,9 +252,9 @@ function LegionShelf({
               {mine ? '已擁有'
                 : lowLevel ? `${t.unlockLevel} 級解鎖`
                   : noBadge ? '先拿成就'
-                    : <><Icon name="coin" size={13} /> {t.price}</>}
+                    : <><Icon name="coin" size={13} /> {price(t.price)}</>}
             </button>
-            {!mine && !lowLevel && !noBadge && poor && <span className="i-poor">還差 {t.price - coins}</span>}
+            {!mine && !lowLevel && !noBadge && poor && <span className="i-poor">還差 {price(t.price) - coins}</span>}
           </div>
         )
       })}

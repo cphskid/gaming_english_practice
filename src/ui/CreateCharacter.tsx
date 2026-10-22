@@ -32,7 +32,8 @@ export function CreateCharacter({
   }
 
   return (
-    <div className="screen">
+    <div className="screen pk-page">
+      <div className="pk-card create-card">
       <h1>捏一個角色</h1>
       <p className="lede">選好之後就可以出發了。之後想改都還改得回來。</p>
       {error && <p className="error">{error}</p>}
@@ -44,19 +45,25 @@ export function CreateCharacter({
         兩個沒有誰比較強，差在打法：騎士把力氣集中在一隻身上，法師把同樣的力氣散開。
       </p>
 
-      <h2 className="sec">長什麼樣子？<small>　商店還有更多可以買</small></h2>
-      <div className="avatars">
-        {jobAvatars(job).map((a) => (
-          <button key={a.id} className={'av' + (avatar === a.id ? ' on' : '')}
-            onClick={() => setAvatar(a.id)} aria-label={a.name}>
-            <img src={avatarSrc(a.id)} alt="" />
-          </button>
-        ))}
-      </div>
+      {/* 樂園模式：頭像就是樂園的時空旅人，這裡不用再挑一張 */}
+      {character.time ? (
+        <p className="lede left small">頭像就是你在樂園的時空旅人，想換衣服、髮型去樂園的換裝間。</p>
+      ) : (<>
+        <h2 className="sec">長什麼樣子？<small>　商店還有更多可以買</small></h2>
+        <div className="avatars">
+          {jobAvatars(job).map((a) => (
+            <button key={a.id} className={'av' + (avatar === a.id ? ' on' : '')}
+              onClick={() => setAvatar(a.id)} aria-label={a.name}>
+              <img src={avatarSrc(a.id)} alt="" />
+            </button>
+          ))}
+        </div>
+      </>)}
 
       <button className="btn big" onClick={() => void go()} disabled={busy}>
         {busy ? '請稍等…' : '就是這個，出發！'}
       </button>
+      </div>
     </div>
   )
 }

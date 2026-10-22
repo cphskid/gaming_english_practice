@@ -265,7 +265,7 @@ export class LocalRepository implements Repository {
     })
   }
 
-  async buyItem(itemId: string): Promise<{ coins: number; items: Record<string, number> }> {
+  async buyItem(itemId: string, _name?: string): Promise<{ coins: number; items: Record<string, number> }> {
     const c = this.current()
     const item = ITEMS.find((i) => i.id === itemId)
     if (!item) throw new Error('商店裡沒有這個東西')

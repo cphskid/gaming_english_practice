@@ -112,7 +112,7 @@ try {
     console.log('── 帶道具進關卡')
     await page.getByRole('button', { name: '回去' }).click()
     await page.waitForSelector('.levels')
-    await page.locator('.lv').first().click()
+    await page.locator('.lv').first().click(); await page.locator('.lvgo').click()
     await page.waitForSelector('.td-cv', { timeout: 20000 })
     await page.locator('.rotate').click()
     await page.locator('.bagitem').first().waitFor({ timeout: 10000 })

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { count } from '@/core/inventory'
+import { count, priceOf } from '@/core/inventory'
 import { levelFromExp } from '@/core/progress'
 import type { Character } from '@/core/types'
 import { ITEMS } from '@/data/shop'
@@ -11,8 +11,9 @@ import { repo } from '@/net'
 import { AVATAR_TIERS, SHOP_AVATARS, avatarAfterJob, avatarSrc, jobAvatars } from '@/data/avatars'
 import type { Job } from '@/core/types'
 import { JobIcon, JobPicker } from './JobPicker'
-import { Avatar } from './Avatar'
+import { Avatar, Face } from './Avatar'
 import { Icon } from './Icon'
+import { PARK_URL } from '@/net'
 import type { IconName } from '@/data/icons'
 
 /**
@@ -26,6 +27,9 @@ import type { IconName } from '@/data/icons'
  *
  * 這一頁是**收集感的主場**：買到的排在前面、沒買到的畫成灰色剪影
  * 並標上價錢。看得到自己還缺什麼，才會想再打一關。
+ *
+ * 2026-10-10 改版：時光幣模式（樂園合用）換成跟對戰、團戰同一套 kr 版面，各區是收得起來的木牌。
+ * 頭像、外框改由樂園的時空旅人決定，所以這裡只留職業、軍團、陣營顏色、道具。
  */
 export function MyCharacter({
   character, onChanged, onBack, onShop,
@@ -86,15 +90,27 @@ export function MyCharacter({
   const cosmetics = ITEMS.filter((i) => i.kind === 'cosmetic' && !i.achievementOnly && !i.free)
   const ownedCosmetics = cosmetics.filter((i) => has(i.id)).length
 
+  const time = !!character.time
   return (
-    <div className="screen wide">
-      <div className="topbar">
-        <span className="who">我的角色</span>
-        <span className="spacer" />
-        <span className="coins"><Icon name="coin" size={15} /> {character.coins}</span>
-        <button className="btn ghost small" onClick={onShop}>商店</button>
-        <button className="btn ghost small" onClick={onBack}>回去</button>
-      </div>
+    <div className={'screen wide' + (time ? ' kr' : '')}>
+      {time ? (
+        <div className="kr-top">
+          <img className="kr-badge" src={import.meta.env.BASE_URL + 'td-park/p-btn-hero.webp'} alt="" />
+          <h2>英雄營</h2>
+          <span className="spacer" />
+          <span className="coins" title="時光幣（跟樂園共用）"><Icon name="coin" size={15} /> {character.coins}</span>
+          <button className="kr-back" onClick={onShop}>軍械庫</button>
+          <button className="kr-back" onClick={onBack}>回地圖</button>
+        </div>
+      ) : (
+        <div className="topbar">
+          <span className="who">我的角色</span>
+          <span className="spacer" />
+          <span className="coins"><Icon name="coin" size={15} /> {character.coins}</span>
+          <button className="btn ghost small" onClick={onShop}>商店</button>
+          <button className="btn ghost small" onClick={onBack}>回去</button>
+        </div>
+      )}
 
       {error && <p className="error">{error}</p>}
       {note && <p className="note">{note}</p>}
@@ -105,13 +121,17 @@ export function MyCharacter({
           <div className="hero-txt">
             <b><JobIcon job={character.job} size={20} /> {JOB_NAME[character.job]}　Lv.{level}</b>
             <span>{wornLegion.usesColor ? `${wornLegion.name}．${wornColor.name}` : wornLegion.name}　{wornFrame ? wornFrame.name : '沒戴外框'}</span>
-            <span className="i-tag">收集進度 {ownedCosmetics} / {cosmetics.length}</span>
+            {time
+              ? <span className="i-tag">頭像就是你在樂園的時空旅人{PARK_URL && <> ・ <a href={PARK_URL}>去樂園換裝</a></>}</span>
+              : <span className="i-tag">收集進度 {ownedCosmetics} / {cosmetics.length}</span>}
           </div>
         </div>
 
-        <h2 className="sec">職業<small>　不用錢，想換就換，進度和金幣都不會動</small></h2>
-        <JobPicker job={character.job} disabled={busy} onPick={(j) => { if (j !== character.job) void changeJob(j) }} />
+        <Sec time={time} open title="職業" hint="不用錢，想換就換，進度和金幣都不會動">
+          <JobPicker job={character.job} disabled={busy} onPick={(j) => { if (j !== character.job) void changeJob(j) }} />
+        </Sec>
 
+        {!time && <>
         <h2 className="sec">頭像<small>　{JOB_NAME[character.job]}送四張，其他的在商店</small></h2>
         <div className="avatars">
           {jobAvatars(character.job).map((a) => (
@@ -144,8 +164,9 @@ export function MyCharacter({
             </div>
           )
         })}
+        </>}
 
-        <h2 className="sec">軍團<small>　兵推整套換；守塔換士兵和箭塔</small></h2>
+        <Sec time={time} open title="軍團" hint="對戰整套換；守塔換士兵和箭塔">
         <div className="picks">
           {LEGIONS.map((l) => {
             const owned = !l.id || has(l.id)
@@ -158,13 +179,14 @@ export function MyCharacter({
                   : wornLegion.id && wear(wornLegion.id, false, wornLegion.name))}>
                 <LegionThumb legion={l} size={30} />
                 {l.name}
-                {!owned && <small>Lv{t.unlockLevel}．<Icon name="coin" size={12} /> {t.price}</small>}
+                {!owned && <small>Lv{t.unlockLevel}．<Icon name="coin" size={12} /> {priceOf(character, t.price)}</small>}
               </button>
             )
           })}
         </div>
+        </Sec>
 
-        <h2 className="sec">陣營顏色<small>　送的，隨你換</small></h2>
+        <Sec time={time} title="陣營顏色" hint="送的，隨你換">
         {!wornLegion.usesColor && (
           <p className="pick-note">顏色只有王國軍有，換回王國軍才看得到</p>
         )}
@@ -182,7 +204,9 @@ export function MyCharacter({
             )
           })}
         </div>
+        </Sec>
 
+        {!time && <>
         <h2 className="sec">頭像外框</h2>
         <div className="picks">
           <button className={'pick' + (wornFrame ? '' : ' on')} disabled={busy || !wornFrame}
@@ -196,7 +220,7 @@ export function MyCharacter({
               <button key={f.id} className={'pick' + (on ? ' on' : '') + (owned ? '' : ' locked')}
                 disabled={busy || !owned} onClick={() => void wear(f.id, true, f.name)}>
                 <span className={'mugbox ' + f.className} style={{ width: 26, height: 26 }}>
-                  <img src={avatarSrc(character.avatar)} alt="" />
+                  <Face avatar={character.avatar} look={character.look} />
                   {f.badge && <i className="mugbadge" style={{ fontSize: 11 }}>{f.badge}</i>}
                 </span>
                 {f.name}
@@ -207,8 +231,9 @@ export function MyCharacter({
             )
           })}
         </div>
+        </>}
 
-        <h2 className="sec">道具<small>　在關卡最上面那一排點它</small></h2>
+        <Sec time={time} open={time} title="道具" hint="在關卡最上面那一排點它">
         <div className="picks">
           {ITEMS.filter((i) => i.kind === 'consumable').map((i) => (
             <span key={i.id} className={'pick' + (has(i.id) ? '' : ' locked')}>
@@ -217,7 +242,21 @@ export function MyCharacter({
             </span>
           ))}
         </div>
+        </Sec>
       </div>
     </div>
+  )
+}
+
+/** 一區。時光幣模式是收得起來的木牌（跟軍械庫同一套），銅幣模式照舊是標題。 */
+function Sec({ time, title, hint, open, children }: {
+  time: boolean; title: string; hint: string; open?: boolean; children: React.ReactNode
+}) {
+  if (!time) return <><h2 className="sec">{title}<small>　{hint}</small></h2>{children}</>
+  return (
+    <details className="kr-sec" open={open}>
+      <summary>{title} <small>{hint}</small></summary>
+      {children}
+    </details>
   )
 }

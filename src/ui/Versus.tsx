@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { RULES } from '@/games/tug-of-war/battle'
 import { repo } from '@/net'
 import type { GhostRow, LiveLobby, LiveMatchInfo } from '@/net/repository'
-import { avatarSrc } from '@/data/jobs'
 import { legionById } from '@/data/legions'
+import { Face } from './Avatar'
 
 /** 「3 分鐘前」「昨天」這種講法。小朋友看不懂日期時間戳。 */
 function ago(at: number): string {
@@ -155,117 +155,129 @@ export function Versus({
     { name: '隔壁班高手', hardness: 1.3, desc: '比你快，要專心才推得回去' },
   ]
 
+  const ART = `${import.meta.env.BASE_URL}td-park/`.replace(/([^:])\/{2,}/g, '$1/')
   return (
-    <div className="screen wide">
-      <div className="topbar">
-        <h2>⚔️ 兵推對戰</h2>
+    <div className="screen kr">
+      <div className="kr-top">
+        <img className="kr-badge" src={ART + 'p-btn-vs.webp'} alt="" />
+        <h2>對戰</h2>
         <span className="spacer" />
-        <button className="btn ghost" onClick={onBack}>回選關</button>
+        <button className="kr-back" onClick={onBack}>回地圖</button>
       </div>
 
-      <h3 className="vs-h">⚡ 真人對戰</h3>
-      {invites.map((p) => (
-        <div key={p.id} className="panel vs-invite">
-          <span className="mugbox vs-mug"><img src={avatarSrc(p.avatar)} alt="" /></span>
-          <span className="txt"><b>{p.nickname}</b> 邀你對戰！</span>
-          <button className="btn small" onClick={() => void accept(p.id)}>接受</button>
-          <button className="btn ghost small" onClick={() => setDismissed((d) => [...d, p.id])}>現在不要</button>
+      <div className="kr-body">
+        {invites.map((p) => (
+          <div key={p.id} className="kr-card vs-invite">
+            <span className="mugbox vs-mug"><Face id={p.id} avatar={p.avatar} /></span>
+            <span className="txt"><b>{p.nickname}</b> 邀你對戰！</span>
+            <button className="btn small" onClick={() => void accept(p.id)}>接受</button>
+            <button className="btn ghost small" onClick={() => setDismissed((d) => [...d, p.id])}>現在不要</button>
+          </div>
+        ))}
+
+        {/* 主角是隨機對戰：一顆大鈕。班上在線的同學接在它下面 */}
+        <div className="vs-live">
+          <button className={'kr-card vs-seek' + (seekAt ? ' on' : '')} onClick={seek}>
+            <span className="ic">⚔️</span>
+            <span className="txt">
+              <b>{seekAt ? `配對中…還有 ${left(seekAt)} 秒` : '隨機對戰'}</b>
+              <small>{seekAt
+                ? '找班上也在排隊、程度跟你差不多的同學。沒配到就改打分身（再按一下取消）'
+                : '系統幫你配一位班上的同學，跟本人即時對打'}</small>
+            </span>
+          </button>
+          <p className="vs-sub muted">
+            {online.length ? `班上現在在這一頁的同學（${online.length}）：點「邀請」找他對打` : '現在班上沒有其他同學在這一頁。按隨機對戰等一下，或先挑戰分身。'}
+          </p>
+          {online.map((p) => {
+            const waiting = invite?.id === p.id
+            const busyNo = noAnswer === p.id
+            const g = ghostOf(p.id)
+            return (
+              <div key={p.id} className="kr-card vs-person">
+                <span className="mugbox vs-mug"><Face id={p.id} avatar={p.avatar} /></span>
+                <span className="txt">
+                  <b>{p.nickname}</b>
+                  <small className="muted">
+                    {p.busy ? '正在對戰中' : waiting ? `等他回應…${left(invite!.at)}` : busyNo ? '他現在沒空' : '在線上'}
+                    {p.fresh && <span className="fresh">　✨ 還沒跟你對打過</span>}
+                  </small>
+                </span>
+                {busyNo && g
+                  ? <button className="btn ghost small" onClick={() => void challenge(p.id)}>打他的分身</button>
+                  : <button className="btn small" disabled={p.busy || waiting}
+                      onClick={() => void inviteOne(p.id)}>{waiting ? '邀請中' : '邀請'}</button>}
+              </div>
+            )
+          })}
+          {lobbyErr && <p className="vs-sub err">連不上對戰大廳，網路好一點會自己接上</p>}
+          {liveMsg && <p className="vs-sub">{liveMsg}</p>}
         </div>
-      ))}
-      <div className="vs-live">
-        <button className={'panel vs-seek' + (seekAt ? ' on' : '')} onClick={seek}>
-          <span className="ic">🎲</span>
-          <span className="txt">
-            <b>{seekAt ? `配對中…還有 ${left(seekAt)} 秒` : '隨機對戰'}</b>
-            <small>{seekAt
-              ? '找班上也在排隊、程度跟你差不多的同學。沒配到就改打分身（再按一下取消）'
-              : '系統幫你配一位班上的同學，跟本人即時對打'}</small>
-          </span>
-        </button>
-        <p className="vs-sub muted">
-          {online.length ? `班上現在在這一頁的同學（${online.length}）：點「邀請」找他對打` : '現在班上沒有其他同學在這一頁。按隨機對戰等一下，或先挑戰分身。'}
-        </p>
-        {online.map((p) => {
-          const waiting = invite?.id === p.id
-          const busyNo = noAnswer === p.id
-          const g = ghostOf(p.id)
-          return (
-            <div key={p.id} className="panel vs-person">
-              <span className="mugbox vs-mug"><img src={avatarSrc(p.avatar)} alt="" /></span>
-              <span className="txt">
-                <b>{p.nickname}</b>
-                <small className="muted">
-                  {p.busy ? '正在對戰中' : waiting ? `等他回應…${left(invite!.at)}` : busyNo ? '他現在沒空' : '在線上'}
-                  {p.fresh && <span className="fresh">　✨ 還沒跟你對打過</span>}
-                </small>
-              </span>
-              {busyNo && g
-                ? <button className="btn ghost small" onClick={() => void challenge(p.id)}>打他的分身</button>
-                : <button className="btn small" disabled={p.busy || waiting}
-                    onClick={() => void inviteOne(p.id)}>{waiting ? '邀請中' : '邀請'}</button>}
-            </div>
-          )
-        })}
-        {lobbyErr && <p className="vs-sub err">連不上對戰大廳，網路好一點會自己接上</p>}
-        {liveMsg && <p className="vs-sub">{liveMsg}</p>}
-      </div>
 
-      <div className="panel vs-intro">
-        <p>
-          答對一題就派一隻兵往對面走。兩邊的兵在中間打架，誰的兵撐不住，
-          <b>前線就往誰那邊退</b>。推到對方城堡就開始打城堡。
-        </p>
-        <p className="muted">
-          一場 {RULES.seconds / 60} 分鐘。時間到的時候，城堡被打得比較兇的人輸；
-          城堡一樣就看前線推到哪。<b>答對一次就是一隻兵，按再快也不會變多</b>——
-          比的是英文，不是手速。
-        </p>
-      </div>
+        {/* 下面三塊都收得起來：常用的打電腦、分身預設打開，規則說明預設收著 */}
+        <details className="kr-sec" open>
+          <summary>打電腦 <small>練手感</small></summary>
+          <div className="vs-foes">
+            {foes.map((f) => (
+              <button key={f.name} className="kr-card vs-foe" onClick={() => onStart(f.hardness, f.name)}>
+                <span className="ic">🤖</span>
+                <span className="txt">
+                  <b>{f.name}</b>
+                  <small>{f.desc}</small>
+                  <small className="muted">電腦對手・每分鐘約答對 {rate(f.hardness)} 題</small>
+                </span>
+                <span className="go">開打</span>
+              </button>
+            ))}
+          </div>
+        </details>
 
-      <h3 className="vs-h">👥 挑戰同學的分身</h3>
-      <p className="vs-sub muted">
-        分身＝同學最近一場的重播，他本人不在線上。打完你的這一場也會變成你的分身，讓同學來挑戰。
-      </p>
-      <div className="vs-ghosts">
-        {ghosts === null && <p className="vs-sub muted">讀取同學名單中…</p>}
-        {ghosts?.length === 0 && !ghostErr && (
-          <p className="vs-sub muted">班上還沒有人打過兵推。先打一場電腦，你就是第一個分身！</p>
-        )}
-        {ghosts?.map((g) => (
-          <button key={g.studentId} className="panel vs-ghost" disabled={!!busy}
-            onClick={() => void challenge(g.studentId)}>
-            <span className="mugbox vs-mug"><img src={avatarSrc(g.avatar)} alt="" /></span>
-            <span className="txt">
-              <b>{g.nickname}的分身</b>
-              <small className="muted">
-                {ago(g.endedAt)}那一場・答對 {g.correct} 題・{legionById(g.legion).name}
-              </small>
-            </span>
-            <span className="go">{busy === g.studentId ? '載入中' : '挑戰'}</span>
-          </button>
-        ))}
-        {ghostErr && <p className="vs-sub err">{ghostErr}</p>}
-      </div>
+        <details className="kr-sec" open>
+          <summary>挑戰同學的分身 {ghosts?.length ? <small>{ghosts.length} 位</small> : null}</summary>
+          <p className="vs-sub muted">
+            分身＝同學最近一場的重播，他本人不在線上。打完你的這一場也會變成你的分身，讓同學來挑戰。
+          </p>
+          <div className="vs-ghosts">
+            {ghosts === null && <p className="vs-sub muted">讀取同學名單中…</p>}
+            {ghosts?.length === 0 && !ghostErr && (
+              <p className="vs-sub muted">班上還沒有人打過兵推。先打一場電腦，你就是第一個分身！</p>
+            )}
+            {ghosts?.map((g) => (
+              <button key={g.studentId} className="kr-card vs-ghost" disabled={!!busy}
+                onClick={() => void challenge(g.studentId)}>
+                <span className="mugbox vs-mug"><Face id={g.studentId} avatar={g.avatar} /></span>
+                <span className="txt">
+                  <b>{g.nickname}的分身</b>
+                  <small className="muted">
+                    {ago(g.endedAt)}那一場・答對 {g.correct} 題・{legionById(g.legion).name}
+                  </small>
+                </span>
+                <span className="go">{busy === g.studentId ? '載入中' : '挑戰'}</span>
+              </button>
+            ))}
+            {ghostErr && <p className="vs-sub err">{ghostErr}</p>}
+          </div>
+        </details>
 
-      <h3 className="vs-h">🤖 打電腦</h3>
-      <div className="vs-foes">
-        {foes.map((f) => (
-          <button key={f.name} className="panel vs-foe" onClick={() => onStart(f.hardness, f.name)}>
-            <span className="ic">🤖</span>
-            <span className="txt">
-              <b>{f.name}</b>
-              <small>{f.desc}</small>
-              <small className="muted">電腦對手・每分鐘約答對 {rate(f.hardness)} 題</small>
-            </span>
-            <span className="go">開打</span>
-          </button>
-        ))}
+        <details className="kr-sec">
+          <summary>怎麼玩？</summary>
+          <div className="vs-intro">
+            <p>
+              答對一題就派一隻兵往對面走。兩邊的兵在中間打架，誰的兵撐不住，
+              <b>前線就往誰那邊退</b>。推到對方城堡就開始打城堡。
+            </p>
+            <p className="muted">
+              一場 {RULES.seconds / 60} 分鐘。時間到的時候，城堡被打得比較兇的人輸；
+              城堡一樣就看前線推到哪。<b>答對一次就是一隻兵，按再快也不會變多</b>——
+              比的是英文，不是手速。
+            </p>
+            <p className="muted">
+              只有跟同學真人對戰打贏才記進戰旗勝場；打贏電腦或分身不算，金幣和經驗照樣拿得到（那本來就只從答對來）。
+              真人對戰不能用道具。
+            </p>
+          </div>
+        </details>
       </div>
-
-      <p className="vs-note muted">
-        只有跟同學真人對戰打贏才記進戰旗勝場；打贏電腦或分身不算，金幣和經驗照樣拿得到（那本來就只從答對來）。
-        真人對戰不能用道具。
-      </p>
     </div>
   )
 }

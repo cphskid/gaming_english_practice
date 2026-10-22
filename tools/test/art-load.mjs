@@ -67,7 +67,7 @@ for (const scene of [
   await page.waitForSelector('.jobs .job, .levels', { timeout: 30000 })
   if (await page.locator('.jobs .job').count()) {
     await page.locator('.jobs .job').first().click()
-    await page.locator('.avatars .av').first().click()
+    await page.locator('.avatars .av').first().click({ timeout: 2000 }).catch(() => {})
     await page.locator('button.btn.big').click()
   }
   await page.waitForSelector('.levels', { timeout: 30000 })
@@ -86,7 +86,7 @@ for (const scene of [
 
   // 第一次進關卡：這就是 Chuck 回報的那一次
   const t0 = Date.now()
-  await page.locator('.lv').first().click()
+  await page.locator('.lv').first().click(); await page.locator('.lvgo').click()
   await page.waitForSelector('canvas.td-cv', { timeout: 30000 })
   let blank = 0
   for (let i = 0; i < 60; i++) {

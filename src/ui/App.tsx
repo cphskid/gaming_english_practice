@@ -22,6 +22,7 @@ import { audio } from '@/audio'
 import { Login } from './Login'
 import { StaffAuth } from './StaffAuth'
 import { LevelSelect } from './LevelSelect'
+import { isParkKey } from '@/games/tower-defense/park'
 import { GameHost } from './GameHost'
 import { Result } from './Result'
 import { Teacher } from './Teacher'
@@ -38,6 +39,8 @@ import { FeedbackButton } from './Feedback'
 import { Changelog } from './Changelog'
 import { NoticeLayer } from './Notice'
 import { ParkGate } from './ParkGate'
+import { seedLook } from './looks'
+import { LEVELS } from '@/data/levels'
 
 type Screen =
   | 'login' | 'staff' | 'create' | 'select' | 'shop' | 'character' | 'board'
@@ -79,7 +82,7 @@ export function App() {
   const [stat, setStat] = useState<WordStat>(() => new WordStat())
   const [playing, setPlaying] = useState<Playing | null>(null)
   const [result, setResult] = useState<
-    { r: SessionResult; coins: number; exp: number; unlocked: string[]; raid?: RaidResult & { bossId: string } } | null>(null)
+    { r: SessionResult; coins: number; exp: number; unlocked: string[]; raid?: RaidResult & { bossId: string }; time?: Character['time'] } | null>(null)
   const [rotateOff, setRotateOff] = useState(false)
   const [staff, setStaff] = useState<Staff | null>(null)
   /** 現在在哪一場房間裡。null＝沒參加。 */
@@ -153,6 +156,7 @@ export function App() {
     ])
     setStudent(s)
     setCharacter(c)
+    seedLook(s.id, c.look)
     setProgress(new Map(p.map((x) => [x.levelId, x])))
     setStat(WordStat.fromEntries(stats))
     setTeacherOpen(new Set(open))
@@ -170,7 +174,14 @@ export function App() {
    * 挑關卡的那段時間網路本來就是閒的，先抓完進去就直接有圖。
    */
   useEffect(() => {
-    if (screen === 'select') void loadArt()
+    // 2026-10-10 起只先抓新畫風那一份（見 docs/image-loading.md）。舊的像素圖不在這裡抓：
+    // 只有還用得到它們的畫面（二三章、對戰、團戰）進去時才由那個畫面自己抓，不跟第一章的地圖搶頻寬。
+    // 2026-10-12：二、三章的雪地／草原怪和城堡只在打到那一章時才先抓（第一章的學生每次都多抓 300KB）
+    if (screen !== 'select') return
+    const nextLv = LEVELS.find((l) => !progress.get(l.id)?.clearedAt) ?? LEVELS[LEVELS.length - 1]
+    const suf = nextLv.chapter === 2 ? '-snow' : nextLv.chapter === 3 ? '-meadow' : '#'
+    void loadArt((k) => isParkKey(k) && (!(k.endsWith('-snow') || k.endsWith('-meadow')) || k.endsWith(suf)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen])
 
   /**
@@ -453,7 +464,8 @@ export function App() {
       // 金幣以資料庫為準再讀一次回來。接了後端之後真正算數的是伺服器，
       // 前端那份只是為了讓數字立刻跳出來給小朋友看；兩邊算式一致（有對帳測試），
       // 萬一哪天漂移了，這一行會讓它立刻現形，而不是默默越差越多。
-      setCharacter(await repo.loadCharacter(student.id))
+      const fresh = await repo.loadCharacter(student.id)
+      setCharacter(fresh)
       if (lv && nextProgress) setProgress((m) => new Map(m).set(lv.id, nextProgress))
       // 結算畫面上的星星也要是伺服器那一份，不然畫面上三顆、選關畫面上一顆，
       // 小朋友只會覺得星星會不見。
@@ -504,8 +516,10 @@ export function App() {
 
       const bonusCoins = saved?.bonusCoins ?? 0
       setResult({
-        r: { ...r, stars: nextProgress?.stars ?? 0, bonusCoins },
-        coins: me.coins + bonusCoins, exp: me.exp, unlocked, raid: raidRes,
+        // 時光幣模式：這一場換到幾枚，就是錢包前後差多少（首次通關獎勵也算在裡面，不另外列）
+        r: { ...r, stars: nextProgress?.stars ?? 0, bonusCoins: fresh.time ? 0 : bonusCoins },
+        coins: fresh.time ? Math.max(0, fresh.coins - character.coins) : me.coins + bonusCoins,
+        exp: me.exp, unlocked, raid: raidRes, time: fresh.time,
       })
       setSettling(null)
       setScreen('result')
@@ -801,7 +815,7 @@ export function App() {
 
       {screen === 'result' && result && (
         <Result
-          result={result.r} bonus={{ coins: result.coins, exp: result.exp }}
+          result={result.r} bonus={{ coins: result.coins, exp: result.exp }} time={result.time}
           unlocked={result.unlocked}
           raid={result.raid}
           onRetry={() => {

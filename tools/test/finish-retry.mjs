@@ -46,7 +46,7 @@ try {
   await page.locator('form button[type=submit]').click()
   await page.waitForSelector('.jobs .job', { timeout: 40000 })
   await page.locator('.jobs .job').first().click()
-  await page.locator('.avatars .av').first().click()
+  await page.locator('.avatars .av').first().click({ timeout: 2000 }).catch(() => {})
   await page.locator('button.btn.big').click()
   await page.waitForSelector('.levels', { timeout: 40000 })
   ok('學生註冊好了')
@@ -58,7 +58,7 @@ try {
   const before = await coinOf()
 
   // ── 第一關打到通關
-  await page.locator('.lv').first().click()
+  await page.locator('.lv').first().click(); await page.locator('.lvgo').click()
   await page.waitForSelector('.td-cv', { timeout: 30000 })
   await page.locator('.rotate').click().catch(() => {})
   await page.waitForTimeout(600)

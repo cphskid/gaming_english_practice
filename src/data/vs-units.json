@@ -1,0 +1,114 @@
+{
+ "vs-el-u-bow": {
+  "anchor": 0.401,
+  "frames": 6
+ },
+ "vs-el-u-shield": {
+  "anchor": 0.382,
+  "frames": 6
+ },
+ "vs-el-u-spear": {
+  "anchor": 0.401,
+  "frames": 6
+ },
+ "vs-gob-u-bow": {
+  "anchor": 0.257,
+  "frames": 6
+ },
+ "vs-gob-u-shield": {
+  "anchor": 0.367,
+  "frames": 6
+ },
+ "vs-gob-u-spear": {
+  "anchor": 0.361,
+  "frames": 6
+ },
+ "vs-mc-u-bow": {
+  "anchor": 0.369,
+  "frames": 6
+ },
+ "vs-mc-u-shield": {
+  "anchor": 0.306,
+  "frames": 6
+ },
+ "vs-mc-u-shield3": {
+  "anchor": 0.324,
+  "frames": 6
+ },
+ "vs-mc-u-spear": {
+  "anchor": 0.455,
+  "frames": 6
+ },
+ "vs-pb-u-bow": {
+  "anchor": 0.412,
+  "frames": 6
+ },
+ "vs-pb-u-bow3": {
+  "anchor": 0.481,
+  "frames": 6
+ },
+ "vs-pb-u-shield": {
+  "anchor": 0.67,
+  "frames": 6
+ },
+ "vs-pb-u-shield3": {
+  "anchor": 0.497,
+  "frames": 6
+ },
+ "vs-pb-u-spear": {
+  "anchor": 0.379,
+  "frames": 6
+ },
+ "vs-pig-u-bow": {
+  "anchor": 0.492,
+  "frames": 6
+ },
+ "vs-pig-u-bow3": {
+  "anchor": 0.574,
+  "frames": 6
+ },
+ "vs-pig-u-shield": {
+  "anchor": 0.454,
+  "frames": 6
+ },
+ "vs-pig-u-shield3": {
+  "anchor": 0.399,
+  "frames": 6
+ },
+ "vs-pig-u-spear": {
+  "anchor": 0.448,
+  "frames": 6
+ },
+ "vs-th-u-bow": {
+  "anchor": 0.35,
+  "frames": 6
+ },
+ "vs-th-u-bow3": {
+  "anchor": 0.384,
+  "frames": 6
+ },
+ "vs-th-u-shield": {
+  "anchor": 0.463,
+  "frames": 6
+ },
+ "vs-th-u-shield3": {
+  "anchor": 0.356,
+  "frames": 6
+ },
+ "vs-th-u-spear": {
+  "anchor": 0.32,
+  "frames": 6
+ },
+ "vs-u-bow": {
+  "anchor": 0.241,
+  "frames": 6
+ },
+ "vs-u-shield": {
+  "anchor": 0.497,
+  "frames": 6
+ },
+ "vs-u-spear": {
+  "anchor": 0.315,
+  "frames": 6
+ }
+}

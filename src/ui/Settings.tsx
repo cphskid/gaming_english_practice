@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Student } from '@/core/types'
 import { repo } from '@/net'
 import { audio } from '@/audio'
+import { ui } from './park-ui'
 
 /**
  * 學生自己的設定：聲音、改密碼、改暱稱、換班。
@@ -39,15 +40,16 @@ export function Settings({
   }
 
   return (
-    <div className="screen">
-      <div className="topbar">
-        <span className="who">{student.nickname}</span>
+    <div className="screen wide kr">
+      <div className="kr-top">
+        <img className="kr-badge" src={ui('gear')} alt="" />
+        <h2>我的設定</h2>
+        <span className="kr-sub">{student.nickname}</span>
         <span className="spacer" />
-        <button className="btn ghost small" onClick={onBack}>回遊戲</button>
-        <button className="btn ghost small" onClick={onLogout}>登出</button>
+        <button className="kr-back" onClick={onLogout}>登出</button>
+        <button className="kr-back" onClick={onBack}>回遊戲</button>
       </div>
-
-      <h1>我的設定</h1>
+      <div className="kr-body">
       {error && <p className="error">{error}</p>}
       {note && <p className="note">{note}</p>}
 
@@ -130,6 +132,7 @@ export function Settings({
           換班
         </button>
       </form>
+      </div>
     </div>
   )
 }

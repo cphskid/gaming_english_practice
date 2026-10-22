@@ -69,9 +69,17 @@ export function consume(c: Character, itemId: string): Character | null {
   return { ...c, items: { ...c.items, [itemId]: have - 1 } }
 }
 
+/** 這個人看到的價錢：時光幣模式就把銅幣價換算過去（跟資料庫 guardian_buy 同一條算式） */
+export function priceOf(c: Pick<Character, 'time'>, price: number): number {
+  return c.time ? Math.max(1, Math.ceil(price / c.time.per)) : price
+}
+/** 錢的名字 */
+export const coinName = (c: Pick<Character, 'time'>) => (c.time ? '時光幣' : '銅幣')
+
 export function buy(c: Character, item: ItemDef): { ok: false; why: string } | { ok: true; character: Character } {
-  if (c.coins < item.price) return { ok: false, why: `銅幣不夠，還差 ${item.price - c.coins} 枚` }
-  const next = add({ ...c, coins: c.coins - item.price }, item.id)
+  const price = priceOf(c, item.price)
+  if (c.coins < price) return { ok: false, why: `${coinName(c)}不夠，還差 ${price - c.coins} 枚` }
+  const next = add({ ...c, coins: c.coins - price }, item.id)
   return { ok: true, character: next }
 }
 
