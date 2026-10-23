@@ -1,8 +1,8 @@
 import { LocalRepository } from './local'
 import { SupabaseRepository } from './supabase'
-import type { ClassRosterRow, Repository, RoomBrief, RoomMember, RoomState } from './repository'
+import type { ClassDetail, ClassRosterRow, Repository, RoomBrief, RoomMember, RoomState } from './repository'
 
-export type { ClassRosterRow, Repository, RoomBrief, RoomMember, RoomState }
+export type { ClassDetail, ClassRosterRow, Repository, RoomBrief, RoomMember, RoomState }
 export { LocalRepository, SupabaseRepository }
 
 /**
