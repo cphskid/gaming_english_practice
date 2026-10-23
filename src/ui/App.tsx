@@ -198,6 +198,13 @@ export function App() {
   useEffect(() => {
     void (async () => {
       try {
+        // 從樂園教師入口按「細節頁」來的（?teacher）：同一個帳號也可能是學生（老師自己也玩），
+        // 這時要先開老師頁，不然會直接進遊戲
+        const asTeacher = new URLSearchParams(location.search).has('teacher')
+        if (asTeacher) {
+          const t = await repo.currentStaff()
+          if (t) { setStaff(t); setScreen('teacher'); return }
+        }
         const s = await repo.currentStudent()
         if (s) { await enter(s); return }
         const t = await repo.currentStaff()
