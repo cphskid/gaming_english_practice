@@ -43,7 +43,7 @@ import { seedLook } from './looks'
 import { LEVELS } from '@/data/levels'
 
 type Screen =
-  | 'login' | 'staff' | 'create' | 'select' | 'shop' | 'character' | 'board'
+  | 'boot' | 'login' | 'staff' | 'create' | 'select' | 'shop' | 'character' | 'board'
   | 'play' | 'result' | 'teacher' | 'admin' | 'settings' | 'rooms' | 'lobby' | 'versus'
   | 'profile' | 'peer' | 'blocked'
 
@@ -73,7 +73,9 @@ interface Playing {
 }
 
 export function App() {
-  const [screen, setScreen] = useState<Screen>('login')
+  // 開機先停在「進入中」，等確定沒有登入過才秀登入畫面。
+  // 以前一開始就是 'login'，從樂園點進來（明明已經登入）會先閃一下舊的登入版面。
+  const [screen, setScreen] = useState<Screen>('boot')
   const [showChangelog, setShowChangelog] = useState(false)
   const [student, setStudent] = useState<Student | null>(null)
   const [character, setCharacter] = useState<Character | null>(null)
@@ -190,10 +192,13 @@ export function App() {
    */
   useEffect(() => {
     void (async () => {
-      const s = await repo.currentStudent()
-      if (s) { await enter(s); return }
-      const t = await repo.currentStaff()
-      if (t) { setStaff(t); setScreen('teacher') }
+      try {
+        const s = await repo.currentStudent()
+        if (s) { await enter(s); return }
+        const t = await repo.currentStaff()
+        if (t) { setStaff(t); setScreen('teacher'); return }
+      } catch { /* 接不回來就當沒登入，讓他自己登入 */ }
+      setScreen((x) => (x === 'boot' ? 'login' : x))
     })()
   }, [enter])
 
@@ -648,6 +653,13 @@ export function App() {
       {showChangelog && <Changelog onClose={() => setShowChangelog(false)} />}
       {/* 網站公告／維修模式（public/notice.json），見 Notice.tsx */}
       <NoticeLayer playing={screen === 'play'} />
+
+      {screen === 'boot' && (
+        <div className="screen boot" role="status" aria-live="polite">
+          <p>進入守護異世界…</p>
+          <div className="dots"><i /><i /><i /></div>
+        </div>
+      )}
 
       {screen === 'login' && (
         <Login onLogin={login} onRegister={register}

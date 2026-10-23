@@ -326,6 +326,9 @@ button{font-family:inherit}
 .dots i:nth-child(3){animation-delay:.32s}
 @keyframes dot{0%,80%,100%{opacity:.25;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
 @media (prefers-reduced-motion:reduce){.dots i{animation:none;opacity:.6}}
+/* 開機接回登入身分時的過場（不再先閃登入畫面） */
+.boot{gap:14px}
+.boot p{margin:0;color:#a8b89a;font-size:15px}
 
 /* 帳號、老師後台、管理員後台 */
 .screen.wide{justify-content:flex-start}
