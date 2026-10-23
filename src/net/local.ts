@@ -188,6 +188,15 @@ export class LocalRepository implements Repository {
     return { ok: true }
   }
 
+  /** 本機模式沒有樂園，不記遊玩紀錄 */
+  async playStart(): Promise<number | null> {
+    return null
+  }
+
+  async playBeat(): Promise<boolean> {
+    return false
+  }
+
   async logout(): Promise<void> {
     setSession(null)
   }

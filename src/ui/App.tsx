@@ -14,6 +14,7 @@ import { bossRaid, towerDefense, tugOfWar } from '@/games'
 import { BOSS_BY_ID, bossWords } from '@/data/bosses'
 import { loadArt } from '@/games/tower-defense/art'
 import { PARK_FACILITY, PARK_URL, repo } from '@/net'
+import { playlogActive } from '@/net/playlog'
 import type { LiveMatchInfo, SavedResult } from '@/net/repository'
 import { liveLink } from '@/net/live'
 import { raidLink } from '@/net/raid'
@@ -103,6 +104,10 @@ export function App() {
     !!student && (screen === 'select' || screen === 'rooms'),
   )
   const { room, loaded: roomLoaded } = useRoomState(roomId, screen === 'lobby')
+
+  /** 樂園的遊玩紀錄：學生登入、沒被擋在門口就算「在守護異世界」 */
+  const inGame = !!student && !['boot', 'login', 'staff', 'blocked', 'teacher', 'admin'].includes(screen)
+  useEffect(() => { playlogActive(inGame) }, [inGame])
 
   /**
    * 老師開放的關卡。以前只在登入時讀一次，老師上課當下按開放，

@@ -158,6 +158,26 @@ export class SupabaseRepository implements Repository {
     }
   }
 
+  async playStart(facility: string, place: string, label: string): Promise<number | null> {
+    try {
+      const { data, error } = await this.db.rpc('park_play_start', {
+        p_facility: facility, p_place: place, p_label: label,
+      })
+      return error ? null : ((data as number | null) ?? null)
+    } catch {
+      return null
+    }
+  }
+
+  async playBeat(id: number, end: boolean): Promise<boolean> {
+    try {
+      const { data, error } = await this.db.rpc('park_play_beat', { p_id: id, p_end: end })
+      return !error && !!data
+    } catch {
+      return false
+    }
+  }
+
   async setPassword(oldPassword: string, newPassword: string): Promise<void> {
     const { error } = await this.db.rpc('student_set_password', {
       p_old: oldPassword, p_new: newPassword,

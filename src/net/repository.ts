@@ -38,6 +38,12 @@ export interface Repository {
    * 寧可多放一個人進來，也不要整班在上課時被一個檢查卡在門外。
    */
   canEnter(facility: string): Promise<{ ok: boolean; reason?: string }>
+  /**
+   * 樂園的遊玩紀錄（park_playlog.sql）：進場拿一個編號，玩的時候送心跳，離開時收尾。
+   * 老師後台靠它看「最後在玩什麼、玩多久」。沒裝、出錯、本機模式都回 null／false，遊戲照玩。
+   */
+  playStart(facility: string, place: string, label: string): Promise<number | null>
+  playBeat(id: number, end: boolean): Promise<boolean>
 
   setPassword(oldPassword: string, newPassword: string): Promise<void>
   /** 回傳實際存下來的暱稱 */
