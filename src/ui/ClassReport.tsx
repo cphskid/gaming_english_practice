@@ -54,11 +54,60 @@ function WordList({ rows, kids }: { rows: ReturnType<typeof topWords>; kids?: bo
         if (!w) return null
         return (
           <div key={`${x.w}:${x.k}`}>
-            <b>{w.word}</b><span className="zh">{w.emoji} {w.zh}</span><small>{SKILL_NAME[x.k]}</small>
+            <b>{w.word}</b><span className="zh">{w.emoji} {w.zh}</span>
             <span className="bad">錯 {x.bad}／{x.n}{kids && x.kids.size > 1 ? `（${x.kids.size} 人）` : ''}</span>
           </div>
         )
       })}
+    </div>
+  )
+}
+
+const SKILLS: Skill[] = ['recognize', 'spell', 'listen']
+const SKILL_HOW: Record<Skill, string> = { recognize: '看英文選中文', spell: '自己拼出英文', listen: '聽發音選字' }
+
+/**
+ * 錯字依題型分三張卡（認字／拼字／聽音），卡上是答對率紅黃綠，點一張才展開那一類的錯字。
+ * 家長第一眼只看到三個顏色和一句「哪一類比較弱」，要細節再點。
+ * totals 沒給（例如某一章）就只寫錯幾次、不上色。
+ */
+function SkillBoard({ words, totals, kids }: { words: WordRow[]; totals?: { k: Skill; n: number; ok: number }[]; kids?: boolean }) {
+  const [pick, setPick] = useState<Skill | null>(null)
+  const [more, setMore] = useState(false)
+  const cards = SKILLS.map((k) => {
+    const t = totals?.filter((x) => x.k === k) ?? []
+    const ws = words.filter((w) => w.k === k)
+    return { k, n: sum(t, (x) => x.n), ok: sum(t, (x) => x.ok), bad: sum(ws, (w) => w.bad), words: new Set(ws.map((w) => w.w)).size }
+  }).filter((c) => c.n || c.words)
+  if (!cards.length) return <p className="lede left small">還沒有人答錯過。</p>
+  const scored = cards.filter((c) => c.n >= 10)
+  const weak = [...scored].sort((a, b) => a.ok / a.n - b.ok / b.n)[0]
+  const wp = weak ? pctOf(weak.ok, weak.n)! : null
+  const list = pick ? topWords(words.filter((w) => w.k === pick), more ? 30 : 5) : []
+  const total = pick ? cards.find((c) => c.k === pick)!.words : 0
+  return (
+    <div className="cr-skills">
+      {totals && wp !== null && (
+        <p className="cr-verdict">{wp >= 80 ? '三種題型都答得不錯。' : <>最需要加強的是<b>{SKILL_NAME[weak.k]}</b>（{SKILL_HOW[weak.k]}，答對 {wp}%）。</>}點下面的卡片看錯了哪些字。</p>
+      )}
+      <div className="cr-cards3">
+        {cards.map((c) => {
+          const p = c.n ? pctOf(c.ok, c.n) : null
+          return (
+            <button key={c.k} className={`cr-skill ${totals ? tone(p) : 'none'} ${pick === c.k ? 'on' : ''}`}
+              onClick={() => { setPick(pick === c.k ? null : c.k); setMore(false) }}>
+              <b>{SKILL_NAME[c.k]}</b>
+              <span className="big">{p !== null ? `${p}%` : `錯 ${c.bad} 次`}</span>
+              <small>{c.words ? `錯過 ${c.words} 個字` : '沒有錯過'}{pick === c.k ? ' ▲' : ' ▼'}</small>
+            </button>
+          )
+        })}
+      </div>
+      {pick && <>
+        <p className="cr-sub">{SKILL_NAME[pick]}（{SKILL_HOW[pick]}）錯最多的字</p>
+        <WordList rows={list} kids={kids} />
+        {total > list.length && <button className="cr-link" onClick={() => setMore(true)}>再看 {Math.min(total, 30) - list.length} 個</button>}
+      </>}
     </div>
   )
 }
@@ -171,8 +220,8 @@ function ClassView({ d, byKid, onPick }: { d: ClassDetail; byKid: Map<string, Ro
                   </tbody>
                 </table>
               </div>
-              <p className="cr-sub">這章全班最常錯的字</p>
-              <WordList rows={topWords(words, 10)} kids />
+              <p className="cr-sub">這章全班錯的字（點題型看）</p>
+              <SkillBoard words={words} kids />
             </>}
           </details>
         )
@@ -189,8 +238,8 @@ function ClassView({ d, byKid, onPick }: { d: ClassDetail; byKid: Map<string, Ro
         </ul>
       </>}
 
-      <h2>全班最常錯的字</h2>
-      <WordList rows={topWords(d.words, 12)} kids />
+      <h2>全班錯的字</h2>
+      <SkillBoard words={d.words} totals={d.skills} kids />
     </div>
   )
 }
@@ -203,11 +252,6 @@ function KidReport({ kid, d, rows, onBack }: { kid: { id: string; nickname: stri
   const last = [...rows].sort((a, b) => (b.last ?? '').localeCompare(a.last ?? ''))[0]
   const lv = last && LEVEL.get(last.l)
   const cleared = rows.filter((r) => r.cleared)
-  // 三種題型各錯幾次（答錯紀錄只有錯過的字）
-  const bySkill = (['recognize', 'spell', 'listen'] as Skill[]).map((k) => {
-    const ws = words.filter((w) => w.k === k)
-    return { k, bad: sum(ws, (w) => w.bad), words: ws.length }
-  }).filter((x) => x.words)
   const weak = rows.filter((r) => r.n >= 10 && (pctOf(r.ok, r.n) ?? 100) < 60)
 
   return (
@@ -220,14 +264,12 @@ function KidReport({ kid, d, rows, onBack }: { kid: { id: string; nickname: stri
           （{CHAPTERS.map((c, i) => `第${CH_NO[i]}章 ${cleared.filter((r) => LEVEL.get(r.l)?.chapter === c.no).length}/${c.levels.length}`).join('、')}）。
           {lv && <>最近在打第{CH_NO[lv.chapter - 1]}章第 {lv.no} 關「{lv.name}」（{when(last.last)}）。</>}
           總共答了 {n} 題，<Pct ok={ok} n={n} />。
-          {bySkill.length > 0 && <>答錯的題目裡，{bySkill.map((x) => `${SKILL_NAME[x.k]}錯 ${x.bad} 次`).join('、')}。</>}
         </p>
       )}
 
       {words.length > 0 && <>
         <h2>可以陪他再練的字</h2>
-        <p className="lede left small">照錯的次數排。「認字」是看英文選中文，「拼字」是自己拼出來，「聽音」是聽發音選字。</p>
-        <WordList rows={topWords(words, 15)} />
+        <SkillBoard words={words} totals={d.skills?.filter((x) => x.s === kid.id)} />
       </>}
       {weak.length > 0 && <>
         <h2>答對率比較低的關卡</h2>

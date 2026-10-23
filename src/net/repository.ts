@@ -358,6 +358,8 @@ export interface ClassDetail {
   games: { s: string; g: string; plays: number; n: number; ok: number; last: string }[]
   /** 每人每個字每種題型，只列錯過的 */
   words: { s: string; w: number; k: Skill; n: number; bad: number; last: string }[]
+  /** 每人每種題型總共答幾題、答對幾題（舊版函式沒有這欄） */
+  skills?: { s: string; k: Skill; n: number; ok: number }[]
 }
 
 export interface ClassRosterRow {

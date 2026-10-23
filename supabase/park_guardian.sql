@@ -358,6 +358,7 @@ grant execute on function public.guardian_class_looks(uuid[]) to authenticated;
 --   levels [{s, l, stars, cleared, plays, n, ok, last}]  每人每關：星星、過關時間、打了幾場、答幾題、答對幾題
 --   games  [{s, g, plays, n, ok, last}]                  沒有關卡的玩法（對戰、團戰…）
 --   words  [{s, w, k, n, bad, last}]                     每人每個字每種題型，只列錯過的
+--   skills [{s, k, n, ok}]                                每人每種題型（認字/拼字/聽音）總共答幾題、答對幾題
 -- -----------------------------------------------------------------------------
 create or replace function public.guardian_class_detail(p_code text)
 returns jsonb language plpgsql stable security definer set search_path = public, pg_temp as $$
@@ -384,7 +385,9 @@ begin
                   from ev where level_id is null group by 1, 2) g), '[]'),
       'words', coalesce((select jsonb_agg(jsonb_build_object('s', student_id, 'w', word_id, 'k', skill, 'n', n, 'bad', bad, 'last', last))
           from (select student_id, word_id, skill, count(*) n, count(*) filter (where not correct) bad, max(at) filter (where not correct) last
-                  from ev group by 1, 2, 3 having count(*) filter (where not correct) > 0) w), '[]'))
+                  from ev group by 1, 2, 3 having count(*) filter (where not correct) > 0) w), '[]'),
+      'skills', coalesce((select jsonb_agg(jsonb_build_object('s', student_id, 'k', skill, 'n', n, 'ok', ok))
+          from (select student_id, skill, count(*) n, count(*) filter (where correct) ok from ev group by 1, 2) k), '[]'))
   );
 end;
 $$;
