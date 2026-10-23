@@ -2190,9 +2190,9 @@ begin
      order by m.joined_at, m.student_id
      limit 6;
     get diagnostics v_n = row_count;
-    if v_n < 2 then
+    if v_n < 1 then  -- 2026-10-23 Chuck：正式區也暫時一個人能打，之後再調
       delete from public.raid_seats where room_id = p_room;
-      raise exception '至少要兩個人才能開打';
+      raise exception '至少要一個人才能開打';
     end if;
     update public.rooms
        set status = 'playing', started_at = now(),

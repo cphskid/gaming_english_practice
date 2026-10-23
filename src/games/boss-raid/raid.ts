@@ -29,10 +29,10 @@ export { LINES, MAX_TIER, TIER_COST, statsOf }
 export type { Line }
 
 /**
- * 2026-10-12 Chuck 要自己一個人測魔王戰：**只有測試站**放寬成一個人就能開打
- * （測試庫的 start_room 也只在測試庫改成 1）。正式站還是兩個人，測完改回來。
+ * 2026-10-23 Chuck：正式站也先讓一個人就能開打，看看大家玩的狀況再調
+ * （兩邊資料庫的 start_room 也都改成 1）。
  */
-export const MIN_PLAYERS = import.meta.env.MODE === 'staging' ? 1 : 2
+export const MIN_PLAYERS = 1
 export const MAX_PLAYERS = 6
 
 export interface RaidRules {
