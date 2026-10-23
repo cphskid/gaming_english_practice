@@ -1530,3 +1530,13 @@ h1,h2,h3{color:var(--wood)}
 .cr-words .bad{color:var(--blood);font-weight:800}
 .cr-sum{font-size:16px;line-height:1.9;margin:0}
 .cr-ul{margin:0;padding-left:20px;line-height:1.9;font-size:14px}
+.cr-skills{display:flex;flex-direction:column;gap:8px}
+.cr-verdict{margin:0;font-size:15px;line-height:1.7}
+.cr-cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.cr-skill{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 12px;border-radius:12px;border:2px solid var(--line);border-top-width:6px;background:var(--panel2);font:inherit;color:var(--ink);cursor:pointer;text-align:left}
+.cr-skill .big{font-size:22px;font-weight:800}
+.cr-skill small{color:var(--muted);font-size:12.5px}
+.cr-skill.good{border-top-color:#4aa834}.cr-skill.good .big{color:#3a8a28}
+.cr-skill.mid{border-top-color:#e9b324}.cr-skill.mid .big{color:#b98100}
+.cr-skill.bad{border-top-color:#e0533f}.cr-skill.bad .big{color:#c8402d}
+.cr-skill.on{box-shadow:0 0 0 3px var(--sun)}
