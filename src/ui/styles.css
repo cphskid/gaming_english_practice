@@ -1540,3 +1540,19 @@ h1,h2,h3{color:var(--wood)}
 .cr-skill.mid{border-top-color:#e9b324}.cr-skill.mid .big{color:#b98100}
 .cr-skill.bad{border-top-color:#e0533f}.cr-skill.bad .big{color:#c8402d}
 .cr-skill.on{box-shadow:0 0 0 3px var(--sun)}
+
+/* 老師・家長細節頁（Teacher.tsx）：kr 版面裡的奶油卡片 */
+.tch .kr-top{flex-wrap:wrap}
+.tch .kr-top .kr-sub{font-weight:700;color:#7a5a30}
+.tch .kr-top a.kr-back{text-decoration:none}
+.tch .tch-card{padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.tch .tch-card .muted{margin:0;font-size:14px;line-height:1.7}
+.tch .chips{display:flex;flex-wrap:wrap;gap:8px}
+.tch .chips button{border:2px solid #d6b46e;background:#fff8e6;color:#4a2e14;font:inherit;font-weight:800;padding:6px 14px;border-radius:999px;cursor:pointer}
+.tch .chips button.on{background:#ffd76a;border-color:#c98500;box-shadow:0 2px 0 #b08a45}
+.tch .codebox{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.tch .codebox .lede{color:#7a5a30;text-align:left;max-width:none}
+.tch .roster .r{background:#fff8e6;border:2px solid #ecd29a;color:#4a2e14}
+.tch .opennow{color:#4a2e14}
+.tch .opench{color:#4a2e14;margin:6px 0 4px;font-size:15px}
+.tch .cr{border:0;background:linear-gradient(#fffaf0,#f7e8c6);border:3px solid #d6b46e;box-shadow:0 3px 0 #b08a45}
