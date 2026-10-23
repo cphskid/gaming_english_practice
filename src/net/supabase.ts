@@ -4,7 +4,7 @@ import type {
   Student, TeacherRow, WordStatEntry,
 } from '@/core/types'
 import type {
-  AchievementRow, AddedTeacher, BadgeCount, Pin, ClassRosterRow, LeaderRow, LevelResult, PublicProfile, WeeklySlot, WeeklyStar,
+  AchievementRow, AddedTeacher, BadgeCount, Pin, ClassDetail, ClassRosterRow, LeaderRow, LevelResult, PublicProfile, WeeklySlot, WeeklyStar,
   Repository, RoomBrief, RoomMember, RoomState, RaidSeat, RaidSyncResult, RaidResult, SavedResult, VersusMatchInput, Ghost, GhostRow,
   LiveLobby, LiveMatchInfo, LiveSyncResult, FeedbackKind, FeedbackRow, FeedbackStatus, MyFeedbackRow,
 } from './repository'
@@ -417,6 +417,13 @@ export class SupabaseRepository implements Repository {
       .limit(CLASS_EVENT_LIMIT)
     fail('讀取全班紀錄失敗', error)
     return ((data as EventRow[] | null) ?? []).map(toEvent)
+  }
+
+  async loadClassDetail(classCode: string): Promise<ClassDetail | null> {
+    const { data, error } = await this.db.rpc('guardian_class_detail', { p_code: classCode.trim().toUpperCase() })
+    if (error?.code === 'PGRST202') return null // 資料庫還沒裝新函式
+    fail('讀取全班細節失敗', error)
+    return data as ClassDetail
   }
 
   async loadTeacherOpen(classCode: string): Promise<string[]> {

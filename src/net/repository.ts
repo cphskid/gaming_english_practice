@@ -1,6 +1,6 @@
 import type {
   AdminClassRow, AnswerEvent, Character, ClassRoom, LevelProgress, Mode, Move, Staff, Student,
-  TeacherRow, WordStatEntry,
+  TeacherRow, WordStatEntry, Skill,
 } from '@/core/types'
 
 /**
@@ -129,6 +129,8 @@ export interface Repository {
   loadClassEvents(classCode: string): Promise<AnswerEvent[]>
   /** 班上每個人的概況 */
   loadClassRoster(classCode: string): Promise<ClassRosterRow[]>
+  /** 老師・家長細節頁：每人每關、每個錯過的字（樂園班級名單）。沒裝 SQL 或本機版回 null。 */
+  loadClassDetail(classCode: string): Promise<ClassDetail | null>
   addStudent(classCode: string, loginId: string, password: string, nickname: string): Promise<void>
   removeStudent(studentId: string): Promise<void>
   /** 忘記密碼。順便解鎖，因為忘記的人通常已經試到被鎖住了。 */
@@ -346,6 +348,16 @@ export interface MyFeedbackRow {
   /** 分類或回覆最後一次變動；比 seenAt 新就亮紅點 */
   updatedAt: string | null
   seenAt: string | null
+}
+
+export interface ClassDetail {
+  kids: { id: string; nickname: string }[]
+  /** 每人每關：s 學生、l 關卡、plays 打了幾場、n 答幾題、ok 答對幾題 */
+  levels: { s: string; l: string; stars: number; cleared: string | null; plays: number; n: number; ok: number; last: string | null }[]
+  /** 沒有關卡的玩法（對戰、團戰） */
+  games: { s: string; g: string; plays: number; n: number; ok: number; last: string }[]
+  /** 每人每個字每種題型，只列錯過的 */
+  words: { s: string; w: number; k: Skill; n: number; bad: number; last: string }[]
 }
 
 export interface ClassRosterRow {

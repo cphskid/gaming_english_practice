@@ -418,6 +418,10 @@ export class LocalRepository implements Repository {
     return roster.flatMap((id) => read<AnswerEvent[]>(k.events(id), []))
   }
 
+  async loadClassDetail(): Promise<null> {
+    return null // 本機版沒有樂園班級，老師頁照舊用「全班最常錯的字」
+  }
+
   async loadTeacherOpen(classCode: string): Promise<string[]> {
     return read<string[]>(k.teacherOpen(classCode.trim().toUpperCase()), [])
   }

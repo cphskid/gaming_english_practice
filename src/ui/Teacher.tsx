@@ -5,6 +5,7 @@ import { WordStat } from '@/core/wordStat'
 import { SKILL_NAME, type ClassRoom, type Staff } from '@/core/types'
 import { PARK_URL, repo, type ClassRosterRow } from '@/net'
 import { TeacherRoom } from './Room'
+import { ClassReport } from './ClassReport'
 import { Icon } from './Icon'
 
 /**
@@ -34,6 +35,8 @@ export function Teacher({
   const [roster, setRoster] = useState<ClassRosterRow[]>([])
   const [stat, setStat] = useState<WordStat | null>(null)
   const [open, setOpen] = useState<Set<string>>(new Set())
+  // 有新的細節頁（樂園班級）就不再另外列「全班最常錯的字」，細節頁裡有
+  const [hasDetail, setHasDetail] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
 
@@ -221,6 +224,8 @@ export function Teacher({
               </div>
             </div>
 
+            <ClassReport code={room.code} onLoaded={setHasDetail} />
+
             <TeacherRoom classCode={room.code} />
 
             <div>
@@ -259,6 +264,7 @@ export function Teacher({
               ))}
             </div>
 
+            {!hasDetail && <>
             <div>
               <h2>全班最常錯的字</h2>
             </div>
@@ -276,6 +282,7 @@ export function Teacher({
                 )
               })}
             </div>
+            </>}
 
             <div>
               <h2>這禮拜開放的關卡</h2>

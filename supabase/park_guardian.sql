@@ -350,3 +350,43 @@ end;
 $$;
 revoke all on function public.guardian_class_looks(uuid[]) from public, anon;
 grant execute on function public.guardian_class_looks(uuid[]) to authenticated;
+
+-- -----------------------------------------------------------------------------
+-- 2026-10-23 老師・家長細節頁（跟島嶼開拓者那頁同一套）：一班每個人每一關打得怎樣、錯過哪些字。
+-- 只給這班的老師（或管理員）。回一包 jsonb：
+--   kids   [{id, nickname}]                              這班的人（樂園班級名單）
+--   levels [{s, l, stars, cleared, plays, n, ok, last}]  每人每關：星星、過關時間、打了幾場、答幾題、答對幾題
+--   games  [{s, g, plays, n, ok, last}]                  沒有關卡的玩法（對戰、團戰…）
+--   words  [{s, w, k, n, bad, last}]                     每人每個字每種題型，只列錯過的
+-- -----------------------------------------------------------------------------
+create or replace function public.guardian_class_detail(p_code text)
+returns jsonb language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare v_code text := upper(btrim(coalesce(p_code, '')));
+begin
+  if not public.is_teacher_of(v_code) then raise exception '不是這班的老師'; end if;
+  return (
+    with kids as (
+      select s.id, s.nickname from public.park_class_members m join public.students s on s.id = m.student_id
+       where m.class_code = v_code),
+    ev as (select ae.* from public.answer_events ae join kids k on k.id = ae.student_id)
+    select jsonb_build_object(
+      'kids', coalesce((select jsonb_agg(jsonb_build_object('id', id, 'nickname', nickname) order by nickname) from kids), '[]'),
+      'levels', coalesce((select jsonb_agg(jsonb_build_object('s', x.s, 'l', x.l, 'stars', coalesce(lp.stars, 0),
+                  'cleared', lp.cleared_at, 'plays', coalesce(x.plays, 0), 'n', coalesce(x.n, 0), 'ok', coalesce(x.ok, 0), 'last', coalesce(x.last, lp.cleared_at)))
+          from (select coalesce(a.student_id, p.student_id) s, coalesce(a.level_id, p.level_id) l, a.plays, a.n, a.ok, a.last
+                  from (select student_id, level_id, count(distinct session_id) plays, count(*) n, count(*) filter (where correct) ok, max(at) last
+                          from ev where level_id is not null group by 1, 2) a
+                  full join (select lp.student_id, lp.level_id from public.level_progress lp join kids k on k.id = lp.student_id) p
+                    on p.student_id = a.student_id and p.level_id = a.level_id) x
+          left join public.level_progress lp on lp.student_id = x.s and lp.level_id = x.l), '[]'),
+      'games', coalesce((select jsonb_agg(jsonb_build_object('s', student_id, 'g', game_id, 'plays', plays, 'n', n, 'ok', ok, 'last', last))
+          from (select student_id, game_id, count(distinct session_id) plays, count(*) n, count(*) filter (where correct) ok, max(at) last
+                  from ev where level_id is null group by 1, 2) g), '[]'),
+      'words', coalesce((select jsonb_agg(jsonb_build_object('s', student_id, 'w', word_id, 'k', skill, 'n', n, 'bad', bad, 'last', last))
+          from (select student_id, word_id, skill, count(*) n, count(*) filter (where not correct) bad, max(at) filter (where not correct) last
+                  from ev group by 1, 2, 3 having count(*) filter (where not correct) > 0) w), '[]'))
+  );
+end;
+$$;
+revoke all on function public.guardian_class_detail(text) from public, anon, authenticated;
+grant execute on function public.guardian_class_detail(text) to authenticated;

@@ -1495,3 +1495,38 @@ h1,h2,h3{color:var(--wood)}
   .kr-top h2{margin-left:0;padding-left:12px}
   .kr-sub{display:none}
 }
+
+/* 老師・家長細節頁（ClassReport.tsx）：答對率紅黃綠、每章可收合 */
+.cr{display:flex;flex-direction:column;gap:10px;user-select:text;background:var(--panel);border:3px solid var(--line);border-radius:16px;padding:14px 16px;color:var(--ink)}
+.cr h2{margin:8px 0 0;font-size:19px}
+.cr-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.cr-cards div{background:var(--panel2);border:2px solid var(--line);border-radius:12px;padding:8px 12px;display:flex;flex-direction:column}
+.cr-cards b{font-size:26px;color:var(--wood)}
+.cr-cards span{font-size:13px;color:var(--muted)}
+.cr-wrap{overflow-x:auto}
+.cr-table{border-collapse:collapse;width:100%;font-size:14px;white-space:nowrap}
+.cr-table th,.cr-table td{padding:6px 9px;border-bottom:1px solid var(--cream-2);text-align:left}
+.cr-table th{background:var(--cream-2)}
+.cr-table tr.idle td{color:var(--muted)}
+.cr-link{background:none;border:0;padding:0;font:inherit;font-weight:800;color:var(--wood-2);text-decoration:underline;cursor:pointer;align-self:flex-start}
+.cr-pct{display:inline-block;padding:1px 9px;border-radius:999px;font-size:13px;font-weight:800;color:#fff}
+.cr-pct.good{background:#4aa834}.cr-pct.mid{background:#d99c0b}.cr-pct.bad{background:#e0533f}.cr-pct.none{background:var(--cream-2);color:var(--muted)}
+.cr-legend{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;font-size:13px;color:var(--muted);margin:0}
+.cr-legend .cr-link{margin-left:auto}
+.cr-ch{border-top:2px solid var(--cream-2);border-left:6px solid var(--cream-2);padding:8px 0 8px 10px}
+.cr-ch.good{border-left-color:#4aa834}.cr-ch.mid{border-left-color:#e9b324}.cr-ch.bad{border-left-color:#e0533f}
+.cr-ch summary{cursor:pointer;list-style:none;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;font-size:16px}
+.cr-ch summary::-webkit-details-marker{display:none}
+.cr-ch summary::before{content:"▶";font-size:12px;color:var(--muted);transition:transform .15s}
+.cr-ch[open] summary::before{transform:rotate(90deg)}
+.cr-ch summary span:last-child{color:var(--muted);font-size:14px}
+.cr-ch[open] summary{margin-bottom:6px}
+.cr-sub{margin:8px 0 0;font-weight:800;font-size:14px}
+.cr-words{display:flex;flex-direction:column;gap:4px}
+.cr-words div{display:flex;align-items:baseline;gap:10px;padding:5px 10px;background:var(--panel2);border-radius:8px;font-size:14px}
+.cr-words b{min-width:90px}
+.cr-words .zh{flex:1;color:var(--muted)}
+.cr-words small{color:var(--muted)}
+.cr-words .bad{color:var(--blood);font-weight:800}
+.cr-sum{font-size:16px;line-height:1.9;margin:0}
+.cr-ul{margin:0;padding-left:20px;line-height:1.9;font-size:14px}
