@@ -57,7 +57,9 @@ export function Teacher({
   const refreshClasses = useCallback(async () => {
     const all = await repo.listClasses()
     setClasses(all)
-    setActive((prev) => prev ?? all[0]?.code ?? null)
+    // 樂園「細節頁」連過來會帶 ?class=代碼，直接打開那一班
+    const want = new URLSearchParams(location.search).get('class')?.toUpperCase()
+    setActive((prev) => prev ?? (all.find((c) => c.code === want) ?? all[0])?.code ?? null)
   }, [])
 
   useEffect(() => { void refreshClasses() }, [refreshClasses])
