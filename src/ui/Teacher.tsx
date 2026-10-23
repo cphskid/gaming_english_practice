@@ -7,6 +7,7 @@ import { PARK_URL, repo, type ClassRosterRow } from '@/net'
 import { TeacherRoom } from './Room'
 import { ClassReport } from './ClassReport'
 import { Icon } from './Icon'
+import { ui } from './park-ui'
 
 /**
  * 老師後台。
@@ -134,12 +135,15 @@ export function Teacher({
   const missed = stat?.mostMissed(10) ?? []
 
   return (
-    <div className="screen wide">
-      <div className="topbar">
-        <span className="who">{staff.displayName}</span>
-        {staff.isAdmin && <button className="btn ghost small" onClick={onAdmin}>管理員</button>}
+    <div className="screen wide kr tch">
+      {/* 2026-10-23 版面跟樂園一樣（木牌標題、奶油卡片、可收合），細節頁放最上面，管理的東西收起來 */}
+      <div className="kr-top">
+        <img className="kr-badge" src={ui('rank')} alt="" />
+        <h2>老師・家長細節頁</h2>
+        <span className="kr-sub">{staff.displayName}</span>
+        {staff.isAdmin && <button className="kr-back" onClick={onAdmin}>管理員</button>}
         {noAdmin && (
-          <button className="btn small" onClick={() => void run(async () => {
+          <button className="kr-back" onClick={() => void run(async () => {
             await onClaimAdmin()
             setNoAdmin(false)
             return '你現在是最高管理者了'
@@ -147,17 +151,16 @@ export function Teacher({
         )}
         <span className="spacer" />
         {/* 開班、開放遊戲、全班各科進度、重設密碼都在樂園；這裡留英文專屬的細節（最常錯的字、開放關卡、團戰） */}
-        {PARK_URL && <a className="btn small" href={PARK_URL + 'teacher.html'}>樂園教師入口</a>}
-        <button className="btn ghost small" onClick={onBack}>回遊戲</button>
-        <button className="btn ghost small" onClick={onLogout}>登出</button>
+        {PARK_URL && <a className="kr-back" href={PARK_URL + 'teacher.html'}>回樂園教師入口</a>}
+        <button className="kr-back" onClick={onBack}>回遊戲</button>
+        <button className="kr-back" onClick={onLogout}>登出</button>
       </div>
 
       {error && <p className="error">{error}</p>}
       {note && <p className="note">{note}</p>}
 
-      <div className="teacher">
-        <div>
-          <h2>我的班級</h2>
+      <div className="kr-body teacher">
+        <div className="kr-card tch-card">
           <div className="chips">
             {classes.map((c) => (
               <button key={c.code} className={c.code === active ? 'on' : ''}
@@ -165,10 +168,11 @@ export function Teacher({
                 {c.name || c.code}
               </button>
             ))}
-            {classes.length === 0 && <span className="lede">還沒有班級，在下面開一個。</span>}
+            {classes.length === 0 && <span className="muted">還沒有班級{PARK_URL ? '，請到樂園教師入口開班' : '，在下面開一個'}。</span>}
           </div>
 
-          <form className="row" onSubmit={(e) => {
+          {/* 開班在樂園做；沒有樂園（本機版）才留這裡的表單 */}
+          {!PARK_URL && <form className="row" onSubmit={(e) => {
             e.preventDefault()
             void run(async () => {
               const code = newCode.trim().toUpperCase()
@@ -187,13 +191,16 @@ export function Teacher({
             <button className="btn small" type="submit" disabled={newCode.trim().length < 3}>
               開一個新班
             </button>
-          </form>
+          </form>}
         </div>
 
         {room && (
           <>
-            <div>
-              <h2>{room.name || room.code}</h2>
+            <ClassReport code={room.code} onLoaded={setHasDetail} />
+
+            <details className="kr-sec">
+              <summary>班級設定<small>代碼、開放加入、真人對戰聽音題</small></summary>
+              <div className="kr-card tch-card">
               <div className="codebox">
                 <span className="code">{room.code}</span>
                 <span className="lede">
@@ -224,19 +231,21 @@ export function Teacher({
                   換一組代碼
                 </button>
               </div>
-            </div>
+              </div>
+            </details>
 
-            <ClassReport code={room.code} onLoaded={setHasDetail} />
+            <details className="kr-sec">
+              <summary>老師開場對戰<small>全班一起打</small></summary>
+              <TeacherRoom classCode={room.code} />
+            </details>
 
-            <TeacherRoom classCode={room.code} />
-
-            <div>
-              <h2>班上同學（{roster.length}）</h2>
-              <p className="lede left">
+            <details className="kr-sec">
+              <summary>班上同學（{roster.length}）<small>重設密碼、改暱稱</small></summary>
+              <div className="kr-card tch-card">
+              <p className="muted">
                 小朋友忘記密碼的時候在這裡重設。重設會順便解鎖，因為忘記密碼的人
                 通常已經試到被鎖住了。暱稱取得不好也可以在這裡直接幫他改。
               </p>
-            </div>
             <div className="roster">
               {roster.length === 0 && <p className="lede">還沒有人加入。</p>}
               {roster.map((r) => (
@@ -265,6 +274,8 @@ export function Teacher({
                 </div>
               ))}
             </div>
+              </div>
+            </details>
 
             {!hasDetail && <>
             <div>
@@ -286,9 +297,10 @@ export function Teacher({
             </div>
             </>}
 
-            <div>
-              <h2>這禮拜開放的關卡</h2>
-              <p className="lede left">點一下就額外開放，不受學生自己的進度限制。</p>
+            <details className="kr-sec">
+              <summary>額外開放關卡<small>{open.size ? `目前開了 ${open.size} 關` : '目前沒有'}</small></summary>
+              <div className="kr-card tch-card">
+              <p className="muted">點一下就額外開放，不受學生自己的進度限制。</p>
               {openError && <p className="error">{openError}</p>}
               {/* 85 顆按鈕在手機上一捲就容易誤點，開了哪幾關要一眼看得到（2026-09-26 誤開第 61 關）。
                   點這裡的也是關掉。 */}
@@ -304,7 +316,6 @@ export function Teacher({
                   </div>
                 </>}
               </div>
-            </div>
             {CHAPTERS.map((ch, ci) => (
               <div key={ch.no}>
                 <h3 className="opench">第{'一二三'[ci]}章　{ch.name}</h3>
@@ -318,6 +329,8 @@ export function Teacher({
                 </div>
               </div>
             ))}
+              </div>
+            </details>
           </>
         )}
       </div>
