@@ -651,7 +651,8 @@ export function App() {
       {screen !== 'play' && (student || staff) && (
         <FeedbackButton screen={screen} levelId={playing?.level?.id}
           mode={playing ? (playing.raid ? 'raid' : playing.level ? 'td' : 'versus') : null}
-          inbox={staff ? (staff.isAdmin ? 'admin' : 'teacher') : null} />
+          // 接上樂園時收件匣在樂園教師入口（#feedback），這裡只留寫回報，免得又開出英文版舊收件匣
+          inbox={staff && !PARK_URL ? (staff.isAdmin ? 'admin' : 'teacher') : null} />
       )}
 
       {screen !== 'play' && (

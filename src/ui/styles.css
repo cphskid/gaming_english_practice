@@ -1545,6 +1545,8 @@ h1,h2,h3{color:var(--wood)}
 .tch .kr-top{flex-wrap:wrap}
 .tch .kr-top .kr-sub{font-weight:700;color:#7a5a30}
 .tch .kr-top a.kr-back{text-decoration:none}
+.tch .kr-top .kr-back.park{display:inline-flex;align-items:center;gap:4px}
+.tch .kr-top .kr-back.park img{width:24px;height:24px;object-fit:contain}
 .tch .tch-card{padding:12px 14px;display:flex;flex-direction:column;gap:10px}
 .tch .tch-card .muted{margin:0;font-size:14px;line-height:1.7}
 .tch .chips{display:flex;flex-wrap:wrap;gap:8px}
