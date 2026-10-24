@@ -1558,3 +1558,21 @@ h1,h2,h3{color:var(--wood)}
 .tch .opennow{color:#4a2e14}
 .tch .opench{color:#4a2e14;margin:6px 0 4px;font-size:15px}
 .tch .cr{border:0;background:linear-gradient(#fffaf0,#f7e8c6);border:3px solid #d6b46e;box-shadow:0 3px 0 #b08a45}
+/* 2026-10-24 跟島嶼開拓者細節頁合成一套：工具列第二列（看誰、列印、匯出）、統計三格、一句話重點、老師工具標題 */
+.tch .tch-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;border-top:2px dashed #ecd29a;padding-top:10px}
+.tch .tch-tools label{display:flex;align-items:center;gap:8px;font-weight:800;color:#4a2e14}
+.tch .tch-tools select{font:inherit;font-weight:700;padding:6px 10px;border-radius:10px;border:2px solid #d6b46e;background:#fff}
+.tch .tch-tools .spacer{flex:1}
+.tch .cr-cards div{background:linear-gradient(#fffaf0,#f7e8c6);border:3px solid #d6b46e;box-shadow:0 3px 0 #b08a45;flex-direction:row;align-items:baseline;gap:6px;flex-wrap:wrap}
+.tch .cr-cards b{font-size:30px}
+.tch .cr-key{display:block;margin:0;font-size:15px;line-height:1.8}
+.tch .cr-grid td,.tch .cr-grid th{text-align:center}
+.tch .cr-grid td:first-child,.tch .cr-grid th:first-child{text-align:left;position:sticky;left:0;background:#fffaf0}
+.tch .cr-grid th:first-child{background:var(--cream-2)}
+.tch-tools-h{margin:10px 2px 0;color:var(--cream);font-size:15px;letter-spacing:.06em;text-shadow:0 1px 2px rgba(0,0,0,.4)}
+@media print{
+  body,.screen{background:#fff!important}
+  .tch .kr-top,.tch .tch-tools,.tch .chips,.tch .kr-sec,.tch-tools-h,.tch .cr-link,.app-version,.feedback-fab,.feedback-btn{display:none!important}
+  .tch .kr-body{border:0!important;filter:none!important}
+  .tch .cr{break-inside:avoid;box-shadow:none}
+}

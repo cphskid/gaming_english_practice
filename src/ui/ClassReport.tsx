@@ -112,15 +112,20 @@ function SkillBoard({ words, totals, kids }: { words: WordRow[]; totals?: { k: S
   )
 }
 
-export function ClassReport({ code, onLoaded }: { code: string; onLoaded?: (has: boolean) => void }) {
+/**
+ * 2026-10-24 跟島嶼開拓者細節頁合成同一套：班級、「看誰」、列印、匯出 CSV 在上面的工具列（Teacher.tsx），
+ * 所以看哪個孩子（kid）由外面管，網址也帶 ?kid=，報告頁可以直接分享或列印給家長。
+ */
+export function ClassReport({ code, kid, onKid, onData }: {
+  code: string; kid: string | null; onKid: (id: string | null) => void; onData?: (d: ClassDetail | null) => void
+}) {
   const [d, setD] = useState<ClassDetail | null | undefined>(undefined)
   const [err, setErr] = useState<string | null>(null)
-  const [kid, setKid] = useState<string | null>(null)
   useEffect(() => {
-    setD(undefined); setKid(null); setErr(null)
+    setD(undefined); setErr(null)
     repo.loadClassDetail(code)
-      .then((x) => { setD(x); onLoaded?.(!!x) })
-      .catch((e) => { setErr(e instanceof Error ? e.message : String(e)); setD(null); onLoaded?.(false) })
+      .then((x) => { setD(x); onData?.(x) })
+      .catch((e) => { setErr(e instanceof Error ? e.message : String(e)); setD(null); onData?.(null) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code])
 
@@ -134,8 +139,30 @@ export function ClassReport({ code, onLoaded }: { code: string; onLoaded?: (has:
   if (err) return <p className="error">{err}</p>
   if (!d) return null
   const k = kid ? d.kids.find((x) => x.id === kid) : null
-  if (k) return <KidReport kid={k} d={d} rows={byKid.get(k.id) ?? []} onBack={() => setKid(null)} />
-  return <ClassView d={d} byKid={byKid} onPick={setKid} />
+  if (k) return <KidReport kid={k} d={d} rows={byKid.get(k.id) ?? []} onBack={() => onKid(null)} />
+  return <ClassView d={d} byKid={byKid} onPick={onKid} />
+}
+
+/** 匯出 CSV（跟島嶼開拓者一樣一人一列）：各章過幾關、答對率、最近在打、三種題型答對率、最常錯的字 */
+export function classCsv(d: ClassDetail): string {
+  const head = ['暱稱', ...CHAPTERS.map((_, i) => `第${CH_NO[i]}章過關`), '答對率', '最近在打', '最後玩',
+    ...SKILLS.map((k) => `${SKILL_NAME[k]}答對率`), '最常錯的字']
+  const body = d.kids.map((x) => {
+    const rows = d.levels.filter((r) => r.s === x.id)
+    const games = d.games.filter((g) => g.s === x.id)
+    const n = sum([...rows, ...games], (r) => r.n), ok = sum([...rows, ...games], (r) => r.ok)
+    const last = [...rows].sort((a, b) => (b.last ?? '').localeCompare(a.last ?? ''))[0]
+    const lv = last && LEVEL.get(last.l)
+    const lastAt = [...rows.map((r) => r.last ?? ''), ...games.map((g) => g.last)].sort().pop()
+    const sk = d.skills?.filter((r) => r.s === x.id) ?? []
+    return [x.nickname,
+      ...CHAPTERS.map((c) => { const m = rows.filter((r) => r.cleared && LEVEL.get(r.l)?.chapter === c.no).length; return m ? `${m}/${c.levels.length}` : '' }),
+      n ? `${pctOf(ok, n)}%` : '', lv ? `${lv.no}. ${lv.name}` : '', lastAt ? when(lastAt) : '',
+      ...SKILLS.map((k) => { const t = sk.filter((r) => r.k === k); const tn = sum(t, (r) => r.n); return tn ? `${pctOf(sum(t, (r) => r.ok), tn)}%` : '' }),
+      topWords(d.words.filter((w) => w.s === x.id), 5).map((w) => WORDS_BY_ID.get(w.w)?.word).filter(Boolean).join('、')]
+  })
+  const q = (v: string | number) => { const t = String(v); return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t }
+  return '\ufeff' + [head, ...body].map((r) => r.map(q).join(',')).join('\r\n')
 }
 
 function ClassView({ d, byKid, onPick }: { d: ClassDetail; byKid: Map<string, Row[]>; onPick: (id: string) => void }) {
@@ -148,18 +175,36 @@ function ClassView({ d, byKid, onPick }: { d: ClassDetail; byKid: Map<string, Ro
   const avg = played.length ? sum(played, (x) => cleared(x.id)) / played.length : 0
   const order = [...d.kids].sort((a, b) => lastOf(b.id) - lastOf(a.id) || a.nickname.localeCompare(b.nickname, 'zh-TW'))
 
+  // 一句話重點（兩邊細節頁都有）：答對率最低的一關（至少答 10 題才算），先看這裡
+  const lvStat = LEVELS.map((l) => {
+    const lr = d.levels.filter((r) => r.l === l.id)
+    return { l, n: sum(lr, (r) => r.n), ok: sum(lr, (r) => r.ok), kids: lr.length }
+  }).filter((x) => x.n >= 10)
+  const worst = [...lvStat].sort((a, b) => a.ok / a.n - b.ok / b.n)[0]
+  const allN = sum(d.levels, (r) => r.n), allOk = sum(d.levels, (r) => r.ok)
+
   return (
-    <div className="cr">
+    <>
       <div className="cr-cards">
         <div><b>{played.length}</b><span>/ {d.kids.length} 人玩過</span></div>
         <div><b>{d.kids.filter((x) => lastOf(x.id) > week).length}</b><span>人最近 7 天有玩</span></div>
         <div><b>{avg.toFixed(1)}</b><span>關：玩過的人平均過了幾關（共 {LEVELS.length} 關）</span></div>
       </div>
 
+      {allN > 0 && (
+        <p className="cr cr-key">
+          全班關卡答對率 <Pct ok={allOk} n={allN} pre="" />
+          {worst && pctOf(worst.ok, worst.n)! < 80
+            ? <>；最需要加強的是第{CH_NO[worst.l.chapter - 1]}章第 {worst.l.no} 關「{worst.l.name}」（{worst.kids} 人打過，答對 {pctOf(worst.ok, worst.n)}%），可以上課先帶一次這關的字。</>
+            : '，每一關都答得不錯。'}
+        </p>
+      )}
+
+      <section className="cr">
       <h2>全班進度</h2>
       <p className="lede left small">每章「過了幾關」和全班答對率。點名字看那個孩子的報告（可以給家長看）。</p>
       <div className="cr-wrap">
-        <table className="cr-table">
+        <table className="cr-table cr-grid">
           <thead><tr><th>暱稱</th>{CHAPTERS.map((c, i) => <th key={c.no}>第{CH_NO[i]}章</th>)}<th>答對率</th><th>最近在打</th><th>最後玩</th></tr></thead>
           <tbody>
             {order.map((x) => {
@@ -183,8 +228,11 @@ function ClassView({ d, byKid, onPick }: { d: ClassDetail; byKid: Map<string, Ro
           </tbody>
         </table>
       </div>
+      </section>
 
+      <section className="cr">
       <h2>每一章：上課可以加強的地方</h2>
+      <p className="lede left small">點一章打開，看每一關幾個人玩、幾個人過、答對多少，和這章全班最常錯的字。</p>
       <p className="cr-legend">
         <span className="cr-pct good">80% 以上</span><span className="cr-pct mid">60～79%</span><span className="cr-pct bad">不到 60%</span>
         <span>＝全班答對率，紅色的先看。</span>
@@ -226,8 +274,14 @@ function ClassView({ d, byKid, onPick }: { d: ClassDetail; byKid: Map<string, Ro
           </details>
         )
       })}
+      </section>
 
-      {d.games.length > 0 && <>
+      <section className="cr">
+      <h2>全班錯的字</h2>
+      <SkillBoard words={d.words} totals={d.skills} kids />
+      </section>
+
+      {d.games.length > 0 && <section className="cr">
         <h2>對戰與團戰</h2>
         <ul className="cr-ul">
           {Object.entries(GAME_NAME).map(([g, name]) => {
@@ -236,11 +290,8 @@ function ClassView({ d, byKid, onPick }: { d: ClassDetail; byKid: Map<string, Ro
             return <li key={g}><b>{name}</b>：{rs.length} 人玩過、共 {sum(rs, (r) => r.plays)} 場，<Pct ok={sum(rs, (r) => r.ok)} n={sum(rs, (r) => r.n)} /></li>
           })}
         </ul>
-      </>}
-
-      <h2>全班錯的字</h2>
-      <SkillBoard words={d.words} totals={d.skills} kids />
-    </div>
+      </section>}
+    </>
   )
 }
 
@@ -255,7 +306,8 @@ function KidReport({ kid, d, rows, onBack }: { kid: { id: string; nickname: stri
   const weak = rows.filter((r) => r.n >= 10 && (pctOf(r.ok, r.n) ?? 100) < 60)
 
   return (
-    <div className="cr">
+    <>
+    <section className="cr cr-kid">
       <button className="cr-link" onClick={onBack}>‹ 回全班</button>
       <h2>{kid.nickname} 的學習報告</h2>
       {!all.length ? <p className="lede left">還沒開始玩守護異世界。</p> : (
@@ -266,7 +318,9 @@ function KidReport({ kid, d, rows, onBack }: { kid: { id: string; nickname: stri
           總共答了 {n} 題，<Pct ok={ok} n={n} />。
         </p>
       )}
+    </section>
 
+      {(words.length > 0 || weak.length > 0) && <section className="cr">
       {words.length > 0 && <>
         <h2>可以陪他再練的字</h2>
         <SkillBoard words={words} totals={d.skills?.filter((x) => x.s === kid.id)} />
@@ -277,8 +331,11 @@ function KidReport({ kid, d, rows, onBack }: { kid: { id: string; nickname: stri
           {weak.map((r) => { const l = LEVEL.get(r.l)!; return <li key={r.l}>第{CH_NO[l.chapter - 1]}章第 {l.no} 關「{l.name}」：打了 {r.plays} 場，<Pct ok={r.ok} n={r.n} />{r.cleared ? '，已經過關' : '，還沒過關'}。可以陪他把這關的字先念一遍再打。</li> })}
         </ul>
       </>}
+      </section>}
 
-      {rows.length > 0 && CHAPTERS.map((c, i) => {
+      {rows.length > 0 && <section className="cr">
+      <h2>每一章</h2>
+      {CHAPTERS.map((c, i) => {
         const cr = rows.filter((r) => LEVEL.get(r.l)?.chapter === c.no)
         if (!cr.length) return null
         const cok = sum(cr, (r) => r.ok), cn = sum(cr, (r) => r.n)
@@ -301,10 +358,15 @@ function KidReport({ kid, d, rows, onBack }: { kid: { id: string; nickname: stri
           </details>
         )
       })}
+      <p className="lede left small">星星：過關拿到的星星；答對率是那一關所有場次加起來。</p>
+      </section>}
 
-      {games.length > 0 && <ul className="cr-ul">
+      {games.length > 0 && <section className="cr">
+        <h2>對戰與團戰</h2>
+        <ul className="cr-ul">
         {games.map((g) => <li key={g.g}><b>{GAME_NAME[g.g] ?? g.g}</b>：{g.plays} 場，<Pct ok={g.ok} n={g.n} /></li>)}
-      </ul>}
-    </div>
+        </ul>
+      </section>}
+    </>
   )
 }
