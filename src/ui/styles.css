@@ -242,6 +242,31 @@ button{font-family:inherit}
 .td-rb i{position:absolute;right:-4px;top:-4px;width:22px;height:22px;border-radius:50%;background:#5fae3c;color:#fff;
   font:900 14px/22px system-ui;font-style:normal;border:2px solid #fff}
 .td-call:not(.ready){animation:none;opacity:.8}
+/* 新塔還沒有自己的圖示，圓盤鈕上先放 emoji（2026-10-24 方案二） */
+.td-rb-emo{display:block;font-size:calc(100% + 14px);line-height:1;font-style:normal}
+.td-rb{font-size:16px}
+/* 劇情對話（2026-10-24 方案五，data/story.ts） */
+.td-story{position:absolute;inset:0;z-index:9;display:flex;align-items:flex-end;justify-content:center;
+  padding:0 12px 14px;background:linear-gradient(transparent 40%,rgba(30,18,6,.45));cursor:pointer}
+.td-story[hidden]{display:none}
+.td-story-box{position:relative;display:flex;align-items:center;gap:12px;width:min(100%,720px);padding:12px 16px 22px;
+  border-radius:16px;background:linear-gradient(#fff8e6,#f4e1b6);border:3px solid #d29a32;color:#4a2e14;
+  box-shadow:0 6px 18px rgba(0,0,0,.35);animation:td-pop-up .2s ease-out}
+.td-story-box.foe{border-color:#a8452a;background:linear-gradient(#fff0ea,#f2cdb8)}
+@keyframes td-pop-up{from{transform:translateY(16px);opacity:0}}
+.td-story-face{flex:none;width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-size:40px;
+  background:#fffaf0;border:3px solid #d29a32}
+.td-story-box.foe .td-story-face{border-color:#a8452a}
+.td-story-txt b{display:block;font-size:14px;color:#8a5a10}
+.td-story-box.foe .td-story-txt b{color:#8f2a17}
+.td-story-txt p{margin:2px 0 0;font:800 17px/1.45 var(--font,system-ui)}
+.td-story-next{position:absolute;right:14px;bottom:4px;font-size:12px;font-weight:800;color:#8a6a40;animation:wm-bob 1s ease-in-out infinite}
+.td-story-skip{position:absolute;right:12px;top:10px;border:2px solid #d29a32;background:#fff6dc;color:#5a3a18;
+  font-weight:800;font-size:13px;border-radius:99px;padding:3px 12px;cursor:pointer}
+@media (max-width:700px){.td-story-face{width:48px;height:48px;font-size:30px}.td-story-txt p{font-size:15px}}
+.td-lore{position:absolute;left:10px;bottom:10px;z-index:5;width:44px;height:44px;border-radius:50%;border:3px solid #d29a32;
+  background:#fff6dc;font-size:22px;cursor:pointer;box-shadow:0 3px 0 #a8731f}
+.td-lore[hidden]{display:none}
 .td-start{position:absolute;pointer-events:auto;cursor:pointer;display:grid;grid-template-columns:auto auto;
   align-items:center;column-gap:6px;padding:5px 16px 5px 8px;border-radius:999px;border:3px solid #fff3c4;
   background:linear-gradient(#ff7b54,#d9412a);box-shadow:0 4px 0 #8f2a17,0 6px 14px rgba(0,0,0,.35);color:#fff;
@@ -1576,3 +1601,16 @@ h1,h2,h3{color:var(--wood)}
   .tch .kr-body{border:0!important;filter:none!important}
   .tch .cr{break-inside:avoid;box-shadow:none}
 }
+
+/* 2026-10-24 劇情（data/story.ts）：選關大地圖上方的章節故事、還沒搶回來的站、關卡卡片的新登場 */
+.wm-story{position:absolute;left:50%;top:2%;transform:translateX(-50%);z-index:4;max-width:min(62%,560px);
+  display:flex;align-items:center;gap:8px;padding:5px 14px;border-radius:14px;background:rgba(255,248,230,.95);
+  border:3px solid #d29a32;color:#4a2e14;font-weight:800;font-size:13.5px;line-height:1.35;box-shadow:0 3px 0 #a8731f}
+.wm-story span{font-size:22px}
+@media (max-width:700px){.wm-story{left:auto;right:1.2%;transform:none;max-width:56%;font-size:11.5px;padding:3px 9px}}
+.wm-foe{position:absolute;right:-18%;top:-8%;font-size:clamp(11px,1.5cqw,20px);filter:drop-shadow(0 1px 1px rgba(0,0,0,.5));
+  pointer-events:none;animation:wm-foe 1.6s ease-in-out infinite}
+@keyframes wm-foe{50%{transform:translateY(-3px)}}
+.wm-map.dense .wm-foe{font-size:clamp(9px,1.1cqw,15px)}
+.wm-new{margin-top:6px;font-size:12.5px;font-weight:800;color:#1f6f9f;background:#e4f4ff;border-radius:8px;padding:3px 8px}
+.wm-new.boss{color:#8f2a17;background:#ffe3d9}

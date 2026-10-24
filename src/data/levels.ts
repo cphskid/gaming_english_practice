@@ -2,6 +2,7 @@ import type { Layout, LevelData, WaveSpec } from '@/core/types'
 import { FOCUS_MAX, FOCUS_STEP, TOWERS } from './towers'
 import { LAYOUTS, type LayoutName } from './layouts'
 import plan from '../../data/level-plan.json'
+import { kindsUnlockedAt, ENEMIES, type BossSkill } from './enemies'
 
 /**
  * 八十五關，分三章（2026-09-25 從十四關擴成兩千字）。
@@ -103,7 +104,42 @@ function pointAtDist(pts: { x: number; y: number }[], dist: number): { x: number
  *
  * 驗證用 tools/test/play-td.mjs，不是手感。
  */
-function waves(waveCount: number, d: number, pathLen: number, volley: number): WaveSpec[] {
+/**
+ * 一波裡哪幾隻換成特殊怪（2026-10-24 方案一）。
+ *
+ * 大約每三隻有一隻是特殊怪，後面幾波多一點；這一關剛登場的那種排在最前面，
+ * 一開打就看得到。種類輪流出，同一波不會全是同一種。
+ */
+function waveKinds(no: number, d: number, wave: number, count: number, boss: boolean): string[] {
+  const all = kindsUnlockedAt(no)
+  const out: string[] = Array(count).fill('')
+  if (!all.length) return out
+  // 這一關新登場的那一種優先
+  const fresh = all.filter((k) => ENEMIES[k].from === no)
+  // 一關最多三種，照關卡編號輪流挑：每一關的組合不一樣，也不會一次全部擠上來
+  const rest = all.filter((k) => !fresh.includes(k))
+  const pick = rest.length <= 3 - fresh.length ? rest
+    : Array.from({ length: Math.max(0, 3 - fresh.length) }, (_, i) => rest[(no + i * 2) % rest.length])
+  const avail = [...new Set([...fresh, ...pick])]
+  // 簡單的關（刻度低）特殊怪少一點：每四隻一隻；一般每三隻一隻，第四波起每兩隻一隻
+  // 魔王關再少一隻：魔王自己就有招式了（量過：不少一點，魔王關門檻多 5～8 題／分）
+  const every = (d < 6 ? 4 : wave >= 3 ? 2 : 3) + (boss ? 1 : 0)
+  let n = 0
+  for (let j = 1; j < count; j += every) {
+    // 每一波的第一隻特殊怪是新登場的那種，其他輪流
+    out[j] = fresh.length && n === 0 ? fresh[wave % fresh.length] : avail[(wave + n) % avail.length]
+    n++
+  }
+  return out
+}
+
+/**
+ * 特殊怪與塔升級量出來的補血倍率（job-balance.mjs --variety）。
+ * 讓有新東西的關卡，通關門檻（每分鐘要答對幾題）跟原本差不多。
+ */
+export const VARIETY_HP = 1
+
+function waves(waveCount: number, d: number, pathLen: number, volley: number, no = 0, boss = false): WaveSpec[] {
   // d 是「難度刻度」，第一章就是關卡編號 1～14。後兩章不是一路加上去，而是每章
   // 從頭爬一次、最高一樣到 14（見 chapterLevels），所以封頂在每分鐘 25 題。
   const rate = Math.min(25, 11 + d)                     // 目標：每分鐘答對幾題
@@ -117,11 +153,16 @@ function waves(waveCount: number, d: number, pathLen: number, volley: number): W
     const waveSeconds = 24 + d * 1.5 + i * 4
     out.push({
       count: Math.max(3, Math.min(10, Math.round(waveSeconds / gap))),
-      hp: Math.round(volley * hits * 0.95 + i * volley * 0.08),
+      hp: Math.round((volley * hits * 0.95 + i * volley * 0.08) * VARIETY_HP),
       speed,
       gap: +gap.toFixed(1),
       art: i % 2 ? 'goblinPurple' : 'goblinRed',
     })
+    const w = out[out.length - 1]
+    if (no) {
+      const kinds = waveKinds(no, d, i, w.count, boss)
+      if (kinds.some(Boolean)) w.kinds = kinds
+    }
   }
   return out
 }
@@ -188,13 +229,21 @@ function build(o: {
     rules: {
       castleHp: o.boss ? 15 : 20,
       startCoins: 120 + Math.floor(o.d / 3) * 20,
-      waves: waves(o.waveCount, o.d, pathLen, volley),
+      waves: waves(o.waveCount, o.d, pathLen, volley, o.no, o.boss),
       boss: o.boss
         // 魔王要六次齊射才倒，單塔絕對打不動，一定要集火
-        ? { hp: volley * 6, speed: Math.round(pathLen / 26), art: 'goblinPurple', scale: 1.6 }
+        ? { hp: Math.round(volley * 6 * VARIETY_HP), speed: Math.round(pathLen / 26), art: 'goblinPurple', scale: 1.6,
+          skills: bossSkills(o.chapter, o.d) }
         : undefined,
     },
   }
+}
+
+/** 魔王招式：每章一招，難度刻度過 9 的魔王再多一招（見 data/enemies.ts） */
+function bossSkills(chapter: 1 | 2 | 3, d: number): BossSkill[] {
+  const main: BossSkill = chapter === 1 ? 'summon' : chapter === 2 ? 'shield' : 'charge'
+  const extra: BossSkill = chapter === 1 ? 'charge' : chapter === 2 ? 'summon' : 'shield'
+  return d > 9 ? [main, extra] : [main]
 }
 
 const CHAPTER1: LevelData[] = SEEDS.map((s, i) => build({
