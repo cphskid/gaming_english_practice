@@ -66,7 +66,8 @@ export function Teacher({
   useEffect(() => { void refreshClasses() }, [refreshClasses])
 
   useEffect(() => {
-    if (staff.isAdmin) { setNoAdmin(false); return }
+    // 接上樂園時管理員由樂園管，不用問
+    if (staff.isAdmin || PARK_URL) { setNoAdmin(false); return }
     void repo.hasAdmin().then((has) => setNoAdmin(!has)).catch(() => setNoAdmin(false))
   }, [staff.isAdmin])
 
@@ -141,19 +142,30 @@ export function Teacher({
         <img className="kr-badge" src={ui('rank')} alt="" />
         <h2>老師・家長細節頁</h2>
         <span className="kr-sub">{staff.displayName}</span>
-        {staff.isAdmin && <button className="kr-back" onClick={onAdmin}>管理員</button>}
-        {noAdmin && (
-          <button className="kr-back" onClick={() => void run(async () => {
-            await onClaimAdmin()
-            setNoAdmin(false)
-            return '你現在是最高管理者了'
-          })}>我是這裡的管理員</button>
-        )}
         <span className="spacer" />
-        {/* 開班、開放遊戲、全班各科進度、重設密碼都在樂園；這裡留英文專屬的細節（最常錯的字、開放關卡、團戰） */}
-        {PARK_URL && <a className="kr-back" href={PARK_URL + 'teacher.html'}>回樂園教師入口</a>}
-        <button className="kr-back" onClick={onBack}>回遊戲</button>
-        <button className="kr-back" onClick={onLogout}>登出</button>
+        {/*
+          2026-10-24 按鈕跟島嶼開拓者的細節頁一樣：接上樂園時只有一顆「樂園教師入口」（左上角那顆就是回去）。
+          以前這裡還有登出（被樣式排到最左邊加了箭頭，看起來像返回，一按整個樂園都登出）、
+          管理員（開的是英文版舊管理頁）、回遊戲（老師沒有學生帳號會掉到登入畫面），都拿掉了：
+          登出、管理員頁都在樂園教師入口裡。
+          .kr-top 最後一顆 .kr-back 會被排到最左邊加「←」，所以「回去」那顆一定要放最後。
+        */}
+        {PARK_URL ? (
+          <a className="kr-back park" href={PARK_URL + 'teacher.html'}>
+            <img src={PARK_URL + 'img/admin/park.webp'} alt="" />樂園教師入口
+          </a>
+        ) : <>
+          {staff.isAdmin && <button className="kr-back" onClick={onAdmin}>管理員</button>}
+          {noAdmin && (
+            <button className="kr-back" onClick={() => void run(async () => {
+              await onClaimAdmin()
+              setNoAdmin(false)
+              return '你現在是最高管理者了'
+            })}>我是這裡的管理員</button>
+          )}
+          <button className="kr-back" onClick={onLogout}>登出</button>
+          <button className="kr-back" onClick={onBack}>回遊戲</button>
+        </>}
       </div>
 
       {error && <p className="error">{error}</p>}
@@ -198,6 +210,24 @@ export function Teacher({
           <>
             <ClassReport code={room.code} onLoaded={setHasDetail} />
 
+            {/* 代碼、開放加入、換代碼在樂園教師入口做（樂園的班級資料），這裡只留守護異世界自己的設定 */}
+            {PARK_URL ? (
+            <details className="kr-sec">
+              <summary>遊戲設定<small>真人對戰聽音題</small></summary>
+              <div className="kr-card tch-card">
+              <div className="row">
+                <button className={'btn small' + (room.liveListen ? '' : ' ghost')}
+                  onClick={() => void run(async () => {
+                    await repo.setClassLiveListen(room.code, !room.liveListen)
+                    return room.liveListen ? '真人對戰不出聽音題了' : '真人對戰會出聽音題（旁邊的人聽得到答案，在家比較適合）'
+                  })}>
+                  {room.liveListen ? '🔊 真人對戰有聽音題（點一下關掉）' : '🔇 真人對戰不出聽音題（點一下打開）'}
+                </button>
+              </div>
+              <p className="muted">班級代碼、開放加入、換代碼請到<a href={PARK_URL + 'teacher.html'}>樂園教師入口</a>。</p>
+              </div>
+            </details>
+            ) : (
             <details className="kr-sec">
               <summary>班級設定<small>代碼、開放加入、真人對戰聽音題</small></summary>
               <div className="kr-card tch-card">
@@ -233,12 +263,18 @@ export function Teacher({
               </div>
               </div>
             </details>
+            )}
 
             <details className="kr-sec">
               <summary>老師開場對戰<small>全班一起打</small></summary>
               <TeacherRoom classCode={room.code} />
             </details>
 
+            {/*
+              名單管理（重設密碼、改暱稱、移出）在樂園教師入口做。這裡的「移除」是英文版舊功能，
+              會把學生帳號整個刪掉（樂園的「移出」只是移出班級），接上樂園時不放。
+            */}
+            {!PARK_URL && <>
             <details className="kr-sec">
               <summary>班上同學（{roster.length}）<small>重設密碼、改暱稱</small></summary>
               <div className="kr-card tch-card">
@@ -276,6 +312,7 @@ export function Teacher({
             </div>
               </div>
             </details>
+            </>}
 
             {!hasDetail && <>
             <div>
