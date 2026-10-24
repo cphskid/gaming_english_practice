@@ -166,7 +166,7 @@ export function LevelSelect({
           <div className="wm-stars-total"><img src={pic('star')} alt="" /> {stars} / {ch.levels.length * 3}</div>
           {/* 這一章的故事（data/story.ts）：還在打寫現況，全破了寫結局 */}
           {open && (
-            <div className="wm-story"><span>🧚</span>
+            <div className="wm-story"><img src={pic('face-lumi')} alt="露米" />
               {chapterCleared(ch.no, LEVELS, cleared) ? CHAPTER_STORY[ch.no].done : CHAPTER_STORY[ch.no].now}
             </div>
           )}
@@ -190,7 +190,7 @@ export function LevelSelect({
                 {done && <span className="wm-stars">{[0, 1, 2].map((i) => <img key={i} src={pic('star')} alt="" className={i < st ? '' : 'off'} />)}</span>}
                 {!unlocked && <img className="wm-lock" src={pic('lock')} alt="未開放" />}
                 {/* 還沒搶回來的站有敵人佔著（暫代圖示，美術解凍後換手繪小兵） */}
-                {!done && <span className="wm-foe" aria-hidden>{CHAPTER_STORY[ch.no].foe}</span>}
+                {!done && <img className="wm-foe" src={pic('face-boss' + ch.no)} alt="" aria-hidden />}
                 {unlocked && !open && teacherOpen.has(l.id) && <span className="byteacher">老師開放</span>}
                 {l === next && <span className="wm-here">▼</span>}
               </button>
