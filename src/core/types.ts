@@ -129,6 +129,11 @@ export interface WaveSpec {
   /** 每隻之間隔幾秒進場 */
   gap: number
   art?: string
+  /**
+   * 每一隻是什麼怪（data/enemies.ts 的種類，空字串＝一般哥布林），長度跟 count 一樣。
+   * 沒有這欄就全部是一般哥布林。
+   */
+  kinds?: string[]
 }
 
 /** 規則＝波次與怪。與佈局分開，所以同一張圖可以有不同難度。 */
@@ -136,7 +141,7 @@ export interface LevelRules {
   castleHp: number
   startCoins: number
   waves: WaveSpec[]
-  boss?: { hp: number; speed: number; art: string; scale: number }
+  boss?: { hp: number; speed: number; art: string; scale: number; skills?: ('summon' | 'shield' | 'charge')[] }
 }
 
 export interface LevelData {

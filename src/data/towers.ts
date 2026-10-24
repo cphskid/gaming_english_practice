@@ -8,6 +8,18 @@ export interface TowerSpec {
   damage: number
   blockRadius?: number
   soldierHp?: number
+  /** 從第幾關開始蓋得到（沒寫＝一開始就有） */
+  from?: number
+  /** 打到的怪變慢：剩幾成速度、幾秒（冰霜塔） */
+  chill?: { factor: number; seconds: number }
+  /** 濺射：半徑、旁邊的怪吃幾成、最多幾隻（魔法塔） */
+  splash?: { radius: number; share: number; max: number }
+  /** 一發就打碎盾牌兵和魔王冰盾（砲台） */
+  breaksShield?: boolean
+  /** 打魔王多乘這個倍率（砲台） */
+  bossMul?: number
+  /** 圓盤選單上的暫代圖示（正式圖還沒畫的塔用 emoji） */
+  badge?: string
 }
 
 export const TOWERS: Record<string, TowerSpec> = {
@@ -19,6 +31,63 @@ export const TOWERS: Record<string, TowerSpec> = {
     name: '軍營', emoji: '🛡️', desc: '派士兵纏住怪，讓牠們走得很慢',
     cost: 30, range: 0, damage: 0, blockRadius: 30, soldierHp: 60,
   },
+  // 2026-10-24 新塔（方案二）：照關卡解鎖，每一章多一種。數值見 job-balance.mjs --variety。
+  // 傷害都比箭塔低或射程比箭塔短——它們是「換一種打法」，不是「更強的箭塔」。
+  frost: {
+    name: '冰霜塔', emoji: '❄️', badge: '❄️', desc: '答對時打到的怪會凍慢一陣子，傷害比較低',
+    cost: 45, range: 150, damage: 9, from: 15, chill: { factor: 0.5, seconds: 2.5 },
+  },
+  mage: {
+    name: '魔法塔', emoji: '🔮', badge: '🔮', desc: '一發打一小群，旁邊的怪也會受傷',
+    cost: 60, range: 150, damage: 13, from: 30, splash: { radius: 90, share: 0.45, max: 3 },
+  },
+  cannon: {
+    name: '砲台', emoji: '💣', badge: '💣', desc: '射程短、一發很痛，盾牌一打就碎，打魔王特別痛',
+    cost: 70, range: 125, damage: 30, from: 53, breaksShield: true, bossMul: 1.3,
+  },
+}
+
+/** 圓盤選單上塔的順序 */
+export const TOWER_ORDER = ['archery', 'barracks', 'frost', 'mage', 'cannon'] as const
+
+/** 這一關蓋得到哪些塔 */
+export function towersAt(levelNo: number): string[] {
+  return TOWER_ORDER.filter((k) => (TOWERS[k].from ?? 0) <= levelNo)
+}
+
+/**
+ * 塔升級（2026-10-24 方案二）。每座塔可以升兩次，花的是同一場的水晶。
+ *
+ * 升級吃的是「塔位有限、水晶多出來」的那一段：後面幾波塔位都蓋滿了，
+ * 水晶原本只能存著，現在可以拿來升級。所以升級**一定會讓那一關變簡單一點**，
+ * 量過之後由 levels.ts 的 UPGRADE_HP 把怪的血補回來（見 job-balance.mjs --variety）。
+ *
+ * 軍營升級：士兵血變多、纏得更緊（剩下的速度更低）。
+ */
+export const UPGRADE = {
+  /** 升到第 2、3 級要花原價的幾倍 */
+  cost: [0.8, 1.1],
+  /** 第 1、2、3 級的傷害倍率 */
+  damage: [1, 1.3, 1.6],
+  /** 第 1、2、3 級多幾格射程（px） */
+  range: [0, 12, 24],
+  /** 軍營：第 1、2、3 級士兵血量倍率與纏住時剩幾成速度 */
+  soldierHp: [1, 1.5, 2],
+  soldierSlow: [0.3, 0.24, 0.18],
+}
+export const MAX_TOWER_LEVEL = 3
+
+/** 升到下一級要多少水晶；已經滿級回傳 0 */
+export function upgradeCost(kind: string, level: number): number {
+  if (level >= MAX_TOWER_LEVEL) return 0
+  return Math.round(TOWERS[kind].cost * UPGRADE.cost[level - 1] / 5) * 5
+}
+
+/** 一座塔花了多少水晶（拆塔退費用） */
+export function spentOn(kind: string, level: number): number {
+  let n = TOWERS[kind].cost
+  for (let l = 1; l < level; l++) n += upgradeCost(kind, l)
+  return n
 }
 
 /**

@@ -1,6 +1,10 @@
-import { CRYSTAL, FOCUS_MAX, FOCUS_STEP, HERO, SOLDIER_REACH, SOLDIER_SLOW, TOWERS, refundOf } from '@/data/towers'
+import {
+  CRYSTAL, FOCUS_MAX, FOCUS_STEP, HERO, SOLDIER_REACH, TOWERS, UPGRADE, refundOf, spentOn, towersAt, upgradeCost,
+} from '@/data/towers'
 import { JOB_EFFECT } from '@/data/jobs'
-import type { GameContext, GameHandle, LevelData, Point, Word } from '@/core/types'
+import { BOSS_SKILL, ENEMIES, SHAMAN, SLIME_CHILD_HP, SLIME_CHILD_SPEED, type EnemyKind } from '@/data/enemies'
+import { SPEAKERS, storyAfter, storyBefore, type Line } from '@/data/story'
+import type { GameContext, GameHandle, LevelData, Point, Skill, Word } from '@/core/types'
 import { ART, TERRAIN_KEYS, loadArt, onArt } from './art'
 import { PLATE_RULES, layoutPlates as runPlateLayout, plateY } from './plates'
 import { iconImg, iconUrl } from '@/data/icons'
@@ -71,10 +75,24 @@ interface Enemy {
   y: number
   /** 完全進場才可以被點、被出題 */
   entered: boolean
+  /** 哪一種怪（data/enemies.ts），空字串＝一般哥布林 */
+  kind: EnemyKind
+  /** 盾還在：盾牌兵一出生就有，魔王的冰盾是血掉一半才張開 */
+  shield: boolean
+  shieldUsed: boolean
+  /** 冰霜塔：還要凍幾秒、凍的時候剩幾成速度 */
+  chill: number
+  chillF: number
+  /** 計時器：巫師補血、魔王召喚（tick）與衝刺（tick2）；charging＝還要衝幾秒 */
+  tick: number
+  tick2: number
+  charging: number
+  /** 史萊姆分裂出來的小隻，不會再分 */
+  child: boolean
 }
 
-interface Soldier { x: number; y: number; path: number; dist: number; hp: number; respawn: number }
-interface Tower { slot: number; kind: string; soldier: Soldier | null; builtAtWave: number }
+interface Soldier { x: number; y: number; path: number; dist: number; hp: number; maxHp: number; lv: number; respawn: number }
+interface Tower { slot: number; kind: string; soldier: Soldier | null; builtAtWave: number; level: number }
 interface Pop {
   x: number; y: number; text: string; color: string; life: number
   /** 字前面要不要擺一張圖示（data/icons.ts 的鍵）。沒載好就只寫字。 */
@@ -94,8 +112,16 @@ interface Buff { id: string; icon: string; name: string; left: number; dur: numb
 
 /** 擴散出去的圈圈。dur 是它本來有多長命，畫的時候要靠它算擴散到哪了。 */
 interface Ring { x: number; y: number; r: number; max: number; life: number; dur: number; color: string }
-interface Shot { x0: number; y0: number; x1: number; y1: number; life: number }
-interface Spawn { hp: number; speed: number; art: string; path: number; boss: boolean; scale: number }
+interface Shot { x0: number; y0: number; x1: number; y1: number; life: number; color?: string }
+interface Spawn { hp: number; speed: number; art: string; path: number; boss: boolean; scale: number; kind: EnemyKind }
+
+/** 各種塔射出去那條線的顏色 */
+const SHOT_COLOR: Record<string, string> = { frost: '159,216,255', mage: '214,160,255', cannon: '255,170,90' }
+/**
+ * 新塔、新怪的暫代換色（美術暫停中，見 data/enemies.ts）。
+ * 塔拿箭塔的圖、怪拿哥布林的圖，蓋一層顏色上去。
+ */
+const TOWER_TINT: Record<string, string> = { frost: '#6cc4ff', mage: '#a865e0', cannon: '#4a4a52' }
 
 function pathLength(pts: Point[]): number {
   let L = 0
@@ -134,6 +160,8 @@ const SHELL = `
   <div class="td-ring" hidden></div>
   <div class="td-calls"></div>
   <div class="td-guide" hidden></div>
+  <div class="td-story" hidden></div>
+  <button class="td-lore" hidden aria-label="再看一次這一關的故事">📜</button>
   <div class="td-tray">
     <button class="td-card td-sel" data-kind="archery"><b>${iconImg('bow', 15)} 箭塔 <i>40</i></b><span>射程內的怪會被它射中</span></button>
     <button class="td-card" data-kind="barracks"><b>${iconImg('shield', 15)} 軍營 <i>30</i></b><span>派士兵擋路，替你爭取時間</span></button>
@@ -171,6 +199,12 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   const elRing = $<HTMLElement>('.td-ring')
   const elCalls = $<HTMLElement>('.td-calls')
   const elGuide = $<HTMLElement>('.td-guide')
+  const elStory = $<HTMLElement>('.td-story')
+  const elLore = $<HTMLButtonElement>('.td-lore')
+  /** 這一關蓋得到的塔（新塔照關卡解鎖，見 data/towers.ts） */
+  const BUILDABLE = towersAt(level.no)
+  /** 聽音幽靈要念字給你聽；這台裝置念不出來就退回看中文 */
+  const CAN_SPEAK = 'speechSynthesis' in window
 
   // 素材是一張一張進來的，ART 這個物件會就地長大，所以拿參考就好，不用重新指派。
   const img = ART
@@ -293,12 +327,17 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     : createHero(ctx.job, HERO_HOME.x, HERO_HOME.y, 58, -1)
   /** 這隻怪在不在英雄守的範圍裡：從城門到怪身體 */
   const heroReaches = (e: Enemy) => Math.hypot(GATE.x - e.x, GATE.y - (e.y - 22)) <= HERO.reach
-  /** 有沒有任何一座箭塔打得到牠 */
-  const towerCovers = (e: Enemy) => S.towers.some((t) => {
-    const spec = TOWERS[t.kind]
+  /** 塔升級之後的射程與傷害（data/towers.ts 的 UPGRADE） */
+  const towerRange = (t: Tower) => TOWERS[t.kind].range + (TOWERS[t.kind].range ? UPGRADE.range[t.level - 1] : 0)
+  const towerDamage = (t: Tower) => TOWERS[t.kind].damage * UPGRADE.damage[t.level - 1]
+  const inRange = (t: Tower, x: number, y: number) => {
     const s = SLOTS[t.slot]
-    return spec.damage > 0 && Math.hypot(s.x - e.x, s.y - 20 - (e.y - 22)) <= spec.range
-  })
+    return Math.hypot(s.x - x, s.y - 20 - (y - 22)) <= towerRange(t)
+  }
+  /** 有沒有任何一座會打人的塔打得到牠 */
+  const towerCovers = (e: Enemy) => S.towers.some((t) => TOWERS[t.kind].damage > 0 && inRange(t, e.x, e.y))
+  /** 這一題是不是用聽的（聽音幽靈） */
+  const listening = (e: Enemy | null) => !!e && e.kind === 'ghost' && CAN_SPEAK
 
   /** 怪現在剩幾成速度。寒霜陷阱生效中就是三成慢。 */
   const slowFactor = () => (S.buffs.some((b) => b.id === 'slow-30') ? 0.7 : 1)
@@ -335,14 +374,14 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   /** 拿一個目前畫面上還沒出現的字，避免兩隻怪同名沒辦法分辨 */
-  function freshWord(): Word | null {
+  function freshWord(skill?: Skill): Word | null {
     const onScreen = new Set(S.enemies.map((e) => e.word.id))
     for (let i = 0; i < 8; i++) {
-      const q = ctx.nextQuestion()
+      const q = ctx.nextQuestion(skill)
       if (!q) return null
       if (!onScreen.has(q.word.id)) return q.word
     }
-    return ctx.nextQuestion()?.word ?? null
+    return ctx.nextQuestion(skill)?.word ?? null
   }
 
   // ---------------------------------------------------------------- 波次
@@ -359,13 +398,14 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         hp: spec.hp, speed: spec.speed,
         art: spec.art ?? (i % 2 ? 'goblinPurple' : 'goblinRed'),
         path: i % PATHS.length, boss: false, scale: 1,
+        kind: (spec.kinds?.[i] ?? '') as EnemyKind,
       })
     }
     // 魔王在最後一波壓軸，單塔打不動，一定要集火
     if (rules.boss && S.wave === rules.waves.length) {
       S.spawnQueue.push({
         hp: rules.boss.hp, speed: rules.boss.speed, art: rules.boss.art,
-        path: 0, boss: true, scale: rules.boss.scale,
+        path: 0, boss: true, scale: rules.boss.scale, kind: '',
       })
     }
     S.spawnGap = spec.gap
@@ -403,16 +443,32 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   function spawnNext(headStart = 0) {
     const s = S.spawnQueue.shift()
     if (!s) return
-    const word = freshWord()
-    if (!word) return
-    const p = pointAt(PATHS[s.path], headStart)
-    S.enemies.push({
-      word, path: s.path, dist: headStart, hp: s.hp, maxHp: s.hp, speed: s.speed,
-      art: s.art, scale: s.scale, boss: s.boss,
+    // 特殊怪的血量、速度、大小是乘在這一波原本的數字上（倍率見 data/enemies.ts）
+    const k = s.kind ? ENEMIES[s.kind] : null
+    addEnemy({
+      ...s, dist: headStart,
+      hp: Math.max(1, Math.round(s.hp * (k?.hpMul ?? 1))),
+      speed: s.speed * (k?.speedMul ?? 1),
+      scale: s.scale * (k?.scale ?? 1),
+    })
+  }
+
+  /** 放一隻怪到路上。spawnNext、史萊姆分裂、魔王召喚都走這裡。 */
+  function addEnemy(o: Spawn & { dist: number; child?: boolean }): Enemy | null {
+    const word = freshWord(o.kind === 'ghost' && CAN_SPEAK ? 'listen' : undefined)
+    if (!word) return null
+    const p = pointAt(PATHS[o.path], o.dist)
+    const e: Enemy = {
+      word, path: o.path, dist: o.dist, hp: o.hp, maxHp: o.hp, speed: o.speed,
+      art: o.art, scale: o.scale, boss: o.boss,
       frame: Math.random() * 7, blocked: false,
       px: 0, ptx: 0, ox: 0, ty: 0, pw: 0, tier: 0, laid: false, hold: 0, press: 0, good: 0, bad: 0, shake: 0,
-      x: p.x, y: p.y, entered: false,
-    })
+      x: p.x, y: p.y, entered: p.x > ENTER_X && !!o.child,
+      kind: o.kind, shield: o.kind === 'shield', shieldUsed: false, chill: 0, chillF: 1,
+      tick: 0, tick2: 0, charging: 0, child: !!o.child,
+    }
+    S.enemies.push(e)
+    return e
   }
 
   /**
@@ -438,6 +494,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       : ready[(Math.random() * ready.length) | 0]
     S.asked++
     S.askedAt = performance.now()
+    // 聽音幽靈：不給中文，直接念給你聽
+    if (listening(S.target)) speak(S.target.word.word)
     syncQuiz()
   }
 
@@ -450,7 +508,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     S.cooldown = ANSWER_COOLDOWN
 
     // 遊戲只回報發生了什麼，不算錢也不算經驗——那是 core 的事
-    ctx.report({ wordId: S.target.word.id, skill: 'recognize', correct, ms, combo: S.combo })
+    ctx.report({ wordId: S.target.word.id, skill: listening(S.target) ? 'listen' : 'recognize', correct, ms, combo: S.combo })
 
     if (correct) {
       S.correct++; S.combo++
@@ -484,12 +542,12 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     let base = 0
     for (const t of S.towers) {
       const spec = TOWERS[t.kind]
-      if (!spec.damage) continue
+      if (!spec.damage || !inRange(t, e.x, e.y)) continue
       const s = SLOTS[t.slot]
-      const ox = s.x, oy = s.y - 20
-      if (Math.hypot(ox - e.x, oy - (e.y - 22)) > spec.range) continue
-      hits.push(t); base += spec.damage
-      S.shots.push({ x0: ox, y0: oy, x1: e.x, y1: e.y - 24, life: 0.22 })
+      hits.push(t)
+      // 砲台打魔王特別痛（data/towers.ts 的 bossMul）
+      base += towerDamage(t) * (e.boss && spec.bossMul ? spec.bossMul : 1)
+      S.shots.push({ x0: s.x, y0: s.y - 20, x1: e.x, y1: e.y - 24, life: 0.22, color: SHOT_COLOR[t.kind] })
     }
 
     // 英雄守城：箭塔都打不到、怪又走到城堡前面，英雄自己出手（見 data/towers.ts 的 HERO）
@@ -507,6 +565,23 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     // 英雄只在自己出手（guard）時衝出去；箭塔打的那一下，他在城堡旁原地揮一下就好
     if (guard) hero.strike(e.x, e.y)
     else hero.cheer(e.x)
+
+    // 盾（盾牌兵、魔王冰盾）：只有一座塔打到，這一發只打破盾；
+    // 兩座以上一起打、或砲台打到，盾直接碎掉、照樣扣血。
+    if (e.shield) {
+      e.shield = false
+      e.shake = 0.3
+      S.rings.push({ x: e.x, y: e.y - 24, r: 10, max: 54, life: 0.45, dur: 0.45, color: '#d8ecff' })
+      const smash = shooters >= 2 || hits.some((t) => TOWERS[t.kind].breaksShield)
+      if (!smash) {
+        S.pops.push({ x: e.x, y: e.y - 46, text: '盾破了！再答一次', color: '#d8ecff', life: 1.3 })
+        ctx.audio.play('enemy-hit')
+        pickQuestion()
+        return
+      }
+      S.pops.push({ x: e.x, y: e.y - 64, text: '盾碎了！', color: '#d8ecff', life: 1 })
+    }
+
     const mult = 1 + FOCUS_STEP * Math.min(FOCUS_MAX, shooters - 1)
     const total = Math.round(base * mult)
     const job = JOB_EFFECT[ctx.job] ?? JOB_EFFECT.knight
@@ -514,43 +589,129 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     // 主目標。騎士的專長寫在 bossBonus：打魔王特別痛，打小兵跟沒職業一樣。
     const boss = e.boss ? job.bossBonus : 1
     const main = Math.max(1, Math.round(total * job.focus * boss))
-    const dead: Enemy[] = []
+    const dead = new Set<Enemy>()
     e.hp -= main
     S.pops.push({ x: e.x + 18, y: e.y - 40, text: '-' + main, color: '#fff', life: 0.9 })
     if (guard) S.pops.push({ x: e.x + 18, y: e.y - 22, text: '英雄守城', color: '#9fd0ff', life: 1 })
     if (shooters > 1)
       S.pops.push({ x: e.x + 18, y: e.y - 22, text: '集火 ×' + mult.toFixed(1), color: '#ffd05a', life: 1 })
-    if (e.hp <= 0) dead.push(e)
+    if (e.hp <= 0) dead.add(e)
+
+    // 冰霜塔：打到的那隻凍慢一陣子
+    for (const t of hits) {
+      const ch = TOWERS[t.kind].chill
+      if (!ch) continue
+      e.chill = Math.max(e.chill, ch.seconds)
+      e.chillF = ch.factor
+    }
+
+    const near = (radius: number, max: number) => S.enemies
+      .filter((o) => o !== e && o.entered && !dead.has(o))
+      .map((o) => ({ o, d: Math.hypot(o.x - e.x, o.y - e.y) }))
+      .filter((x) => x.d <= radius)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, max)
+
+    // 魔法塔：同一發散給旁邊幾隻（跟法師職業的濺射分開算，兩個會疊）
+    const mages = hits.filter((t) => TOWERS[t.kind].splash)
+    if (mages.length) {
+      const sp = TOWERS[mages[0].kind].splash!
+      const dmg = Math.max(1, Math.round(mages.reduce((n, t) => n + towerDamage(t) * sp.share, 0) * mult))
+      const list = near(sp.radius, sp.max)
+      if (list.length) S.rings.push({ x: e.x, y: e.y - 20, r: 16, max: sp.radius, life: 0.5, dur: 0.5, color: '#d6a0ff' })
+      for (const { o } of list) {
+        o.hp -= dmg
+        o.shake = 0.25
+        S.pops.push({ x: o.x + 14, y: o.y - 34, text: '-' + dmg, color: '#e2c2ff', life: 0.8 })
+        if (o.hp <= 0) dead.add(o)
+      }
+    }
 
     // 濺射。只打已經進場的怪，近的先吃，最多 splashMax 隻——
     // 不設上限的話後面幾關一發就清場，法師會變成唯一解。
     if (job.splash > 0 && job.splashShare > 0) {
-      const near = S.enemies
-        .filter((o) => o !== e && o.entered)
-        .map((o) => ({ o, d: Math.hypot(o.x - e.x, o.y - e.y) }))
-        .filter((x) => x.d <= job.splash)
-        .sort((a, b) => a.d - b.d)
-        .slice(0, job.splashMax)
-      if (near.length) {
+      const list = near(job.splash, job.splashMax)
+      if (list.length) {
         const dmg = Math.max(1, Math.round(total * job.splashShare))
         S.rings.push({ x: e.x, y: e.y - 20, r: 20, max: job.splash, life: 0.5, dur: 0.5, color: '#9fd0ff' })
-        for (const { o } of near) {
+        for (const { o } of list) {
           o.hp -= dmg
           o.shake = 0.25
           S.pops.push({ x: o.x + 14, y: o.y - 34, text: '-' + dmg, color: '#9fd0ff', life: 0.8 })
-          if (o.hp <= 0) dead.push(o)
+          if (o.hp <= 0) dead.add(o)
         }
       }
     }
 
-    if (dead.length) {
+    if (dead.size) {
       ctx.audio.play('enemy-die')
       for (const d of dead) {
         gainCrystals(d.boss ? CRYSTAL.perKill * 5 : CRYSTAL.perKill, d.x, d.y - 70)
         killEnemy(d)
+        if (d.kind === 'slime' && !d.child) splitSlime(d)
       }
     } else ctx.audio.play('enemy-hit')
     pickQuestion()
+  }
+
+  /** 史萊姆倒下分成兩隻小的，各帶一個新字 */
+  function splitSlime(d: Enemy) {
+    for (const off of [14, -20]) {
+      addEnemy({
+        kind: 'slime', hp: Math.max(1, Math.round(d.maxHp * SLIME_CHILD_HP)), speed: d.speed * SLIME_CHILD_SPEED, art: d.art,
+        path: d.path, boss: false, scale: d.scale * 0.7, dist: Math.max(0, d.dist + off), child: true,
+      })
+    }
+    S.rings.push({ x: d.x, y: d.y - 18, r: 8, max: 46, life: 0.45, dur: 0.45, color: '#8fe08a' })
+    S.pops.push({ x: d.x, y: d.y - 56, text: '分裂了！', color: '#b8f0a8', life: 1.1 })
+  }
+
+  /** 治療巫師：幫旁邊的怪補血 */
+  function shamanHeal(w: Enemy) {
+    let n = 0
+    for (const o of S.enemies) {
+      if (o === w || o.hp >= o.maxHp || Math.hypot(o.x - w.x, o.y - w.y) > SHAMAN.radius) continue
+      const add = Math.max(1, Math.round(o.maxHp * SHAMAN.heal))
+      o.hp = Math.min(o.maxHp, o.hp + add)
+      S.pops.push({ x: o.x + 12, y: o.y - 50, text: '+' + add, color: '#9de8a0', life: 0.8 })
+      n++
+    }
+    if (n) S.rings.push({ x: w.x, y: w.y - 20, r: 14, max: SHAMAN.radius, life: 0.6, dur: 0.6, color: '#9de8a0' })
+  }
+
+  /** 魔王招式（data/enemies.ts 的 BOSS_SKILL）：召喚小狼、冰盾、衝刺 */
+  function bossSkills(b: Enemy, dt: number) {
+    const skills = rules.boss?.skills ?? []
+    if (!b.entered || !skills.length) return
+    if (skills.includes('summon')) {
+      b.tick += dt
+      if (b.tick >= BOSS_SKILL.summonEvery && S.enemies.length < 9) {
+        b.tick = 0
+        const spec = rules.waves[Math.min(S.wave - 1, rules.waves.length - 1)]
+        for (let i = 0; i < 2; i++) {
+          addEnemy({
+            kind: 'wolf', hp: Math.max(1, Math.round(spec.hp * ENEMIES.wolf.hpMul)), speed: spec.speed * ENEMIES.wolf.speedMul,
+            art: 'goblinRed', path: b.path, boss: false, scale: ENEMIES.wolf.scale, dist: Math.max(0, b.dist - 40 - i * 45),
+          })
+        }
+        S.pops.push({ x: b.x, y: b.y - 96, text: '召喚小狼！', color: '#ffb48a', life: 1.3 })
+        S.rings.push({ x: b.x, y: b.y - 30, r: 20, max: 80, life: 0.6, dur: 0.6, color: '#ff9a6a' })
+      }
+    }
+    if (skills.includes('charge')) {
+      if (b.charging > 0) b.charging -= dt
+      else if ((b.tick2 += dt) >= BOSS_SKILL.chargeEvery) {
+        b.tick2 = 0
+        b.charging = BOSS_SKILL.chargeSeconds
+        S.pops.push({ x: b.x, y: b.y - 96, text: '衝刺！', color: '#ffb48a', life: 1.1 })
+      }
+    }
+    if (skills.includes('shield') && !b.shieldUsed && b.hp <= b.maxHp / 2) {
+      b.shieldUsed = true
+      b.shield = true
+      S.pops.push({ x: b.x, y: b.y - 96, text: '冰盾！', color: '#d8ecff', life: 1.3 })
+      S.rings.push({ x: b.x, y: b.y - 30, r: 20, max: 70, life: 0.6, dur: 0.6, color: '#d8ecff' })
+    }
   }
 
   /**
@@ -623,9 +784,27 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     const spec = TOWERS[S.picked]
     if (S.crystals < spec.cost) return toast('水晶不夠，還差 ' + (spec.cost - S.crystals) + ' 顆')
     S.crystals -= spec.cost
-    const t: Tower = { slot: idx, kind: S.picked, soldier: null, builtAtWave: S.wave }
-    if (S.picked === 'barracks') t.soldier = makeSoldier(idx)
+    const t: Tower = { slot: idx, kind: S.picked, soldier: null, builtAtWave: S.wave, level: 1 }
+    if (S.picked === 'barracks') t.soldier = makeSoldier(idx, 1)
     S.towers.push(t)
+    ctx.audio.play('tower-build')
+    syncUI()
+  }
+
+  /** 塔升級（data/towers.ts 的 UPGRADE）。跟蓋塔一樣只在備戰的時候能按。 */
+  function upgradeTower(idx: number) {
+    if (S.phase !== 'build') return
+    const t = S.towers.find((x) => x.slot === idx)
+    if (!t) return
+    const cost = upgradeCost(t.kind, t.level)
+    if (!cost) return toast('已經升到最高級了')
+    if (S.crystals < cost) return toast('水晶不夠，還差 ' + (cost - S.crystals) + ' 顆')
+    S.crystals -= cost
+    t.level++
+    if (t.kind === 'barracks') t.soldier = makeSoldier(idx, t.level)
+    const s = SLOTS[idx]
+    S.rings.push({ x: s.x, y: s.y - 40, r: 14, max: 60, life: 0.5, dur: 0.5, color: '#ffe08a' })
+    S.pops.push({ x: s.x, y: s.y - 96, text: `升級！Lv.${t.level}`, color: '#ffe08a', life: 1.2 })
     ctx.audio.play('tower-build')
     syncUI()
   }
@@ -636,7 +815,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     if (i < 0) return
     const t = S.towers[i]
     // 這一波還沒開打全額退，打過仗的退一半。小朋友需要能安心亂試。
-    const back = refundOf(TOWERS[t.kind].cost, t.builtAtWave < S.wave)
+    const back = refundOf(spentOn(t.kind, t.level), t.builtAtWave < S.wave)
     S.crystals += back
     S.towers.splice(i, 1)
     S.selected = null
@@ -656,12 +835,12 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
    * 就退回最近的路點。士兵每次重生都會重算，所以後來才蓋的箭塔
    * 會把士兵吸進火力網裡，玩家亂放也不會白放。
    */
-  function makeSoldier(slotIdx: number): Soldier {
+  function makeSoldier(slotIdx: number, lv: number): Soldier {
     const s = SLOTS[slotIdx]
-    const archers = S.towers.filter((t) => t.kind === 'archery').map((t) => SLOTS[t.slot])
+    const shooters = S.towers.filter((t) => TOWERS[t.kind].damage > 0)
     // 跟 data/levels.ts 的 volleyOf 用同一個判定，不然難度算出來的跟實際打到的會不一樣
     const covered = (px: number, py: number) =>
-      archers.reduce((n, a) => n + (Math.hypot(a.x - px, a.y - 20 - (py - 22)) <= TOWERS.archery.range ? 1 : 0), 0)
+      shooters.reduce((n, t) => n + (inRange(t, px, py) ? 1 : 0), 0)
 
     type Spot = { score: number; d: number; x: number; y: number; path: number; dist: number }
     const spots: Spot[] = []
@@ -678,7 +857,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     const reachable = spots.filter((sp) => sp.d <= SOLDIER_REACH && sp.score > 0)
     const pool = reachable.length ? reachable : spots
     const b = pool.reduce((a, c) => (c.score > a.score || (c.score === a.score && c.d < a.d) ? c : a))
-    return { x: b.x, y: b.y, path: b.path, dist: b.dist, hp: TOWERS.barracks.soldierHp!, respawn: 0 }
+    const maxHp = Math.round(TOWERS.barracks.soldierHp! * UPGRADE.soldierHp[lv - 1])
+    return { x: b.x, y: b.y, path: b.path, dist: b.dist, hp: maxHp, maxHp, lv, respawn: 0 }
   }
 
   // ---------------------------------------------------------------- 每幀
@@ -704,7 +884,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         for (const k of ['press', 'good', 'bad', 'shake'] as const) if (e[k] > 0) e[k] -= dt
 
         let blocker: Soldier | null = null
-        for (const sd of soldiers) {
+        // 蝙蝠會飛，士兵擋不住
+        for (const sd of e.kind === 'bat' ? [] : soldiers) {
           if (sd.path !== e.path) continue
           const gap = sd.dist - e.dist
           if (gap >= -4 && gap < TOWERS.barracks.blockRadius!) blocker = sd
@@ -715,7 +896,13 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         // 拖慢之後怪再慢也一定會走進箭塔的範圍，那個壞情況就消失了，
         // 而軍營原本的用處（替你爭取時間）完全保留。
         if (blocker) blocker.hp -= dt * 9
-        e.dist += e.speed * (blocker ? SOLDIER_SLOW : 1) * slowFactor() * dt
+        if (e.chill > 0) e.chill -= dt
+        if (e.kind === 'shaman' && e.entered && (e.tick += dt) >= SHAMAN.every) { e.tick = 0; shamanHeal(e) }
+        if (e.boss) bossSkills(e, dt)
+        const held = blocker ? UPGRADE.soldierSlow[blocker.lv - 1] : 1
+        const chill = e.chill > 0 ? e.chillF : 1
+        const rush = e.charging > 0 ? BOSS_SKILL.chargeSpeed : 1
+        e.dist += e.speed * held * slowFactor() * chill * rush * dt
 
         const p = pointAt(PATHS[e.path], e.dist)
         e.x = p.x; e.y = p.y
@@ -734,7 +921,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         if (t.kind !== 'barracks' || !t.soldier) continue
         if (t.soldier.hp <= 0) {
           t.soldier.respawn += dt
-          if (t.soldier.respawn > 6) t.soldier = makeSoldier(t.slot)
+          if (t.soldier.respawn > 6) t.soldier = makeSoldier(t.slot, t.level)
         }
       }
 
@@ -770,15 +957,20 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     if (S.phase === 'done') return
     S.phase = 'done'
     elTray.hidden = true
+    elLore.hidden = true
     ctx.audio.play(win ? 'victory' : 'defeat')
     const acc = S.asked ? Math.round((S.correct / S.asked) * 100) : 0
-    ctx.finish({
+    const after = win ? storyAfter(level) : []
+    const done = () => ctx.finish({
       win,
       survival: Math.max(0, S.hp) / rules.castleHp,
       detail: win
         ? `${rules.waves.length} 波全部擋下來，正確率 ${acc}%，城堡還剩 ${S.hp} 滴血。`
         : `撐到第 ${S.wave} 波，正確率 ${acc}%。塔集中一點，或用軍營把怪擋久一些。`,
     })
+    // 打贏魔王、打完一章：先演一小段劇情再進結算（每關只自動演一次）
+    if (after.length && !seenStory('after')) showStory(after, () => { markStory('after'); done() })
+    else done()
   }
 
   // ---------------------------------------------------------------- 字牌排版
@@ -903,7 +1095,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     for (const e of [...S.enemies].filter((e) => e.entered).sort((a, b) => a.tier - b.tier)) drawPlate(e)
 
     for (const s of S.shots) {
-      c2d.strokeStyle = 'rgba(255,240,190,' + s.life / 0.22 + ')'
+      c2d.strokeStyle = 'rgba(' + (s.color ?? '255,240,190') + ',' + s.life / 0.22 + ')'
       c2d.lineWidth = 3; c2d.lineCap = 'round'
       c2d.beginPath(); c2d.moveTo(s.x0, s.y0); c2d.lineTo(s.x1, s.y1); c2d.stroke()
     }
@@ -972,11 +1164,11 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         c2d.beginPath(); c2d.ellipse(s.x, s.y - 4, 34 + 3 * k, 15 + 1.5 * k, 0, 0, 7); c2d.stroke()
       })
       // 圓盤上選了一種塔、還沒確認：在塔位上先畫一座半透明的虛影
-      if (ringSlot !== null && ringPick && ringPick !== 'sell') {
+      if (ringSlot !== null && ringPick && ringPick !== 'sell' && ringPick !== 'upgrade') {
         const s = SLOTS[ringSlot]
-        const im = img['p-' + ringPick]
-        if (im?.complete) {
-          const h = ringPick === 'archery' ? 116 : 84
+        const im = towerPic(ringPick)
+        if (im) {
+          const h = ringPick === 'barracks' ? 84 : 116
           const w = (im.width / im.height) * h
           c2d.save(); c2d.globalAlpha = 0.55 + 0.15 * Math.sin(S.t * 6)
           c2d.drawImage(im, s.x - w / 2, s.y + 12 - h, w, h)
@@ -986,12 +1178,14 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       if (S.selected !== null) {
         const s = SLOTS[S.selected]
         const t = S.towers.find((x) => x.slot === S.selected)
-        const spec = TOWERS[t ? t.kind : ringPick && ringPick !== 'sell' ? ringPick : 'archery']
+        const spec = TOWERS[t ? t.kind : ringPick && TOWERS[ringPick] ? ringPick : 'archery']
+        // 升級鈕按下去（還沒確認）時，畫升級之後的射程
+        const range = t ? towerRange(t) + (ringPick === 'upgrade' && t.level < 3 ? UPGRADE.range[t.level] - UPGRADE.range[t.level - 1] : 0) : spec.range
         if (spec.range) {
           c2d.save()
           c2d.fillStyle = 'rgba(255,240,180,.14)'; c2d.strokeStyle = 'rgba(255,224,138,.9)'; c2d.lineWidth = 2.5
           c2d.setLineDash([8, 6])
-          c2d.beginPath(); c2d.arc(s.x, s.y - 20, spec.range, 0, 7); c2d.fill(); c2d.stroke()
+          c2d.beginPath(); c2d.arc(s.x, s.y - 20, range, 0, 7); c2d.fill(); c2d.stroke()
           c2d.restore()
         }
       }
@@ -1023,7 +1217,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       const on = S.selected === t.slot
       c2d.strokeStyle = on ? 'rgba(255,224,138,.95)' : 'rgba(255,224,138,.4)'
       c2d.lineWidth = on ? 3 : 1.5
-      c2d.beginPath(); c2d.arc(s.x, s.y - 20, spec.range, 0, 7); c2d.stroke()
+      c2d.beginPath(); c2d.arc(s.x, s.y - 20, towerRange(t), 0, 7); c2d.stroke()
       c2d.fillStyle = on ? 'rgba(255,224,138,.12)' : 'rgba(255,224,138,.05)'
       c2d.fill()
     }
@@ -1080,14 +1274,61 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     c2d.drawImage(im, layout.castle.x - w / 2, layout.castle.y - h, w, h)
   }
 
+  /**
+   * 換色過的圖（新塔、新怪的暫代，見 TOWER_TINT 與 data/enemies.ts 的 tint）。
+   * 每張圖每個顏色只做一次，存起來重複用。
+   */
+  const tintCache = new Map<string, HTMLCanvasElement>()
+  function tinted(im: HTMLImageElement | undefined, color: string): HTMLCanvasElement | undefined {
+    if (!im?.complete || !im.naturalWidth) return undefined
+    const key = im.src + '|' + color
+    let c = tintCache.get(key)
+    if (!c) {
+      c = document.createElement('canvas')
+      c.width = im.naturalWidth; c.height = im.naturalHeight
+      const g = c.getContext('2d')!
+      g.drawImage(im, 0, 0)
+      g.globalCompositeOperation = 'source-atop'
+      g.globalAlpha = 0.5
+      g.fillStyle = color
+      g.fillRect(0, 0, c.width, c.height)
+      tintCache.set(key, c)
+    }
+    return c
+  }
+
+  /** 塔的圖。新塔還沒有自己的圖，先拿箭塔換色（美術暫停中） */
+  function towerPic(kind: string): HTMLImageElement | HTMLCanvasElement | undefined {
+    const arch = img[LG_TOWER] ?? img['p-archery']
+    if (kind === 'archery') return arch?.complete ? arch : undefined
+    if (kind === 'barracks') return img['p-barracks']?.complete ? img['p-barracks'] : undefined
+    return tinted(img['p-archery'], TOWER_TINT[kind] ?? '#888')
+  }
+
+  /** 畫布上寫一個 emoji（暫代圖示），有白邊比較看得清楚 */
+  function emoji(ch: string, x: number, y: number, size: number) {
+    c2d.font = `${size}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`
+    c2d.textAlign = 'center'; c2d.textBaseline = 'middle'
+    c2d.fillText(ch, x, y)
+  }
+
   function drawTower(t: Tower, s: Point) {
     if (PARK) {
-      const im = (t.kind === 'archery' ? img[LG_TOWER] : undefined) ?? img['p-' + t.kind]
-      if (!im?.complete) return
-      // 塔自帶一小圈草地，腳對到塔位
-      const h = t.kind === 'archery' ? 116 : 84
+      const im = towerPic(t.kind)
+      if (!im) return
+      // 塔自帶一小圈草地，腳對到塔位；升級之後大一點點
+      const h = (t.kind === 'barracks' ? 84 : 116) * (1 + 0.06 * (t.level - 1))
       const w = (im.width / im.height) * h
       c2d.drawImage(im, s.x - w / 2, s.y + 12 - h, w, h)
+      const badge = TOWERS[t.kind].badge
+      if (badge) emoji(badge, s.x, s.y + 12 - h * 0.62, 22)
+      if (t.level > 1) {
+        // 頭上幾顆星＝升了幾級
+        c2d.font = 'bold 16px system-ui, sans-serif'; c2d.textAlign = 'center'; c2d.textBaseline = 'alphabetic'
+        const txt = '★'.repeat(t.level - 1)
+        c2d.lineWidth = 3; c2d.strokeStyle = 'rgba(80,40,10,.8)'; c2d.strokeText(txt, s.x, s.y + 8 - h)
+        c2d.fillStyle = '#ffd24a'; c2d.fillText(txt, s.x, s.y + 8 - h)
+      }
       return
     }
     const im = art(t.kind)
@@ -1109,7 +1350,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         const bob = fighting ? 0 : Math.sin(S.t * 3 + sd.x) * 0.8
         drawFrame(c2d, im, sp.frames, sp.anchor, f, sd.x, sd.y + 4 + bob, 58, true)
       }
-      bar(sd.x - 17, sd.y - 58, 34, 5, sd.hp / TOWERS.barracks.soldierHp!, '#6fbf4a')
+      bar(sd.x - 17, sd.y - 58, 34, 5, sd.hp / sd.maxHp, '#6fbf4a')
       return
     }
     const w = art('warrior')
@@ -1117,7 +1358,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       shadow(sd.x, sd.y + 2, 20)
       c2d.drawImage(w, sd.x - 42, sd.y - 63, 84, 84)
     }
-    bar(sd.x - 19, sd.y - 48, 38, 5, sd.hp / TOWERS.barracks.soldierHp!, '#6fbf4a')
+    bar(sd.x - 19, sd.y - 48, 38, 5, sd.hp / sd.maxHp, '#6fbf4a')
   }
 
   /**
@@ -1148,11 +1389,16 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     const sc = (1 + (e.press > 0 ? Math.sin((e.press / PRESS) * Math.PI) * 0.18 : 0)) * e.scale
     const sh = e.shake > 0 ? Math.sin(e.shake * 70) * 4 : 0
     shadow(e.x + sh, e.y + 1, 21 * e.scale)
+    // 蝙蝠飛在半空中（影子留在地上），身體上下飄
+    const fly = e.kind === 'bat' ? 22 + Math.sin(S.t * 6 + e.dist * 0.05) * 4 : 0
     c2d.save()
-    c2d.translate(e.x + sh, e.y); c2d.scale(sc, sc); c2d.translate(-(e.x + sh), -e.y)
+    c2d.translate(e.x + sh, e.y - fly); c2d.scale(sc, sc); c2d.translate(-(e.x + sh), -e.y)
+    if (e.kind === 'ghost') c2d.globalAlpha = 0.72
     const sp = PARK ? (PSUF && img[SPRITES[e.art + PSUF]?.k] ? SPRITES[e.art + PSUF] : SPRITES[e.art]) : undefined
-    const pim = sp && img[sp.k]
-    if (sp && pim?.complete) {
+    const raw = sp && img[sp.k]
+    // 特殊怪先拿哥布林換色暫代（data/enemies.ts 的 tint）
+    const pim = raw && e.kind ? tinted(raw, ENEMIES[e.kind].tint) : raw
+    if (sp && pim && (pim instanceof HTMLCanvasElement || pim.complete)) {
       // 走路是第 2、1、3、1 格輪流；剛被打中（答對的那隻）換成縮一下的那格。
       // 面向看牠接下來往哪裡走：路往左彎的那一段要翻面。
       const ahead = pointAt(PATHS[e.path], e.dist + 6)
@@ -1169,7 +1415,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       c2d.beginPath(); c2d.ellipse(e.x + sh, e.y - 20, 26, 28, 0, 0, 7); c2d.fill()
       c2d.globalAlpha = 1
     }
-    if (S.buffs.some((b) => b.id === 'slow-30')) {
+    if (S.buffs.some((b) => b.id === 'slow-30') || e.chill > 0) {
       c2d.globalAlpha = 0.38
       c2d.fillStyle = '#9fd0ff'
       c2d.beginPath(); c2d.ellipse(e.x + sh, e.y - 22, 24, 27, 0, 0, 7); c2d.fill()
@@ -1177,8 +1423,21 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       const fi = popIcon('frost')
       if (fi) c2d.drawImage(fi, e.x + sh - 9, e.y - 65, 18, 18)
     }
+    // 盾（盾牌兵、魔王冰盾）：身體前面一圈藍白色的護罩
+    if (e.shield) {
+      c2d.globalAlpha = 0.85
+      c2d.strokeStyle = '#d8ecff'; c2d.lineWidth = 4
+      c2d.beginPath(); c2d.ellipse(e.x + sh, e.y - 24, 30, 34, 0, 0, 7); c2d.stroke()
+      c2d.globalAlpha = 1
+    }
+    c2d.globalAlpha = 1
     c2d.restore()
-    bar(e.x + sh - 22 * e.scale, e.y - (PARK ? 64 : 46) * e.scale, 44 * e.scale, 5, e.hp / e.maxHp, e.boss ? '#ff7a3c' : '#d4504a')
+    const top = e.y - fly - (PARK ? 64 : 46) * e.scale
+    bar(e.x + sh - 22 * e.scale, top, 44 * e.scale, 5, e.hp / e.maxHp, e.boss ? '#ff7a3c' : '#d4504a')
+    // 暫代圖示：頭上一個小 emoji 說明牠是哪一種；有盾再加一面盾
+    if (e.kind) emoji(ENEMIES[e.kind].badge, e.x + sh - 30 * e.scale, top + 2, 18)
+    if (e.shield && e.kind !== 'shield') emoji('🛡️', e.x + sh + 30 * e.scale, top + 2, 16)
+    if (e.charging > 0) emoji('💨', e.x + sh - 40 * e.scale, e.y - 20, 22)
     if (e.blocked) {
       c2d.font = '15px sans-serif'; c2d.textAlign = 'center'; c2d.textBaseline = 'alphabetic'
       c2d.fillText('⚔️', e.x + 30, e.y - 30)
@@ -1270,7 +1529,12 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   }
 
   function syncQuiz() {
-    if (S.target) {
+    if (listening(S.target)) {
+      // 聽音幽靈：不給中文，只念英文
+      elEmoji.textContent = '👂'
+      elZh.textContent = '聽聽看！'
+      elHint.textContent = '點出剛剛念的那個字（按 🔊 再聽一次）'
+    } else if (S.target) {
       // 題目的 emoji 是題庫的內容不是介面圖示，所以照樣用 textContent
       elEmoji.textContent = S.target.word.emoji
       elZh.textContent = S.target.word.zh
@@ -1304,7 +1568,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       const py = plateY(e)
       const inPlate = x >= e.px - e.pw / 2 - 4 && x <= e.px + e.pw / 2 + 4 && y >= py - 4 && y <= py + PLATE_H + 4
       if (inPlate) { plate = e; break }
-      const inBody = x >= e.x - 30 && x <= e.x + 30 && y >= e.y - 48 && y <= e.y + 6
+      const by = e.kind === 'bat' ? e.y - 22 : e.y // 蝙蝠的身體畫在半空中
+      const inBody = x >= e.x - 30 && x <= e.x + 30 && y >= by - 48 && y <= by + 6
       if (inBody) { bodies.push(e); continue }
       const d = Math.min(Math.hypot(e.x - x, e.y - 22 - y), Math.hypot(e.px - x, py + PLATE_H / 2 - y))
       if (d < nd) { nd = d; near = e }
@@ -1398,27 +1663,44 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     const sz = Math.max(46, Math.min(62, 62 * p.k))
     const u = sz / 62
     const gap = 74 * u // 兩顆鈕中心離塔位多遠：拉開一點，手指才不會一次壓到兩顆
+
+    type Item = { act: string; pic: string; label: string; off?: boolean }
+    const items: Item[] = []
+    if (t) {
+      const up = upgradeCost(t.kind, t.level)
+      if (up) items.push({ act: 'upgrade', pic: 'emoji:⬆️', label: `升到 Lv.${t.level + 1}（${up}）`, off: S.crystals < up })
+      const back = refundOf(spentOn(t.kind, t.level), t.builtAtWave < S.wave)
+      items.push({ act: 'sell', pic: 'hammer', label: `拆除（退 ${back}）` })
+    } else {
+      // 這一關蓋得到的塔（新塔照關卡解鎖）。箭塔、軍營有自己的圖示，新塔先用 emoji
+      for (const k of BUILDABLE) {
+        const spec = TOWERS[k]
+        const pic = k === 'archery' ? 'bow' : k === 'barracks' ? 'shield' : 'emoji:' + (spec.badge ?? spec.emoji)
+        items.push({ act: k, pic, label: `${spec.name} ${spec.cost}`, off: S.crystals < spec.cost })
+      }
+    }
+
+    // 兩顆左右排在塔位兩側；三顆以上排成塔位上方一整排，間距要放得下鈕底下那行字
+    const n = items.length
+    const step = n <= 2 ? gap * 2 : Math.max(sz + 18, 78)
     // 太靠畫面邊緣就往裡挪，太靠上就改放到塔位下面
     const st = (cv.parentElement as HTMLElement).getBoundingClientRect()
-    const half = (t ? 0 : gap) + sz / 2 + 6
+    const half = ((n - 1) * step) / 2 + sz / 2 + 6
     const left = Math.max(half, Math.min(st.width - half, p.left))
     const below = p.top - 46 * u - sz / 2 - 26 < 0
     const dy = below ? 58 * u : -46 * u
     elRing.style.left = left + 'px'
     elRing.style.top = p.top + 'px'
-    const btn = (act: string, pic: string, label: string, dx: number, off = false) => {
-      const on = ringPick === act
-      return `<button class="td-rb${off ? ' off' : ''}${on ? ' on' : ''}" data-act="${act}" style="left:${dx}px;top:${dy}px;width:${sz}px;height:${sz}px">`
-        + `<img src="${pUrl(pic)}" alt="">${on ? '<i>✓</i>' : ''}<span>${on ? (act === 'sell' ? '再點一次拆掉' : '再點一次蓋') : label}</span></button>`
+    const spot = (i: number) => ({ x: (i - (n - 1) / 2) * step, y: dy })
+    const btn = (it: Item, i: number) => {
+      const on = ringPick === it.act
+      const q = spot(i)
+      const face = it.pic.startsWith('emoji:') ? `<b class="td-rb-emo">${it.pic.slice(6)}</b>` : `<img src="${pUrl(it.pic)}" alt="">`
+      const hint = it.act === 'sell' ? '再點一次拆掉' : it.act === 'upgrade' ? '再點一次升級' : '再點一次蓋'
+      return `<button class="td-rb${it.off ? ' off' : ''}${on ? ' on' : ''}" data-act="${it.act}" style="left:${q.x}px;top:${q.y}px;width:${sz}px;height:${sz}px">`
+        + `${face}${on ? '<i>✓</i>' : ''}<span>${on ? hint : it.label}</span></button>`
     }
-    if (t) {
-      const back = refundOf(TOWERS[t.kind].cost, t.builtAtWave < S.wave)
-      elRing.innerHTML = btn('sell', 'hammer', `拆除（退 ${back}）`, 0)
-    } else {
-      elRing.innerHTML =
-        btn('archery', 'bow', `箭塔 ${TOWERS.archery.cost}`, -gap, S.crystals < TOWERS.archery.cost)
-        + btn('barracks', 'shield', `軍營 ${TOWERS.barracks.cost}`, gap, S.crystals < TOWERS.barracks.cost)
-    }
+    elRing.innerHTML = items.map(btn).join('')
   }
   function closeRing() {
     ringSlot = null
@@ -1432,8 +1714,10 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     ctx.audio.unlock()
     const idx = ringSlot
     const act = b.dataset.act!
-    if (act !== 'sell' && S.crystals < TOWERS[act].cost) {
-      toast('水晶不夠，還差 ' + (TOWERS[act].cost - S.crystals) + ' 顆')
+    const t = S.towers.find((x) => x.slot === idx)
+    const need = act === 'sell' ? 0 : act === 'upgrade' ? (t ? upgradeCost(t.kind, t.level) : 0) : TOWERS[act].cost
+    if (S.crystals < need) {
+      toast('水晶不夠，還差 ' + (need - S.crystals) + ' 顆')
       return
     }
     // 第一下：選起來、預覽；第二下（同一顆）才算數
@@ -1445,6 +1729,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     }
     closeRing()
     if (act === 'sell') { S.selected = idx; sellSelected(); return }
+    if (act === 'upgrade') { S.selected = null; upgradeTower(idx); return }
     S.picked = act
     S.selected = null
     tapSlot(idx)
@@ -1508,7 +1793,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     if (S.phase !== 'build') return ''
     if (!S.towers.length) return ringPick ? '同一顆再點一次，塔就蓋好了' : ringSlot !== null ? '選一種塔：箭塔會射怪、軍營會派兵擋路' : '① 點一塊閃金光的石板空地，蓋一座塔'
     if (S.wave === 1) return '② 塔蓋好了！可以再多蓋幾座；準備好就按右下角「開戰！」'
-    return `第 ${S.wave} 波要來了：可以再蓋塔，準備好就按「開戰！」`
+    return `第 ${S.wave} 波要來了：可以再蓋塔、點已經蓋好的塔升級，準備好就按「開戰！」`
   }
   let guideSig = ''
   function syncGuide() {
@@ -1551,6 +1836,68 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   const ro = new ResizeObserver(() => { if (PARK) { closeRing(); callsSig = ''; syncCalls() } })
   ro.observe(cv)
 
+  // ---------------------------------------------------------------- 劇情（data/story.ts）
+  /** 看過哪幾關的劇情：記在這台瀏覽器裡。拿不到（私密視窗）就每次都演，不會壞。 */
+  const STORY_KEY = 'td-story-seen'
+  function seenSet(): Set<string> {
+    try { return new Set(JSON.parse(localStorage.getItem(STORY_KEY) || '[]') as string[]) } catch { return new Set() }
+  }
+  function seenStory(part: 'before' | 'after') { return seenSet().has(level.id + ':' + part) }
+  function markStory(part: 'before' | 'after') {
+    try {
+      const s = seenSet(); s.add(level.id + ':' + part)
+      localStorage.setItem(STORY_KEY, JSON.stringify([...s]))
+    } catch { /* 存不了就算了 */ }
+  }
+
+  /**
+   * 一句一句演：頭像＋名字＋台詞，點一下換下一句，右上角可以整段跳過。
+   * 演的時候遊戲暫停（備戰階段本來就不動；結算前的那段是遊戲已經結束了）。
+   */
+  function showStory(lines: Line[], done?: () => void) {
+    if (!lines.length) { done?.(); return }
+    let i = 0
+    const wasPaused = paused
+    paused = true
+    const close = () => {
+      elStory.hidden = true
+      elStory.onclick = null
+      paused = wasPaused
+      last = performance.now()
+      done?.()
+    }
+    const render = () => {
+      const ln = lines[i]
+      const sp = SPEAKERS[ln.who]
+      elStory.innerHTML = `<div class="td-story-box${ln.who === 'lumi' ? '' : ' foe'}">`
+        + `<span class="td-story-face">${sp.face}</span>`
+        + `<div class="td-story-txt"><b>${sp.name}</b><p>${ln.text}</p></div>`
+        + `<span class="td-story-next">${i < lines.length - 1 ? '點一下繼續 ▶' : '開始！'}</span>`
+        + `</div><button class="td-story-skip">跳過</button>`
+    }
+    elStory.onclick = (ev) => {
+      ev.stopPropagation()
+      ctx.audio.unlock(); ctx.audio.play('ui-tap')
+      if ((ev.target as HTMLElement).closest('.td-story-skip') || ++i >= lines.length) return close()
+      render()
+    }
+    elStory.addEventListener('pointerdown', (ev) => ev.stopPropagation())
+    render()
+    elStory.hidden = false
+  }
+
+  const BEFORE = storyBefore(level)
+  if (BEFORE.length) {
+    elLore.hidden = false
+    elLore.addEventListener('click', (ev) => {
+      ev.stopPropagation()
+      if (S.phase === 'build') showStory(BEFORE)
+    })
+    elLore.addEventListener('pointerdown', (ev) => ev.stopPropagation())
+    // 看完（或按跳過）才記成看過：開發模式 React 會把畫面掛兩次，一掛上就記的話第二次就不演了
+    if (!seenStory('before')) showStory(BEFORE, () => markStory('before'))
+  }
+
   // ---------------------------------------------------------------- 主迴圈
   let last = performance.now()
   let artKick = last
@@ -1574,7 +1921,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   // 正式版 build 會整段消失（import.meta.env.DEV 在 production 是 false）。
   if (import.meta.env.DEV) {
     ;(window as unknown as { __td?: unknown }).__td = {
-      S, SLOTS, level, tapEnemy, tapSlot, sellSelected, startWave, useItem,
+      S, SLOTS, level, tapEnemy, tapSlot, sellSelected, startWave, useItem, upgradeTower, showStory,
     }
   }
 

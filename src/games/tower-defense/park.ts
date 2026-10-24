@@ -67,7 +67,7 @@ export const SPRITES: Record<string, { k: string; frames: number; anchor: number
 
 /** 一格動作畫到畫布上：x 是腳底中心、y 是腳底，h 是整格要畫多高。 */
 export function drawFrame(
-  c: CanvasRenderingContext2D, im: HTMLImageElement, frames: number, anchor: number,
+  c: CanvasRenderingContext2D, im: HTMLImageElement | HTMLCanvasElement, frames: number, anchor: number,
   f: number, x: number, y: number, h: number, flip: boolean,
 ) {
   const fw = im.width / frames

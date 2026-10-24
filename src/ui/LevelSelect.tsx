@@ -12,6 +12,8 @@ import { Avatar } from './Avatar'
 import WORLD from '@/data/world-stops.json'
 import { PARK_URL } from '@/net'
 import { ui } from './park-ui'
+import { CHAPTER_STORY, newcomers } from '@/data/story'
+import { BOSS_SKILL_NAME } from '@/data/enemies'
 
 /**
  * 選關大地圖（2026-10-10 改版，Kingdom Rush 那種戰役地圖）。
@@ -162,6 +164,12 @@ export function LevelSelect({
           style={{ backgroundImage: `url(${base}td-park/world/ch${ch.no}.webp)`.replace(/([^:])\/{2,}/g, '$1/') }}
           onClick={() => setCard(null)}>
           <div className="wm-stars-total"><img src={pic('star')} alt="" /> {stars} / {ch.levels.length * 3}</div>
+          {/* 這一章的故事（data/story.ts）：還在打寫現況，全破了寫結局 */}
+          {open && (
+            <div className="wm-story"><span>🧚</span>
+              {chapterCleared(ch.no, LEVELS, cleared) ? CHAPTER_STORY[ch.no].done : CHAPTER_STORY[ch.no].now}
+            </div>
+          )}
           <img className="wm-castle" src={pic('castle')} alt=""
             style={{ left: `${CASTLE.x * 100}%`, top: `${CASTLE.y * 100}%` }} />
           {ch.levels.map((l, k) => {
@@ -181,6 +189,8 @@ export function LevelSelect({
                 <span className="sr">第 {l.no} 關</span>
                 {done && <span className="wm-stars">{[0, 1, 2].map((i) => <img key={i} src={pic('star')} alt="" className={i < st ? '' : 'off'} />)}</span>}
                 {!unlocked && <img className="wm-lock" src={pic('lock')} alt="未開放" />}
+                {/* 還沒搶回來的站有敵人佔著（暫代圖示，美術解凍後換手繪小兵） */}
+                {!done && <span className="wm-foe" aria-hidden>{CHAPTER_STORY[ch.no].foe}</span>}
                 {unlocked && !open && teacherOpen.has(l.id) && <span className="byteacher">老師開放</span>}
                 {l === next && <span className="wm-here">▼</span>}
               </button>
@@ -209,6 +219,12 @@ export function LevelSelect({
               <div className="wm-cth">
                 {card.themes.length ? card.themes.slice(0, 3).map((t) => THEME_NAME[t] ?? t).join('、') : '全部主題'}
               </div>
+              {newcomers(card).length > 0 && (
+                <div className="wm-new">新登場：{newcomers(card).map((n) => `${n.badge} ${n.name}`).join('、')}</div>
+              )}
+              {card.isBoss && (card.rules.boss?.skills?.length ?? 0) > 0 && (
+                <div className="wm-new boss">魔王招式：{card.rules.boss!.skills!.map((k) => BOSS_SKILL_NAME[k]).join('、')}</div>
+              )}
               <div className="wm-cst">
                 {[0, 1, 2].map((i) => <img key={i} src={pic('star')} alt="" className={i < (progress.get(card.id)?.stars ?? 0) ? '' : 'off'} />)}
               </div>
