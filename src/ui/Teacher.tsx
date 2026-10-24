@@ -3,9 +3,9 @@ import { CHAPTERS, LEVELS } from '@/data/levels'
 import { WORDS_BY_ID } from '@/data/words'
 import { WordStat } from '@/core/wordStat'
 import { SKILL_NAME, type ClassRoom, type Staff } from '@/core/types'
-import { PARK_URL, repo, type ClassRosterRow } from '@/net'
+import { PARK_URL, repo, type ClassDetail, type ClassRosterRow } from '@/net'
 import { TeacherRoom } from './Room'
-import { ClassReport } from './ClassReport'
+import { ClassReport, classCsv } from './ClassReport'
 import { Icon } from './Icon'
 import { ui } from './park-ui'
 
@@ -37,7 +37,17 @@ export function Teacher({
   const [stat, setStat] = useState<WordStat | null>(null)
   const [open, setOpen] = useState<Set<string>>(new Set())
   // 有新的細節頁（樂園班級）就不再另外列「全班最常錯的字」，細節頁裡有
-  const [hasDetail, setHasDetail] = useState(false)
+  const [detail, setDetail] = useState<ClassDetail | null>(null)
+  const hasDetail = !!detail
+  // 看哪個孩子的報告；網址帶 ?kid=（跟島嶼開拓者一樣，報告頁可以直接分享、列印）
+  const [kid, setKid] = useState<string | null>(() => new URLSearchParams(location.search).get('kid'))
+  const pickKid = (id: string | null) => {
+    setKid(id)
+    const u = new URL(location.href)
+    if (id) u.searchParams.set('kid', id); else u.searchParams.delete('kid')
+    history.replaceState(null, '', u)
+    window.scrollTo(0, 0)
+  }
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
 
@@ -176,12 +186,39 @@ export function Teacher({
           <div className="chips">
             {classes.map((c) => (
               <button key={c.code} className={c.code === active ? 'on' : ''}
-                onClick={() => setActive(c.code)}>
+                onClick={() => {
+                  setActive(c.code); setDetail(null); pickKid(null)
+                  const u = new URL(location.href); u.searchParams.set('class', c.code); history.replaceState(null, '', u)
+                }}>
                 {c.name || c.code}
               </button>
             ))}
             {classes.length === 0 && <span className="muted">還沒有班級{PARK_URL ? '，請到樂園教師入口開班' : '，在下面開一個'}。</span>}
           </div>
+
+          {/* 第二列跟島嶼開拓者一樣：看全班／某個孩子、列印、匯出 CSV */}
+          {room && detail && (
+            <div className="tch-tools">
+              {detail.kids.length > 0 && (
+                <label>看
+                  <select value={kid ?? ''} onChange={(e) => pickKid(e.target.value || null)}>
+                    <option value="">全班（{detail.kids.length} 人）</option>
+                    {detail.kids.map((k) => <option key={k.id} value={k.id}>{k.nickname} 的報告</option>)}
+                  </select>
+                </label>
+              )}
+              <span className="spacer" />
+              <button className="btn small ghost" onClick={() => window.print()}>列印</button>
+              <button className="btn small" onClick={() => {
+                const url = URL.createObjectURL(new Blob([classCsv(detail)], { type: 'text/csv' }))
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `守護異世界_${room.name || room.code}.csv`
+                a.click()
+                URL.revokeObjectURL(url)
+              }}>匯出 CSV</button>
+            </div>
+          )}
 
           {/* 開班在樂園做；沒有樂園（本機版）才留這裡的表單 */}
           {!PARK_URL && <form className="row" onSubmit={(e) => {
@@ -208,7 +245,10 @@ export function Teacher({
 
         {room && (
           <>
-            <ClassReport code={room.code} onLoaded={setHasDetail} />
+            <ClassReport code={room.code} kid={kid} onKid={pickKid} onData={setDetail} />
+
+            {/* 下面是守護異世界自己的老師工具（島嶼沒有），收起來，列印時不印 */}
+            <h3 className="tch-tools-h">老師工具</h3>
 
             {/* 代碼、開放加入、換代碼在樂園教師入口做（樂園的班級資料），這裡只留守護異世界自己的設定 */}
             {PARK_URL ? (
