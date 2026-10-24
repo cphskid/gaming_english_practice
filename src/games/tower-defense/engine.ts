@@ -236,7 +236,16 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   /** 穿別的軍團時，軍營士兵和箭塔換那一套的手繪圖（legion-art.ts） */
   const LG_SOLDIER = legion.id ? unitKey(legion, 'recognize', 'u_spear', 1) : ''
   const LG_TOWER = legion.id ? towerKey(legion, false) : 'p-archery'
-  const parkKeys = (k: string) => k === LG_SOLDIER || k === LG_TOWER || k.startsWith('p-') && (mapFailed || !MAP_NAME || !PARK_FALLBACK.has(k)) &&
+  /**
+   * 新塔、塔升級、新怪的圖（pv- 開頭，2026-10-24）：只抓這一關用得到的——
+   * 蓋得到的塔的各級、這一關會出現的怪（魔王會召喚小狼就加狼）。
+   */
+  const VARIETY_KEYS = new Set<string>([
+    ...towersAt(level.no).flatMap((k) => [1, 2, 3].map((l) => `pv-${k}-${l}`)),
+    ...rules.waves.flatMap((w) => (w.kinds ?? []).filter(Boolean).map((k) => 'pv-en-' + k)),
+    ...(rules.boss?.skills?.includes('summon') ? ['pv-en-wolf'] : []),
+  ])
+  const parkKeys = (k: string) => k === LG_SOLDIER || k === LG_TOWER || VARIETY_KEYS.has(k) || k.startsWith('p-') && (mapFailed || !MAP_NAME || !PARK_FALLBACK.has(k)) &&
     // 別章的城堡和怪不用抓
     !((k.endsWith('-snow') || k.endsWith('-meadow')) && !k.endsWith(PSUF || '#'))
   const MAP_NAME = PARK && level.skin.map ? level.skin.map.replace(/M$/, '') : ''
@@ -1166,7 +1175,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       // 圓盤上選了一種塔、還沒確認：在塔位上先畫一座半透明的虛影
       if (ringSlot !== null && ringPick && ringPick !== 'sell' && ringPick !== 'upgrade') {
         const s = SLOTS[ringSlot]
-        const im = towerPic(ringPick)
+        const im = towerPic(ringPick, 1)
         if (im) {
           const h = ringPick === 'barracks' ? 84 : 116
           const w = (im.width / im.height) * h
@@ -1297,11 +1306,17 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     return c
   }
 
-  /** 塔的圖。新塔還沒有自己的圖，先拿箭塔換色（美術暫停中） */
-  function towerPic(kind: string): HTMLImageElement | HTMLCanvasElement | undefined {
-    const arch = img[LG_TOWER] ?? img['p-archery']
-    if (kind === 'archery') return arch?.complete ? arch : undefined
-    if (kind === 'barracks') return img['p-barracks']?.complete ? img['p-barracks'] : undefined
+  /**
+   * 塔的圖：每種塔每一級一張（pv-<種類>-<級>）。箭塔、軍營的第 1 級是原本那張；
+   * 穿別的軍團時箭塔一律用那個軍團的塔（軍團沒有升級圖，靠頭上的星星看級數）。
+   * 新圖還沒到之前，新塔先拿箭塔換色墊著。
+   */
+  function towerPic(kind: string, lv = 1): HTMLImageElement | HTMLCanvasElement | undefined {
+    const ok = (im?: HTMLImageElement) => (im?.complete && im.naturalWidth ? im : undefined)
+    if (kind === 'archery' && legion.id) return ok(img[LG_TOWER])
+    const up = ok(img[`pv-${kind}-${lv}`])
+    if (up) return up
+    if (kind === 'archery' || kind === 'barracks') return ok(img[`p-${kind}`])
     return tinted(img['p-archery'], TOWER_TINT[kind] ?? '#888')
   }
 
@@ -1314,14 +1329,15 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
 
   function drawTower(t: Tower, s: Point) {
     if (PARK) {
-      const im = towerPic(t.kind)
+      const im = towerPic(t.kind, t.level)
       if (!im) return
       // 塔自帶一小圈草地，腳對到塔位；升級之後大一點點
       const h = (t.kind === 'barracks' ? 84 : 116) * (1 + 0.06 * (t.level - 1))
       const w = (im.width / im.height) * h
       c2d.drawImage(im, s.x - w / 2, s.y + 12 - h, w, h)
+      // 正式圖還沒到、還在用換色暫代的時候，才在塔身上畫小圖示說明是哪一種
       const badge = TOWERS[t.kind].badge
-      if (badge) emoji(badge, s.x, s.y + 12 - h * 0.62, 22)
+      if (badge && im instanceof HTMLCanvasElement) emoji(badge, s.x, s.y + 12 - h * 0.62, 22)
       if (t.level > 1) {
         // 頭上幾顆星＝升了幾級
         c2d.font = 'bold 16px system-ui, sans-serif'; c2d.textAlign = 'center'; c2d.textBaseline = 'alphabetic'
@@ -1393,11 +1409,13 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     const fly = e.kind === 'bat' ? 22 + Math.sin(S.t * 6 + e.dist * 0.05) * 4 : 0
     c2d.save()
     c2d.translate(e.x + sh, e.y - fly); c2d.scale(sc, sc); c2d.translate(-(e.x + sh), -e.y)
-    if (e.kind === 'ghost') c2d.globalAlpha = 0.72
-    const sp = PARK ? (PSUF && img[SPRITES[e.art + PSUF]?.k] ? SPRITES[e.art + PSUF] : SPRITES[e.art]) : undefined
+    if (e.kind === 'ghost') c2d.globalAlpha = 0.82
+    // 特殊怪有自己的動作條（pv-en-<種類>）；還沒到之前先拿哥布林換色墊著（data/enemies.ts 的 tint）
+    const own = PARK && e.kind ? SPRITES['en-' + e.kind] : undefined
+    const ownIm = own && img[own.k]?.complete && img[own.k].naturalWidth ? img[own.k] : undefined
+    const sp = ownIm ? own : PARK ? (PSUF && img[SPRITES[e.art + PSUF]?.k] ? SPRITES[e.art + PSUF] : SPRITES[e.art]) : undefined
     const raw = sp && img[sp.k]
-    // 特殊怪先拿哥布林換色暫代（data/enemies.ts 的 tint）
-    const pim = raw && e.kind ? tinted(raw, ENEMIES[e.kind].tint) : raw
+    const pim = raw && e.kind && !ownIm ? tinted(raw, ENEMIES[e.kind].tint) : raw
     if (sp && pim && (pim instanceof HTMLCanvasElement || pim.complete)) {
       // 走路是第 2、1、3、1 格輪流；剛被打中（答對的那隻）換成縮一下的那格。
       // 面向看牠接下來往哪裡走：路往左彎的那一段要翻面。
@@ -1434,8 +1452,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     c2d.restore()
     const top = e.y - fly - (PARK ? 64 : 46) * e.scale
     bar(e.x + sh - 22 * e.scale, top, 44 * e.scale, 5, e.hp / e.maxHp, e.boss ? '#ff7a3c' : '#d4504a')
-    // 暫代圖示：頭上一個小 emoji 說明牠是哪一種；有盾再加一面盾
-    if (e.kind) emoji(ENEMIES[e.kind].badge, e.x + sh - 30 * e.scale, top + 2, 18)
+    // 還在用換色暫代的怪：頭上一個小 emoji 說明牠是哪一種；有盾再加一面盾
+    if (e.kind && !ownIm) emoji(ENEMIES[e.kind].badge, e.x + sh - 30 * e.scale, top + 2, 18)
     if (e.shield && e.kind !== 'shield') emoji('🛡️', e.x + sh + 30 * e.scale, top + 2, 16)
     if (e.charging > 0) emoji('💨', e.x + sh - 40 * e.scale, e.y - 20, 22)
     if (e.blocked) {
@@ -1668,14 +1686,14 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     const items: Item[] = []
     if (t) {
       const up = upgradeCost(t.kind, t.level)
-      if (up) items.push({ act: 'upgrade', pic: 'emoji:⬆️', label: `升到 Lv.${t.level + 1}（${up}）`, off: S.crystals < up })
+      if (up) items.push({ act: 'upgrade', pic: 'upgrade', label: `升到 Lv.${t.level + 1}（${up}）`, off: S.crystals < up })
       const back = refundOf(spentOn(t.kind, t.level), t.builtAtWave < S.wave)
       items.push({ act: 'sell', pic: 'hammer', label: `拆除（退 ${back}）` })
     } else {
-      // 這一關蓋得到的塔（新塔照關卡解鎖）。箭塔、軍營有自己的圖示，新塔先用 emoji
+      // 這一關蓋得到的塔（新塔照關卡解鎖），圖示是 td-park/p-<圖>.webp
       for (const k of BUILDABLE) {
         const spec = TOWERS[k]
-        const pic = k === 'archery' ? 'bow' : k === 'barracks' ? 'shield' : 'emoji:' + (spec.badge ?? spec.emoji)
+        const pic = k === 'archery' ? 'bow' : k === 'barracks' ? 'shield' : k
         items.push({ act: k, pic, label: `${spec.name} ${spec.cost}`, off: S.crystals < spec.cost })
       }
     }
@@ -1870,7 +1888,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       const ln = lines[i]
       const sp = SPEAKERS[ln.who]
       elStory.innerHTML = `<div class="td-story-box${ln.who === 'lumi' ? '' : ' foe'}">`
-        + `<span class="td-story-face">${sp.face}</span>`
+        + `<span class="td-story-face"><img src="${pUrl('face-' + ln.who)}" alt="${sp.face}"></span>`
         + `<div class="td-story-txt"><b>${sp.name}</b><p>${ln.text}</p></div>`
         + `<span class="td-story-next">${i < lines.length - 1 ? '點一下繼續 ▶' : '開始！'}</span>`
         + `</div><button class="td-story-skip">跳過</button>`

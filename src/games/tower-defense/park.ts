@@ -63,6 +63,14 @@ export const SPRITES: Record<string, { k: string; frames: number; anchor: number
   'goblinRed-meadow': { k: 'p-goblin-meadow', frames: 6, anchor: 0.33 },
   'goblinPurple-meadow': { k: 'p-ogre-meadow', frames: 6, anchor: 0.56 },
   soldier: { k: 'p-soldier', frames: 6, anchor: 0.5 },
+  // 2026-10-24 新怪（art/guardian/gen_variety.py → cut_variety.py）。三章共用一套。
+  // 鍵用 pv- 開頭：選關畫面「先抓全部 p-」不會連它們一起抓，只有關卡裡真的有這種怪才抓。
+  'en-wolf': { k: 'pv-en-wolf', frames: 6, anchor: 0.511 },
+  'en-shield': { k: 'pv-en-shield', frames: 6, anchor: 0.615 },
+  'en-bat': { k: 'pv-en-bat', frames: 6, anchor: 0.631 },
+  'en-slime': { k: 'pv-en-slime', frames: 6, anchor: 0.54 },
+  'en-shaman': { k: 'pv-en-shaman', frames: 6, anchor: 0.496 },
+  'en-ghost': { k: 'pv-en-ghost', frames: 6, anchor: 0.46 },
 }
 
 /** 一格動作畫到畫布上：x 是腳底中心、y 是腳底，h 是整格要畫多高。 */
