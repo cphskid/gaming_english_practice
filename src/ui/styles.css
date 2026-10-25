@@ -1694,3 +1694,28 @@ h1,h2,h3{color:var(--wood)}
   .wm-chsw{order:20;margin:0 auto}
   .wm .roomcall{top:96px}
 }
+/*
+  守塔手機橫拿（2026-10-25 Chuck：地圖太小、左右空一大塊）。
+  畫布是 1088×576 的扁長方形，手機橫拿時高度先用完，左右本來就會剩；
+  所以離開鈕和狀態列改直排放到左邊那條空位，戰場吃滿整個高度。
+*/
+@media (max-height:520px) and (orientation:landscape){
+  .play:has(.td-park){grid-template-columns:104px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);
+    padding:4px max(4px,env(safe-area-inset-right)) 4px max(4px,env(safe-area-inset-left));gap:4px 8px}
+  .play:has(.td-park) .leavebar{grid-column:1;grid-row:1;flex-direction:column;align-items:stretch;padding:0;gap:4px}
+  .play:has(.td-park) .leave{width:100%;padding:3px 0;text-align:center}
+  .play:has(.td-park) .bagbar{margin:0;max-width:none;flex-direction:column;overflow:visible}
+  .play:has(.td-park) .bagitem{padding:3px 6px}
+  .play:has(.td-park) .bagitem .nm{overflow:hidden;text-overflow:ellipsis}
+  .play:has(.td-park) .td-hud{grid-column:1;grid-row:2;align-self:start;flex-direction:column;align-items:stretch;gap:3px;padding:6px 6px}
+  .play:has(.td-park) .td-stat{font-size:14px}
+  .play:has(.td-park) .td-wave{font-size:12px}
+  .play:has(.td-park) .td-quiz{flex:none;flex-direction:column;gap:2px;padding:4px 0;border-top:2px dashed #e2c27f;border-bottom:2px dashed #e2c27f}
+  .play:has(.td-park) .td-qzh{white-space:normal;text-align:center;font-size:16px;line-height:1.25;overflow-wrap:anywhere}
+  .play:has(.td-park) .td-buffs{flex-direction:column;gap:3px}
+  .play:has(.td-park) .td-buff{padding:2px 5px}
+  .play:has(.td-park) .td-say{width:100%;height:30px}
+  .play:has(.td-park) .td-stage{grid-column:2;grid-row:1 / -1;padding:8px}
+  /* 📜 故事鈕本來在戰場左下，會壓到開戰鈕；搬到左邊那條的最下面 */
+  .play:has(.td-park) .td-lore{left:-108px;bottom:4px}
+}
