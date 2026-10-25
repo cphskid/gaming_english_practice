@@ -26,6 +26,10 @@ import { BOSS_SKILL_NAME } from '@/data/enemies'
  * 一點就開打很容易點錯關（跟蓋塔要點兩下同一個道理）。
  * 上面那排七顆鈕收成右下角三顆大鈕（英雄營、對戰、魔王團戰）；排行榜、徽章、商店、設定
  * 之後要交給樂園，改版期間先縮成右上角的小字鈕。
+ *
+ * 手機（2026-10-25，Chuck 選 A＋商店/排行/徽章另外收）：地圖鋪滿，上面只剩一排
+ * （🏠、齒輪、一顆章節切換、名牌＋時光幣），底部一條木頭列放三顆大鈕＋「更多」，
+ * 商店/排行/徽章收在「更多」裡；露米的故事看過就縮成左下角頭像。只靠 CSS 切，電腦版不變。
  */
 type Pt = { x: number; y: number }
 
@@ -102,6 +106,8 @@ export function LevelSelect({
     return cur?.no ?? 1
   })
   const [card, setCard] = useState<LevelData | null>(null)
+  /** 手機底部列的「更多」（商店、排行、徽章） */
+  const [more, setMore] = useState(false)
 
   const ch = CHAPTERS.find((c) => c.no === openCh) ?? CHAPTERS[0]
   const ci = ch.no - 1
@@ -117,24 +123,58 @@ export function LevelSelect({
   useEffect(() => { if (next) prefetchMap(next) }, [next])
   useEffect(() => { if (card) prefetchMap(card) }, [card])
 
+  // 露米的章節故事：手機上每段只自動攤開一次，看完縮成頭像，想再看點頭像（電腦版一直攤開）
+  const chDone = chapterCleared(ch.no, LEVELS, cleared)
+  const storyKey = `td-wm-story:${ch.no}:${chDone ? 'done' : 'now'}`
+  const [storyOpen, setStoryOpen] = useState(false)
+  useEffect(() => {
+    let seen = false
+    try { seen = localStorage.getItem(storyKey) === '1' } catch { /* 私密模式讀不到就當沒看過 */ }
+    setStoryOpen(!seen)
+  }, [storyKey])
+  const closeStory = () => {
+    setStoryOpen(false)
+    try { localStorage.setItem(storyKey, '1') } catch { /* 存不了就下次再跳一次 */ }
+  }
+  const goCh = (d: number) => {
+    const n = ch.no + d
+    if (n < 1 || n > CHAPTERS.length) return
+    setOpenCh(n); setCard(null)
+  }
+
   return (
     <div className="screen wm">
       {/* 上面那一條照樂園的排法：左邊齒輪（設定）、名牌＋時光幣，右邊一條木頭功能列 */}
       <div className="wm-top">
         {PARK_URL && character.time && (
-          <a className="pk-back" href={PARK_URL}>← 回樂園</a>
+          <a className="pk-back" href={PARK_URL} aria-label="回樂園">
+            <span className="pk-back-txt">← 回樂園</span><span className="pk-back-ico" aria-hidden>🏠</span>
+          </a>
         )}
         <button className="pk-gear" onClick={onSettings} aria-label="設定"><img src={ui('gear')} alt="" /></button>
         <div className="pk-me">
           <Avatar character={character} size={40} />
           <div className="wm-who">
             <b>{student.nickname}</b>
-            <span>{JOB_NAME[character.job]}　Lv.{lv}</span>
+            <span data-lv={`Lv.${lv}`}>{JOB_NAME[character.job]}　Lv.{lv}</span>
             <i className="wm-exp"><i style={{ width: `${Math.round((into / Math.max(1, need)) * 100)}%` }} /></i>
           </div>
         </div>
-        <span className="wm-coin pk-coin"><img src={pic('coin')} alt="" />{character.coins}</span>
+        {/* 點時光幣直接去商店：手機上商店收進「更多」，想買東西的人還是一下就到 */}
+        <button className="wm-coin pk-coin" onClick={onShop} aria-label={`時光幣 ${character.coins}，去商店`}>
+          <img src={pic('coin')} alt="" />{character.coins}
+        </button>
         <span className="spacer" />
+        {/* 手機才有：三個章節頁籤合成一顆，左右切章，星星也併進來 */}
+        <div className={'wm-chsw' + (open ? '' : ' locked')}>
+          <button onClick={() => goCh(-1)} disabled={ch.no === 1} aria-label="上一章">‹</button>
+          <span className="wm-chsw-nm">{ch.name}</span>
+          {open
+            ? <span className="wm-chsw-st">{ch.levels.filter((l) => cleared.has(l.id)).length}/{ch.levels.length}
+              <img src={pic('star')} alt="星星" />{stars}</span>
+            : <img className="wm-chsw-lock" src={pic('lock')} alt="未開放" />}
+          <button onClick={() => goCh(1)} disabled={ch.no === CHAPTERS.length} aria-label="下一章">›</button>
+        </div>
         <nav className="wm-mini pk-dock">
           <button onClick={onShop}><img src={ui('shop')} alt="" /><b>商店</b></button>
           <button onClick={onBoard}><img src={ui('rank')} alt="" /><b>排行榜</b></button>
@@ -166,8 +206,9 @@ export function LevelSelect({
           <div className="wm-stars-total"><img src={pic('star')} alt="" /> {stars} / {ch.levels.length * 3}</div>
           {/* 這一章的故事（data/story.ts）：還在打寫現況，全破了寫結局 */}
           {open && (
-            <div className="wm-story"><img src={pic('face-lumi')} alt="露米" />
-              {chapterCleared(ch.no, LEVELS, cleared) ? CHAPTER_STORY[ch.no].done : CHAPTER_STORY[ch.no].now}
+            <div className={'wm-story' + (storyOpen ? ' open' : '')} onClick={(ev) => { ev.stopPropagation(); closeStory() }}>
+              <img src={pic('face-lumi')} alt="露米" />
+              {chDone ? CHAPTER_STORY[ch.no].done : CHAPTER_STORY[ch.no].now}
             </div>
           )}
           <img className="wm-castle" src={pic('castle')} alt=""
@@ -234,10 +275,29 @@ export function LevelSelect({
         </div>
       </div>
 
+      {/* 手機：故事收起來時左下角只留露米頭像 */}
+      {open && !storyOpen && (
+        <button className="wm-lumi" onClick={() => setStoryOpen(true)} aria-label="看露米說的故事">
+          <img src={pic('face-lumi')} alt="" />
+        </button>
+      )}
+
       <nav className="wm-big">
         <button onClick={onCharacter}><img src={pic('btn-hero')} alt="" /><b>英雄營</b></button>
         <button onClick={onVersus}><img src={pic('btn-vs')} alt="" /><b>對戰</b></button>
         <button onClick={onRooms}><img src={pic('btn-raid')} alt="" /><b>魔王團戰</b></button>
+        {/* 手機才有：商店、排行、徽章收在這裡 */}
+        <button className={'wm-more' + (more ? ' on' : '')} onClick={() => setMore((m) => !m)}
+          aria-expanded={more} aria-label="更多">
+          <i aria-hidden>⋯</i><b>更多</b>
+        </button>
+        {more && (
+          <div className="wm-morepop" role="menu">
+            <button role="menuitem" onClick={() => { setMore(false); onShop() }}><img src={ui('shop')} alt="" /><b>商店</b></button>
+            <button role="menuitem" onClick={() => { setMore(false); onBoard() }}><img src={ui('rank')} alt="" /><b>排行榜</b></button>
+            <button role="menuitem" onClick={() => { setMore(false); onProfile() }}><img src={ui('passport')} alt="" /><b>徽章</b></button>
+          </div>
+        )}
       </nav>
     </div>
   )
