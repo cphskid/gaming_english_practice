@@ -14,7 +14,7 @@ import { bossRaid, towerDefense, tugOfWar } from '@/games'
 import { BOSS_BY_ID, bossWords } from '@/data/bosses'
 import { loadArt } from '@/games/tower-defense/art'
 import { PARK_FACILITY, PARK_URL, repo } from '@/net'
-import { playlogActive } from '@/net/playlog'
+import { playlogActive, playMark } from '@/net/playlog'
 import type { LiveMatchInfo, SavedResult } from '@/net/repository'
 import { liveLink } from '@/net/live'
 import { raidLink } from '@/net/raid'
@@ -81,6 +81,8 @@ export function App() {
   const [student, setStudent] = useState<Student | null>(null)
   const [character, setCharacter] = useState<Character | null>(null)
   const [progress, setProgress] = useState<Map<string, LevelProgress>>(new Map())
+  // 遊玩紀錄：建角色、選關這兩個畫面記一下，看新人是停在哪裡走掉的
+  useEffect(() => { if (screen === 'create' || screen === 'select') playMark(screen) }, [screen])
   const [teacherOpen, setTeacherOpen] = useState<Set<string>>(new Set())
   const [stat, setStat] = useState<WordStat>(() => new WordStat())
   const [playing, setPlaying] = useState<Playing | null>(null)
@@ -263,6 +265,7 @@ export function App() {
     })
     setPlaying({ level, game: towerDefense, session, quizzes: new Map(), quizOpts, opponent: null })
     setScreen('play')
+    playMark(`battle:${level.id}`)
     return session
   }, [student, stat, progress])
 
@@ -438,6 +441,7 @@ export function App() {
     if (!playing || !student || !character) return
     const r = playing.session.finish(outcome)
     const me = r.scores[0]
+    if (playing.level) playMark(`${outcome.win ? 'win' : 'lose'}:${playing.level.id}`)
     retryRef.current = () => void finish(outcome)
     setSettling({ error: null })
 
@@ -707,6 +711,9 @@ export function App() {
               await repo.saveCharacter({ ...character, job })
               await repo.setAvatar(avatar)
               setCharacter({ ...character, job, avatar })
+              // 新人建完角色直接開打第一關，不先停在選關地圖（2026-10-25：正式庫 115 人進來，
+              // 48 人一場都沒打完就走了，中位數只待 0.7 分鐘）
+              if (!progress.size) { startLevel(LEVELS[0]); return null }
               setScreen('select')
               return null
             } catch (e) {

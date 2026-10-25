@@ -44,6 +44,8 @@ export interface Repository {
    */
   playStart(facility: string, place: string, label: string): Promise<number | null>
   playBeat(id: number, end: boolean): Promise<boolean>
+  /** 這一趟補記：裝置、讀取時間，或發生的事（例如 'battle:td-01' 開打、'win:td-01' 打贏） */
+  playNote(id: number, note: { device?: string; loadMs?: number; mark?: string }): Promise<void>
 
   setPassword(oldPassword: string, newPassword: string): Promise<void>
   /** 回傳實際存下來的暱稱 */

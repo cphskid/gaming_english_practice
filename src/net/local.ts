@@ -197,6 +197,8 @@ export class LocalRepository implements Repository {
     return false
   }
 
+  async playNote(): Promise<void> {}
+
   async logout(): Promise<void> {
     setSession(null)
   }

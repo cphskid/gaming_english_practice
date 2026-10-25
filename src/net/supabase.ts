@@ -169,6 +169,16 @@ export class SupabaseRepository implements Repository {
     }
   }
 
+  async playNote(id: number, note: { device?: string; loadMs?: number; mark?: string }): Promise<void> {
+    try {
+      await this.db.rpc('park_play_note', {
+        p_id: id, p_device: note.device ?? null, p_load_ms: note.loadMs ?? null, p_mark: note.mark ?? null,
+      })
+    } catch {
+      // 樂園那邊還沒裝、網路斷了：不記就好
+    }
+  }
+
   async playBeat(id: number, end: boolean): Promise<boolean> {
     try {
       const { data, error } = await this.db.rpc('park_play_beat', { p_id: id, p_end: end })
