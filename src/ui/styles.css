@@ -1614,3 +1614,83 @@ h1,h2,h3{color:var(--wood)}
 @keyframes wm-foe{50%{transform:translateY(-3px)}}
 .wm-new{margin-top:6px;font-size:12.5px;font-weight:800;color:#1f6f9f;background:#e4f4ff;border-radius:8px;padding:3px 8px}
 .wm-new.boss{color:#8f2a17;background:#ffe3d9}
+
+/*
+  選關大地圖・手機版（2026-10-25，Chuck 選 A＋商店/排行/徽章另外收）。
+  地圖鋪滿整個畫面，上面一排、底部一條都疊在地圖上：
+  上＝🏠、齒輪、一顆章節切換（星星併進去）、名牌＋時光幣；下＝英雄營/對戰/魔王團戰＋「更多」。
+  露米故事看過縮成左下頭像；問題回報收進 ⚙（設定頁左下角還是有），有新回覆時才在地圖上出現。
+  電腦、平板看不到這些新東西，照舊。
+*/
+.wm-chsw,.wm-lumi,.wm-big .wm-more,.wm-morepop,.pk-back-ico{display:none}
+.wm-story{flex-wrap:nowrap}
+.pk-coin{cursor:pointer}
+@media (max-width:760px),(max-height:560px){
+  .screen.wm{padding:0;gap:0}
+  .wm-top{position:absolute;left:0;right:0;top:0;z-index:6;max-width:none;width:auto;gap:6px;
+    padding:6px max(8px,env(safe-area-inset-right)) 0 max(8px,env(safe-area-inset-left));pointer-events:none}
+  .wm-top>*{pointer-events:auto}
+  .wm-top .spacer{display:none}
+  .wm-mini,.wm-tabs,.wm-stars-total{display:none!important}
+  .pk-back{padding:0;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:50%;box-shadow:0 3px 0 var(--wood)}
+  .pk-back-txt{display:none}
+  .pk-back-ico{display:inline;font-size:20px;line-height:1}
+  .pk-gear{width:40px;height:40px}
+  /* 名牌只留頭像＋等級，時光幣緊貼在旁邊，一起靠右 */
+  .pk-me{order:9;margin-left:auto;padding:2px 10px 2px 2px;box-shadow:0 3px 0 var(--wood)}
+  .pk-me .mugbox{width:32px!important;height:32px!important}
+  .pk-me .wm-who{display:flex}
+  .pk-me .wm-who b,.wm-exp{display:none}
+  .pk-me .wm-who span{font-size:0}
+  .pk-me .wm-who span::after{content:attr(data-lv);font:900 14px/1 var(--font);color:var(--wood)}
+  .pk-coin{order:10;font-size:15px;padding:3px 10px 3px 4px;box-shadow:0 3px 0 var(--wood)}
+  .pk-coin img{width:22px;height:22px}
+  .wm-chsw{display:flex;align-items:center;gap:6px;height:38px;padding:0 4px;margin:0 auto;border-radius:999px;
+    background:var(--cream);border:3px solid var(--wood);box-shadow:0 3px 0 var(--wood);color:var(--wood);font-weight:900;white-space:nowrap;min-width:0}
+  .wm-chsw button{width:30px;height:30px;border:0;border-radius:50%;background:linear-gradient(var(--wood-2),var(--wood));color:var(--cream);
+    font:900 20px/1 var(--font);padding:0 0 3px;cursor:pointer;flex:none}
+  .wm-chsw button:disabled{opacity:.3;cursor:default}
+  .wm-chsw-nm{font-size:15px}
+  .wm-chsw-st{display:flex;align-items:center;gap:3px;font-size:13px;color:#8a6a4a}
+  .wm-chsw-st img{width:16px;height:16px;margin-left:4px}
+  .wm-chsw-lock{width:16px;height:20px;object-fit:contain}
+  .wm-chsw.locked{background:#d9dbe0}
+  .wm .roomcall{position:absolute;z-index:6;top:52px;left:50%;transform:translateX(-50%);width:auto;max-width:min(560px,80vw);padding:4px 12px;gap:8px;animation:none}
+  .wm .roomcall .txt b{font-size:14px}
+  /* 地圖吃滿整個畫面（橫拿＝照高度撐滿；直拿維持固定寬、左右滑） */
+  .wm-scroll{height:100%}
+  .wm .wm-map{border-width:0;border-radius:0;box-shadow:none}
+  /* 露米：故事沒攤開時只剩左下角頭像 */
+  .wm-story:not(.open){display:none}
+  .wm-story.open{left:50%;right:auto;top:52px;bottom:auto;transform:translateX(-50%);width:max-content;max-width:min(70vw,520px);flex-wrap:nowrap;font-size:13px;padding:5px 10px;cursor:pointer;z-index:7}
+  .wm-story.open::after{content:'點一下收起來';display:block;position:absolute;right:10px;bottom:-16px;font-size:11px;color:var(--cream);text-shadow:0 1px 2px #000}
+  .wm-lumi{display:block;position:absolute;z-index:6;left:max(8px,env(safe-area-inset-left));bottom:max(8px,env(safe-area-inset-bottom));
+    width:46px;height:46px;padding:2px;border-radius:50%;background:#cdeee9;border:3px solid var(--wood);box-shadow:0 3px 0 var(--wood);cursor:pointer}
+  .wm-lumi img{width:100%;height:100%;object-fit:contain}
+  /* 底部木頭列：三顆大鈕＋更多 */
+  .wm-big{left:50%;right:auto;bottom:max(4px,env(safe-area-inset-bottom));transform:translateX(-50%);gap:4px;align-items:flex-end;
+    padding:3px 10px 4px;border-radius:18px;background:linear-gradient(#8a5a2a,#5e3a18);box-shadow:inset 0 0 0 3px #c99a4a,0 6px 14px rgba(0,0,0,.3)}
+  .wm-big>button{width:68px}
+  .wm-big img{width:52px}
+  .wm-big b{margin-top:-8px;padding:1px 6px;font-size:12px;border-width:2px}
+  .wm-more{display:flex!important;flex-direction:column;align-items:center;margin-left:4px;padding-left:8px!important;border-left:2px solid #4a2a12!important}
+  .wm-more i{display:flex;align-items:center;justify-content:center;width:42px;height:42px;margin-bottom:4px;border-radius:12px;
+    font:900 26px/1 var(--font);font-style:normal;color:var(--wood);background:linear-gradient(#fff8e6,#f3dcb0);box-shadow:inset 0 -3px 0 #d9b77a}
+  .wm-more.on i{background:linear-gradient(#ffd46a,var(--sun))}
+  .wm-morepop{display:flex;position:absolute;right:0;bottom:calc(100% + 8px);gap:6px;padding:6px;border-radius:16px;
+    background:linear-gradient(#8a5a2a,#5e3a18);box-shadow:inset 0 0 0 3px #c99a4a,0 6px 14px rgba(0,0,0,.35);animation:td-pop .14s ease-out}
+  .wm-morepop button{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:1px;width:60px;height:56px;padding:4px 0;
+    border:0;border-radius:12px;background:linear-gradient(#fff8e6,#f3dcb0);box-shadow:inset 0 -3px 0 #d9b77a;cursor:pointer}
+  .wm-morepop img{width:30px;height:30px;object-fit:contain;filter:none}
+  .wm-morepop b{all:unset;font:900 12px/1.1 var(--font);color:#5a3418;white-space:nowrap}
+  /* 問題回報收進齒輪（設定頁左下還在）；有新回覆才在地圖上出現，而且讓開露米 */
+  body:has(.screen.wm) .feedback-fab:not(:has(.feedback-dot)){display:none}
+  body:has(.screen.wm) .feedback-fab{bottom:calc(62px + env(safe-area-inset-bottom))}
+  body:has(.screen.wm) .app-version{font-size:10px;padding:1px 5px}
+}
+/* 直拿（窄）：上面一排放不下，章節切換換到第二排 */
+@media (max-width:520px){
+  .wm-top{flex-wrap:wrap;row-gap:6px}
+  .wm-chsw{order:20;margin:0 auto}
+  .wm .roomcall{top:96px}
+}
