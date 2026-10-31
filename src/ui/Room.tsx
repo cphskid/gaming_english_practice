@@ -1,3 +1,4 @@
+import { WeeklyStarsStrip } from './Leaderboard'
 import { useCallback, useEffect, useState } from 'react'
 import { frameOf } from '@/data/cosmetics'
 import { BOSSES, BOSS_BY_ID, CATS, TIERS, bossTopic, bossWords, needChapter, raidUrl, type BossDef } from '@/data/bosses'
@@ -246,6 +247,7 @@ export function RoomList({ rooms, stat, cleared, onJoin, onOpen, onBack }: {
         <button className="kr-back" onClick={onBack}>回地圖</button>
       </div>
       <div className="kr-body">
+      <WeeklyStarsStrip />
       <p className="lede left">
         {MIN_PLAYERS} 到 {MAX_PLAYERS} 個人一起打一隻魔王，三分鐘內把牠的血打光。
         每個人守一座城，城被攻破就先答對題目修好，再繼續出兵。
