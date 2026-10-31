@@ -1354,9 +1354,7 @@ h1,h2,h3{color:var(--wood)}
 
 /* 選關大地圖：上面一條照樂園排（齒輪、名牌＋時光幣、右邊木頭功能列） */
 .wm-top{background:none;border:none;box-shadow:none;padding:0 4px;gap:10px;color:var(--ink)}
-.pk-back,.pk-gear{flex:none}
-.pk-back{font:700 16px/1 var(--font);color:var(--wood);background:var(--cream);border:3px solid var(--wood);border-radius:14px;
-  padding:9px 13px;box-shadow:0 4px 0 var(--wood);text-decoration:none;white-space:nowrap}
+.park-back,.pk-gear{flex:none}
 .pk-gear{width:46px;height:46px;border:0;padding:0;background:none;cursor:pointer;filter:drop-shadow(0 3px 4px rgba(0,0,0,.3));transition:transform .3s}
 .pk-gear img{width:100%;height:100%;object-fit:contain}
 .pk-gear:hover{transform:rotate(30deg)}
@@ -1409,7 +1407,6 @@ h1,h2,h3{color:var(--wood)}
   .pk-gear{width:36px;height:36px}
   .pk-coin{font-size:15px;padding:3px 10px 3px 4px}
   .pk-coin img{width:22px;height:22px}
-  .pk-back{font-size:13px;padding:7px 9px}
 }
 @media (max-height:480px){
   .wm-mini.pk-dock button{height:44px;width:54px}
@@ -1622,7 +1619,7 @@ h1,h2,h3{color:var(--wood)}
   露米故事看過縮成左下頭像；問題回報收進 ⚙（設定頁左下角還是有），有新回覆時才在地圖上出現。
   電腦、平板看不到這些新東西，照舊。
 */
-.wm-chsw,.wm-lumi,.wm-big .wm-more,.wm-morepop,.pk-back-ico{display:none}
+.wm-chsw,.wm-lumi,.wm-big .wm-more,.wm-morepop{display:none}
 .wm-story{flex-wrap:nowrap}
 .pk-coin{cursor:pointer}
 @media (max-width:760px),(max-height:560px){
@@ -1632,9 +1629,6 @@ h1,h2,h3{color:var(--wood)}
   .wm-top>*{pointer-events:auto}
   .wm-top .spacer{display:none}
   .wm-mini,.wm-tabs,.wm-stars-total{display:none!important}
-  .pk-back{padding:0;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:50%;box-shadow:0 3px 0 var(--wood)}
-  .pk-back-txt{display:none}
-  .pk-back-ico{display:inline;font-size:20px;line-height:1}
   .pk-gear{width:40px;height:40px}
   /* 名牌只留頭像＋等級，時光幣緊貼在旁邊，一起靠右 */
   .pk-me{order:9;margin-left:auto;padding:2px 10px 2px 2px;box-shadow:0 3px 0 var(--wood)}
