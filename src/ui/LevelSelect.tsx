@@ -146,9 +146,11 @@ export function LevelSelect({
     <div className="screen wm">
       {/* 上面那一條照樂園的排法：左邊齒輪（設定）、名牌＋時光幣，右邊一條木頭功能列 */}
       <div className="wm-top">
+        {/* 回樂園用樂園共用的按鈕（樂園 css/park-back.css）：左上第一顆、手機也有字，回到樂園地圖上的守護異世界（#map/castle） */}
+        {PARK_URL && character.time && <link rel="stylesheet" href={PARK_URL + 'css/park-back.css'} />}
         {PARK_URL && character.time && (
-          <a className="pk-back" href={PARK_URL} aria-label="回樂園">
-            <span className="pk-back-txt">← 回樂園</span><span className="pk-back-ico" aria-hidden>🏠</span>
+          <a className="park-back" href={PARK_URL + '#map/castle'}>
+            <img src={PARK_URL + 'img/admin/park.webp'} alt="" />回樂園
           </a>
         )}
         <button className="pk-gear" onClick={onSettings} aria-label="設定"><img src={ui('gear')} alt="" /></button>

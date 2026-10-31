@@ -1354,9 +1354,7 @@ h1,h2,h3{color:var(--wood)}
 
 /* 選關大地圖：上面一條照樂園排（齒輪、名牌＋時光幣、右邊木頭功能列） */
 .wm-top{background:none;border:none;box-shadow:none;padding:0 4px;gap:10px;color:var(--ink)}
-.pk-back,.pk-gear{flex:none}
-.pk-back{font:700 16px/1 var(--font);color:var(--wood);background:var(--cream);border:3px solid var(--wood);border-radius:14px;
-  padding:9px 13px;box-shadow:0 4px 0 var(--wood);text-decoration:none;white-space:nowrap}
+.park-back,.pk-gear{flex:none}
 .pk-gear{width:46px;height:46px;border:0;padding:0;background:none;cursor:pointer;filter:drop-shadow(0 3px 4px rgba(0,0,0,.3));transition:transform .3s}
 .pk-gear img{width:100%;height:100%;object-fit:contain}
 .pk-gear:hover{transform:rotate(30deg)}
@@ -1409,7 +1407,6 @@ h1,h2,h3{color:var(--wood)}
   .pk-gear{width:36px;height:36px}
   .pk-coin{font-size:15px;padding:3px 10px 3px 4px}
   .pk-coin img{width:22px;height:22px}
-  .pk-back{font-size:13px;padding:7px 9px}
 }
 @media (max-height:480px){
   .wm-mini.pk-dock button{height:44px;width:54px}
@@ -1622,7 +1619,7 @@ h1,h2,h3{color:var(--wood)}
   露米故事看過縮成左下頭像；問題回報收進 ⚙（設定頁左下角還是有），有新回覆時才在地圖上出現。
   電腦、平板看不到這些新東西，照舊。
 */
-.wm-chsw,.wm-lumi,.wm-big .wm-more,.wm-morepop,.pk-back-ico{display:none}
+.wm-chsw,.wm-lumi,.wm-big .wm-more,.wm-morepop{display:none}
 .wm-story{flex-wrap:nowrap}
 .pk-coin{cursor:pointer}
 @media (max-width:760px),(max-height:560px){
@@ -1632,9 +1629,6 @@ h1,h2,h3{color:var(--wood)}
   .wm-top>*{pointer-events:auto}
   .wm-top .spacer{display:none}
   .wm-mini,.wm-tabs,.wm-stars-total{display:none!important}
-  .pk-back{padding:0;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:50%;box-shadow:0 3px 0 var(--wood)}
-  .pk-back-txt{display:none}
-  .pk-back-ico{display:inline;font-size:20px;line-height:1}
   .pk-gear{width:40px;height:40px}
   /* 名牌只留頭像＋等級，時光幣緊貼在旁邊，一起靠右 */
   .pk-me{order:9;margin-left:auto;padding:2px 10px 2px 2px;box-shadow:0 3px 0 var(--wood)}
@@ -1695,27 +1689,33 @@ h1,h2,h3{color:var(--wood)}
   .wm .roomcall{top:96px}
 }
 /*
-  守塔手機橫拿（2026-10-25 Chuck：地圖太小、左右空一大塊）。
-  畫布是 1088×576 的扁長方形，手機橫拿時高度先用完，左右本來就會剩；
-  所以離開鈕和狀態列改直排放到左邊那條空位，戰場吃滿整個高度。
+  守塔手機橫拿（2026-10-26 Chuck：左邊直排那版浪費空間，狀態不要木框，直接融在地圖上方）。
+  戰場吃滿整個畫面高度；離開鈕、血量／水晶／波數、題目、念一次鈕都變成小膠囊，
+  浮在地圖最上面那條海和沙灘上（那一條沒有路也沒有石板）。
 */
 @media (max-height:520px) and (orientation:landscape){
-  .play:has(.td-park){grid-template-columns:104px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);
-    padding:4px max(4px,env(safe-area-inset-right)) 4px max(4px,env(safe-area-inset-left));gap:4px 8px}
-  .play:has(.td-park) .leavebar{grid-column:1;grid-row:1;flex-direction:column;align-items:stretch;padding:0;gap:4px}
-  .play:has(.td-park) .leave{width:100%;padding:3px 0;text-align:center}
-  .play:has(.td-park) .bagbar{margin:0;max-width:none;flex-direction:column;overflow:visible}
-  .play:has(.td-park) .bagitem{padding:3px 6px}
-  .play:has(.td-park) .bagitem .nm{overflow:hidden;text-overflow:ellipsis}
-  .play:has(.td-park) .td-hud{grid-column:1;grid-row:2;align-self:start;flex-direction:column;align-items:stretch;gap:3px;padding:6px 6px}
-  .play:has(.td-park) .td-stat{font-size:14px}
-  .play:has(.td-park) .td-wave{font-size:12px}
-  .play:has(.td-park) .td-quiz{flex:none;flex-direction:column;gap:2px;padding:4px 0;border-top:2px dashed #e2c27f;border-bottom:2px dashed #e2c27f}
-  .play:has(.td-park) .td-qzh{white-space:normal;text-align:center;font-size:16px;line-height:1.25;overflow-wrap:anywhere}
-  .play:has(.td-park) .td-buffs{flex-direction:column;gap:3px}
-  .play:has(.td-park) .td-buff{padding:2px 5px}
-  .play:has(.td-park) .td-say{width:100%;height:30px}
-  .play:has(.td-park) .td-stage{grid-column:2;grid-row:1 / -1;padding:8px}
-  /* 📜 故事鈕本來在戰場左下，會壓到開戰鈕；搬到左邊那條的最下面 */
-  .play:has(.td-park) .td-lore{left:-108px;bottom:4px}
+  .play:has(.td-park){grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);padding:0;gap:0;position:relative}
+  .play:has(.td-park) .td-stage{grid-column:1;grid-row:1;padding:4px max(4px,env(safe-area-inset-right)) 4px max(4px,env(safe-area-inset-left))}
+  .play:has(.td-park) .td-cv{box-shadow:0 0 0 3px var(--wood),0 0 0 5px #c99a4a,0 6px 14px rgba(8,50,90,.3)}
+  .play:has(.td-park) .leavebar{grid-column:1;grid-row:1;align-self:start;position:absolute;z-index:7;top:8px;left:max(8px,env(safe-area-inset-left));padding:0;gap:6px;max-width:45%}
+  .play:has(.td-park) .leave{padding:2px 9px;font-size:12px;border-width:2px;box-shadow:0 2px 0 var(--wood);border-radius:999px}
+  .play:has(.td-park) .bagbar{max-width:none}
+  .play:has(.td-park) .bagitem{padding:2px 7px;background:rgba(255,248,230,.92);border-color:#d29a32;color:#4a2e14}
+  .play:has(.td-park) .bagitem .nm{display:none}
+  .play:has(.td-park) .td-hud{grid-column:1;grid-row:1;align-self:start;position:absolute;z-index:6;top:8px;left:0;right:0;background:none;border:0;box-shadow:none;padding:0 max(10px,env(safe-area-inset-right)) 0 max(10px,env(safe-area-inset-left));
+    gap:5px;pointer-events:none;justify-content:flex-end}
+  .play:has(.td-park) .td-hud>*{pointer-events:auto}
+  .play:has(.td-park) .td-stat,.play:has(.td-park) .td-wave,.play:has(.td-park) .td-quiz{background:rgba(255,248,230,.9);border-radius:999px;padding:2px 8px;box-shadow:0 2px 0 rgba(120,80,30,.35)}
+  .play:has(.td-park) .td-stat{font-size:13px;display:flex;align-items:center;gap:3px}
+  .play:has(.td-park) .td-wave{font-size:12px;color:#6a4a20}
+  /* 題目：正上方中間，要大要清楚 */
+  .play:has(.td-park) .td-quiz{position:absolute;left:50%;top:0;translate:-50% 0;flex:none;max-width:44%;padding:2px 12px;gap:6px}
+  .play:has(.td-park) .td-qemoji{font-size:18px}
+  .play:has(.td-park) .td-qzh{font-size:16px}
+  .play:has(.td-park) .td-buffs{gap:3px}
+  .play:has(.td-park) .td-buff{padding:1px 5px;font-size:11px}
+  .play:has(.td-park) .td-say{width:30px;height:26px;font-size:14px}
+  .play:has(.td-park) .td-say.wide{width:auto;height:26px;font-size:12px;padding:0 8px}
+  /* 教學提示讓開上面那一排 */
+  .play:has(.td-park) .td-guide{top:40px}
 }

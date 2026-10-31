@@ -227,7 +227,8 @@ function build(o: {
     skin: { tileset: o.tileset, map: o.layout },
     layout,
     rules: {
-      castleHp: o.boss ? 15 : 20,
+      // 第一關給新人多一點容錯（2026-10-25：第一關答對率 63%，95 場才 60 人過）
+      castleHp: o.boss ? 15 : o.no === 1 ? 30 : 20,
       startCoins: 120 + Math.floor(o.d / 3) * 20,
       waves: waves(o.waveCount, o.d, pathLen, volley, o.no, o.boss),
       boss: o.boss
