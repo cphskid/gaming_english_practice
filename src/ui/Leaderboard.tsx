@@ -136,7 +136,7 @@ const SLOTS: { slot: WeeklySlot; icon: string; name: string }[] = [
 ]
 const MYSTERY: Record<string, string> = { spell: '拼字最多', listen: '聽音最多', days: '天天來' }
 
-function WeeklyStars({ stars, onOpen }: { stars: WeeklyStar[]; onOpen: (id: string) => void }) {
+function WeeklyStars({ stars, onOpen }: { stars: WeeklyStar[]; onOpen?: (id: string) => void }) {
   return (
     <div className="wk">
       <div className="wk-head">⭐ 本週之星<small>每週一重新開始</small></div>
@@ -153,12 +153,13 @@ function WeeklyStars({ stars, onOpen }: { stars: WeeklyStar[]; onOpen: (id: stri
             )
           }
           const frame = frameOf(s.equipped)
+          const link = !!onOpen && s.viewable
           return (
-            <div className={'wk-card' + (s.me ? ' me' : '') + (s.viewable ? ' link' : '')} key={slot}
-              role={s.viewable ? 'button' : undefined} tabIndex={s.viewable ? 0 : undefined}
-              onClick={() => { if (s.viewable) onOpen(s.studentId) }}
+            <div className={'wk-card' + (s.me ? ' me' : '') + (link ? ' link' : '')} key={slot}
+              role={link ? 'button' : undefined} tabIndex={link ? 0 : undefined}
+              onClick={() => { if (link) onOpen!(s.studentId) }}
               onKeyDown={(e) => {
-                if (s.viewable && (e.key === 'Enter' || e.key === ' ')) onOpen(s.studentId)
+                if (link && (e.key === 'Enter' || e.key === ' ')) onOpen!(s.studentId)
               }}>
               <span className="wk-name">{icon} {title}</span>
               <span className={'mugbox' + (frame ? ' ' + frame.className : '')}>
@@ -173,6 +174,20 @@ function WeeklyStars({ stars, onOpen }: { stars: WeeklyStar[]; onOpen: (id: stri
       </div>
     </div>
   )
+}
+
+/**
+ * 對戰、魔王團戰那兩頁上方的本週之星（2026-10-31：樂園模式拿掉了守護自己的排行榜，
+ * 只有這一排是守護才有的，就搬到大家一起玩的地方）。自己去抓，抓不到（沒班級、本機版）就整排不畫。
+ */
+export function WeeklyStarsStrip() {
+  const [stars, setStars] = useState<WeeklyStar[] | null>(null)
+  useEffect(() => {
+    let alive = true
+    void repo.classWeeklyStars().then((s) => { if (alive) setStars(s) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
+  return stars ? <WeeklyStars stars={stars} /> : null
 }
 
 function starText(s: WeeklyStar) {

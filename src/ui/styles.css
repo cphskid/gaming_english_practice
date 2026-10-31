@@ -1719,3 +1719,18 @@ h1,h2,h3{color:var(--wood)}
   /* 教學提示讓開上面那一排 */
   .play:has(.td-park) .td-guide{top:40px}
 }
+
+/* 2026-10-31 樂園模式的選關地圖底部四顆（英雄營｜道具店｜對戰｜魔王團戰）：
+   英雄營底下加一行小字「職業・軍團」，讓人知道換軍團在這裡 */
+.wm-big.four{align-items:flex-start}
+.wm-big .wm-sub{margin-top:2px;padding:0 6px;border-radius:8px;background:rgba(255,246,220,.92);color:#5a3418;
+  font:900 12.5px/1.35 var(--font);white-space:nowrap;box-shadow:0 2px 0 rgba(59,32,12,.5)}
+@media (max-width:760px),(max-height:560px){
+  .wm-big.four{align-items:flex-start}
+  .wm-big.four>button{width:70px}
+  .wm-big .wm-sub{font-size:12px;padding:0 4px;margin-top:1px}
+}
+@media (max-width:340px){
+  .wm-big.four>button{width:62px}
+  .wm-big.four img{width:46px}
+}

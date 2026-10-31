@@ -62,6 +62,8 @@ export function Shop({
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  /** 剛買到軍團：提示列多一顆「去英雄營換上」 */
+  const [justLegion, setJustLegion] = useState(false)
 
   const level = levelFromExp(character.exp)
   const has = (id: string) => count(character, id) > 0
@@ -77,7 +79,7 @@ export function Shop({
 
   async function run(what: () => Promise<string>) {
     if (busy) return
-    setBusy(true); setError(null); setNote(null)
+    setBusy(true); setError(null); setNote(null); setJustLegion(false)
     try {
       setNote(await what())
     } catch (e) {
@@ -86,37 +88,44 @@ export function Shop({
     setBusy(false)
   }
 
-  const buy = (id: string, name: string) => run(async () => {
+  const buy = (id: string, name: string, legion = false) => run(async () => {
     const r = await repo.buyItem(id, name)
     onChanged({ ...character, coins: r.coins, items: r.items })
+    if (legion) setJustLegion(true)
     return `買了「${name}」`
   })
 
-  /** 時光幣模式（樂園合用）：這裡是英雄營軍械庫，只賣道具和軍團；頭像、外框改到樂園商店 */
+  /** 時光幣模式（樂園合用）：這裡是「道具店」（2026-10-31 前叫英雄營軍械庫），只賣道具和軍團；頭像、外框改到樂園商店 */
   const time = !!character.time
   const P = (n: number) => priceOf(character, n)
   return (
     <div className={'screen wide' + (time ? ' kr' : '')}>
       <div className={time ? 'kr-top' : 'topbar'}>
-        <Avatar character={character} />
-        {time ? <h2>英雄營軍械庫</h2> : <span className="who">{JOB_NAME[character.job]}　Lv.{level}</span>}
+        {time ? <img className="kr-badge" src={import.meta.env.BASE_URL + 'td-park/p-btn-shop.webp'} alt="" /> : <Avatar character={character} />}
+        {time ? <h2>道具店</h2> : <span className="who">{JOB_NAME[character.job]}　Lv.{level}</span>}
         <span className="spacer" />
         <span className="coins" title={time ? '時光幣（跟樂園共用）' : '銅幣'}><Icon name="coin" size={15} /> {character.coins}</span>
-        <button className={time ? 'kr-back' : 'btn ghost small'} onClick={onBack}>回去</button>
+        {time && <button className="kr-back" onClick={onCharacter}>英雄營</button>}
+        <button className={time ? 'kr-back' : 'btn ghost small'} onClick={onBack}>{time ? '回地圖' : '回去'}</button>
       </div>
       {time && (
         <p className="lede left small">用的是時光幣，跟樂園共用一個錢包。答對題目就會換到時光幣（一天最多 {character.time!.cap} 枚，今天換到 {character.time!.today} 枚）。頭像、外框這些外觀改到樂園的商店買。</p>
       )}
 
       {error && <p className="error">{error}</p>}
-      {note && <p className="note">{note}</p>}
+      {note && (
+        <p className="note">{note}
+          {justLegion && <>　<button className="i-tag i-go" onClick={onCharacter}>去{time ? '英雄營' : '「我的角色」'}換上 ›</button></>}
+        </p>
+      )}
 
       <div className="shopwrap">
         <Sec time={time} title="軍團" hint="一次換整套：兵推的兵、城堡、塔、戰場，守塔的士兵和箭塔" order={2}>
           {TIER_ORDER.map((tier) => (
             <LegionShelf key={tier} tier={tier} level={level} coins={character.coins} badges={badges} price={P}
-              owned={(l) => !l.id || has(l.id)} busy={busy} onBuy={(l) => void buy(l.id, l.name)}
-              onCharacter={onCharacter} />
+              owned={(l) => !l.id || has(l.id)} busy={busy}
+              onBuy={(l) => void buy(l.id, l.name, true)}
+              onCharacter={onCharacter} where={time ? '英雄營' : '我的角色'} />
           ))}
         </Sec>
 
@@ -153,7 +162,7 @@ export function Shop({
                         </span>
                       )}
                       {owned && i.kind === 'cosmetic'
-                        ? <button className="i-tag i-go" onClick={onCharacter}>已經有了，去「我的角色」換上 ›</button>
+                        ? <button className="i-tag i-go" onClick={onCharacter}>已經有了，去「{time ? '英雄營' : '我的角色'}」換上 ›</button>
                         : <span className="i-tag">{owned ? `已有 ${count(character, i.id)} 個` : ''}</span>}
                       <button className="btn small" disabled={busy || locked || (owned && i.kind === 'cosmetic')}
                         onClick={() => void buy(i.id, i.name)}>
@@ -199,8 +208,10 @@ function Sec({ time, title, hint, open, order, children }: {
  * 之後加新軍團就是往某一層多放一張卡，這裡不用改。
  */
 function LegionShelf({
-  tier, level, coins, badges, owned, busy, onBuy, onCharacter, price,
+  tier, level, coins, badges, owned, busy, onBuy, onCharacter, price, where,
 }: {
+  /** 換上要去哪一頁（樂園模式＝英雄營） */
+  where: string
   tier: keyof typeof TIERS
   level: number
   coins: number
@@ -240,7 +251,7 @@ function LegionShelf({
             <span className="i-desc">{l.desc}</span>
             {mine
               ? <button className="i-tag i-go" onClick={onCharacter}>
-                  {l.id ? '已經有了，去「我的角色」換上 ›' : '預設就有，去「我的角色」換 ›'}
+                  {l.id ? `已經有了，去「${where}」換上 ›` : `預設就有，去「${where}」換 ›`}
                 </button>
               : <span className="i-tag">
                   {lowLevel && `還要升到 ${t.unlockLevel} 級`}

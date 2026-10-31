@@ -1,3 +1,4 @@
+import { WeeklyStarsStrip } from './Leaderboard'
 import { useEffect, useRef, useState } from 'react'
 import { RULES } from '@/games/tug-of-war/battle'
 import { repo } from '@/net'
@@ -166,6 +167,7 @@ export function Versus({
       </div>
 
       <div className="kr-body">
+        <WeeklyStarsStrip />
         {invites.map((p) => (
           <div key={p.id} className="kr-card vs-invite">
             <span className="mugbox vs-mug"><Face id={p.id} avatar={p.avatar} /></span>

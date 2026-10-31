@@ -823,6 +823,7 @@ export function App() {
           onChanged={(s) => { setStudent(s); void enter(s) }}
           onBack={() => setScreen('select')}
           onLogout={() => void logout()}
+          medalsUrl={PARK_URL && character?.time ? PARK_URL + '#passport/' + PARK_FACILITY : undefined}
         />
       )}
 

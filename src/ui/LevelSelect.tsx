@@ -93,7 +93,7 @@ export function LevelSelect({
   onCharacter: () => void
   onBoard: () => void
   onVersus: () => void
-  /** 我的徽章牆 */
+  /** 我的徽章牆（只有不是樂園模式時才有入口） */
   onProfile: () => void
 }) {
   const cleared = new Set([...progress.values()].filter((p) => p.clearedAt).map((p) => p.levelId))
@@ -108,6 +108,8 @@ export function LevelSelect({
   const [card, setCard] = useState<LevelData | null>(null)
   /** 手機底部列的「更多」（商店、排行、徽章） */
   const [more, setMore] = useState(false)
+  /** 接在樂園裡（時光幣模式）：排行榜、徽章交給樂園，商店變成底部的「道具店」 */
+  const park = !!(PARK_URL && character.time)
 
   const ch = CHAPTERS.find((c) => c.no === openCh) ?? CHAPTERS[0]
   const ci = ch.no - 1
@@ -162,8 +164,8 @@ export function LevelSelect({
             <i className="wm-exp"><i style={{ width: `${Math.round((into / Math.max(1, need)) * 100)}%` }} /></i>
           </div>
         </div>
-        {/* 點時光幣直接去商店：手機上商店收進「更多」，想買東西的人還是一下就到 */}
-        <button className="wm-coin pk-coin" onClick={onShop} aria-label={`時光幣 ${character.coins}，去商店`}>
+        {/* 點時光幣直接去道具店（跟樂園一樣：錢包就是去買東西） */}
+        <button className="wm-coin pk-coin" onClick={onShop} aria-label={`時光幣 ${character.coins}，去${park ? '道具店' : '商店'}`}>
           <img src={pic('coin')} alt="" />{character.coins}
         </button>
         <span className="spacer" />
@@ -177,11 +179,14 @@ export function LevelSelect({
             : <img className="wm-chsw-lock" src={pic('lock')} alt="未開放" />}
           <button onClick={() => goCh(1)} disabled={ch.no === CHAPTERS.length} aria-label="下一章">›</button>
         </div>
-        <nav className="wm-mini pk-dock">
-          <button onClick={onShop}><img src={ui('shop')} alt="" /><b>商店</b></button>
-          <button onClick={onBoard}><img src={ui('rank')} alt="" /><b>排行榜</b></button>
-          <button onClick={onProfile}><img src={ui('passport')} alt="" /><b>徽章</b></button>
-        </nav>
+        {/* 樂園模式沒有這條：排行榜、徽章交給樂園（班級排行、護照），商店升到底部大按鈕（2026-10-31） */}
+        {!park && (
+          <nav className="wm-mini pk-dock">
+            <button onClick={onShop}><img src={ui('shop')} alt="" /><b>商店</b></button>
+            <button onClick={onBoard}><img src={ui('rank')} alt="" /><b>排行榜</b></button>
+            <button onClick={onProfile}><img src={ui('passport')} alt="" /><b>徽章</b></button>
+          </nav>
+        )}
       </div>
 
       {rooms.length > 0 && <RoomBanner rooms={rooms} onRoom={onRoom} />}
@@ -284,16 +289,20 @@ export function LevelSelect({
         </button>
       )}
 
-      <nav className="wm-big">
-        <button onClick={onCharacter}><img src={pic('btn-hero')} alt="" /><b>英雄營</b></button>
+      {/* 樂園模式（2026-10-31 Chuck 選 A）：左兩顆準備（英雄營＝職業・軍團、道具店）、右兩顆出戰，
+          手機電腦同一排，不再有「更多」 */}
+      <nav className={'wm-big' + (park ? ' four' : '')}>
+        <button onClick={onCharacter}><img src={pic('btn-hero')} alt="" /><b>英雄營</b>
+          {park && <small className="wm-sub">職業・軍團</small>}</button>
+        {park && <button onClick={onShop}><img src={pic('btn-shop')} alt="" /><b>道具店</b></button>}
         <button onClick={onVersus}><img src={pic('btn-vs')} alt="" /><b>對戰</b></button>
         <button onClick={onRooms}><img src={pic('btn-raid')} alt="" /><b>魔王團戰</b></button>
-        {/* 手機才有：商店、排行、徽章收在這裡 */}
-        <button className={'wm-more' + (more ? ' on' : '')} onClick={() => setMore((m) => !m)}
+        {/* 手機才有：商店、排行、徽章收在這裡（不是樂園模式時） */}
+        {!park && <button className={'wm-more' + (more ? ' on' : '')} onClick={() => setMore((m) => !m)}
           aria-expanded={more} aria-label="更多">
           <i aria-hidden>⋯</i><b>更多</b>
-        </button>
-        {more && (
+        </button>}
+        {!park && more && (
           <div className="wm-morepop" role="menu">
             <button role="menuitem" onClick={() => { setMore(false); onShop() }}><img src={ui('shop')} alt="" /><b>商店</b></button>
             <button role="menuitem" onClick={() => { setMore(false); onBoard() }}><img src={ui('rank')} alt="" /><b>排行榜</b></button>

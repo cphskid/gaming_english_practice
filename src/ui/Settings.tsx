@@ -12,9 +12,11 @@ import { ui } from './park-ui'
  * 暱稱一週只能改一次，不然一定有人整節課都在改名字玩。
  */
 export function Settings({
-  student, onChanged, onBack, onLogout,
+  student, onChanged, onBack, onLogout, medalsUrl,
 }: {
   student: Student
+  /** 樂園模式才有：守護的勳章收在樂園護照（2026-10-31 遊戲自己的徽章牆入口拿掉了），這是直接翻到守護頁的網址 */
+  medalsUrl?: string
   onChanged: (s: Student) => void
   onBack: () => void
   onLogout: () => void
@@ -52,6 +54,14 @@ export function Settings({
       <div className="kr-body">
       {error && <p className="error">{error}</p>}
       {note && <p className="note">{note}</p>}
+
+      {medalsUrl && (
+        <div className="form panel">
+          <h2>我的勳章</h2>
+          <p className="hint">守護異世界拿到的勳章都收在樂園的護照裡，跟其他島的勳章放在一起。</p>
+          <a className="btn" href={medalsUrl}>打開護照的守護異世界頁</a>
+        </div>
+      )}
 
       <div className="form panel">
         <h2>聲音</h2>

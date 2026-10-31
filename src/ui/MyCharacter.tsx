@@ -99,7 +99,7 @@ export function MyCharacter({
           <h2>英雄營</h2>
           <span className="spacer" />
           <span className="coins" title="時光幣（跟樂園共用）"><Icon name="coin" size={15} /> {character.coins}</span>
-          <button className="kr-back" onClick={onShop}>軍械庫</button>
+          <button className="kr-back" onClick={onShop}>道具店</button>
           <button className="kr-back" onClick={onBack}>回地圖</button>
         </div>
       ) : (
