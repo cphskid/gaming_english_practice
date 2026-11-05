@@ -1,6 +1,7 @@
 import type { Word } from '@/core/types'
 import { WORDS } from './words'
 import ART from './raid-art.json'
+import { STAGES } from './levels'
 
 /**
  * 魔王團戰的魔王：四級共 20 隻（2026-09-25 Chuck 定案，取代原本十隻只考核心 300 字）。
@@ -66,13 +67,31 @@ export type BossTier = 'normal' | 'rare' | 'legend' | 'myth'
 
 export const TIERS: { id: BossTier; name: string; words: string; chapter: number | null }[] = [
   { id: 'normal', name: '普通', words: '核心 300 字', chapter: null },
-  { id: 'rare', name: '稀有', words: '第二章的字', chapter: 2 },
-  { id: 'legend', name: '傳說', words: '第三章的字', chapter: 3 },
-  { id: 'myth', name: '神話', words: '三章的字混在一起', chapter: 3 },
+  { id: 'rare', name: '稀有', words: '雪地神殿篇的字', chapter: 2 },
+  { id: 'legend', name: '傳說', words: '草原木堡篇的字', chapter: 3 },
+  { id: 'myth', name: '神話', words: '三篇的字混在一起', chapter: 3 },
 ]
 
-/** 要把第幾章全部打過才能打（null＝一開始就能打） */
+/**
+ * 稀有、傳說級的魔王也是守塔某一章的章尾魔王（levels.ts STAGES 的 foe）：
+ * **守塔打倒牠，團戰就能挑牠**（2026-11-05 Chuck 選，取代「整篇全破才開整級五隻」）。
+ * 回傳那一關的 id；普通、神話級回傳 null（照 needChapter）。
+ */
+export function needLevel(b: BossDef): string | null {
+  if (b.tier !== 'rare' && b.tier !== 'legend') return null
+  const st = STAGES.find((s) => s.foe === b.id)
+  return st ? `td-${String(st.to).padStart(2, '0')}` : null
+}
+
+/** 那一關是守塔第幾章、叫什麼（鎖頭上的說明用） */
+export function needStage(b: BossDef): { no: number; name: string } | null {
+  const st = STAGES.find((s) => s.foe === b.id)
+  return st && needLevel(b) ? { no: st.no, name: st.name } : null
+}
+
+/** 要把第幾篇全部打過才能打（null＝一開始就能打，或改看 needLevel） */
 export function needChapter(b: BossDef): number | null {
+  if (needLevel(b)) return null
   return TIERS.find((t) => t.id === b.tier)!.chapter
 }
 

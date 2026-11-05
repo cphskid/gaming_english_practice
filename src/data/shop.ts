@@ -1,6 +1,6 @@
 import type { ItemDef, ItemMode } from '@/core/inventory'
 import { LEGIONS, TIERS, legionNeed } from './legions'
-import { BOSSES, needChapter } from './bosses'
+import { BOSSES, needChapter, needLevel } from './bosses'
 import { AVATAR_TIERS, SHOP_AVATARS } from './avatars'
 
 /** 守塔和對戰都吃得下的道具。三個消耗品現在都是。 */
@@ -74,9 +74,9 @@ export const ITEMS: ItemDef[] = [
   // 哪一個成就給哪一個框寫在 src/data/achievements.ts。
   { id: 'frame-laurel', name: '葉冠框', icon: '', desc: '題庫每個字都答對過的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
   { id: 'frame-wave', name: '音波框', icon: '', desc: '三種技能都練到熟的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
-  { id: 'frame-flame', name: '火焰框', icon: '', desc: '第一章全破的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
-  { id: 'frame-frost', name: '冰晶框', icon: '', desc: '第二章全破的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
-  { id: 'frame-legend', name: '傳說框', icon: '', desc: '三章全破、兩千字都走過的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
+  { id: 'frame-flame', name: '火焰框', icon: '', desc: '草地城堡篇全破的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
+  { id: 'frame-frost', name: '冰晶框', icon: '', desc: '雪地神殿篇全破的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
+  { id: 'frame-legend', name: '傳說框', icon: '', desc: '三篇全破、兩千字都走過的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
   { id: 'frame-banner', name: '戰旗框', icon: '', desc: '贏過同學五場的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
   { id: 'frame-stardust', name: '星塵框', icon: '', desc: '兩個職業都通關過的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
   { id: 'frame-calendar', name: '日曆框', icon: '', desc: '一週來五天的人才有', price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true },
@@ -87,5 +87,6 @@ export const ITEMS: ItemDef[] = [
     id: b.frame, name: b.name + '框', icon: '', desc: `第一次打倒${b.name}的人才有`,
     price: 1, kind: 'cosmetic', slot: 'frame', unlockLevel: 1, achievementOnly: true,
     needChapter: needChapter(b) ?? undefined,
+    needLevel: needLevel(b) ?? undefined,
   })),
 ]

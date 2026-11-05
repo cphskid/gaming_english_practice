@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CHAPTERS, LEVELS } from '@/data/levels'
+import { CHAPTERS, LEVELS, stageOf } from '@/data/levels'
 import { WORDS_BY_ID } from '@/data/words'
 import { SKILL_NAME, type Skill } from '@/core/types'
 import { repo, type ClassDetail } from '@/net'
@@ -19,7 +19,6 @@ type Row = ClassDetail['levels'][number]
 type WordRow = ClassDetail['words'][number]
 
 const LEVEL = new Map(LEVELS.map((l) => [l.id, l]))
-const CH_NO = '一二三四五'
 const GAME_NAME: Record<string, string> = { 'tug-of-war': '真人對戰', 'boss-raid': '魔王團戰' }
 
 const pctOf = (ok: number, n: number) => (n ? Math.round((100 * ok) / n) : null)
@@ -145,7 +144,7 @@ export function ClassReport({ code, kid, onKid, onData }: {
 
 /** 匯出 CSV（跟島嶼開拓者一樣一人一列）：各章過幾關、答對率、最近在打、三種題型答對率、最常錯的字 */
 export function classCsv(d: ClassDetail): string {
-  const head = ['暱稱', ...CHAPTERS.map((_, i) => `第${CH_NO[i]}章過關`), '答對率', '最近在打', '最後玩',
+  const head = ['暱稱', ...CHAPTERS.map((c) => `${c.name}篇過關`), '答對率', '最近在打', '最後玩',
     ...SKILLS.map((k) => `${SKILL_NAME[k]}答對率`), '最常錯的字']
   const body = d.kids.map((x) => {
     const rows = d.levels.filter((r) => r.s === x.id)
@@ -195,17 +194,17 @@ function ClassView({ d, byKid, onPick }: { d: ClassDetail; byKid: Map<string, Ro
         <p className="cr cr-key">
           全班關卡答對率 <Pct ok={allOk} n={allN} pre="" />
           {worst && pctOf(worst.ok, worst.n)! < 80
-            ? <>；最需要加強的是第{CH_NO[worst.l.chapter - 1]}章第 {worst.l.no} 關「{worst.l.name}」（{worst.kids} 人打過，答對 {pctOf(worst.ok, worst.n)}%），可以上課先帶一次這關的字。</>
+            ? <>；最需要加強的是第{stageOf(worst.l.no).no}章第 {worst.l.no} 關「{worst.l.name}」（{worst.kids} 人打過，答對 {pctOf(worst.ok, worst.n)}%），可以上課先帶一次這關的字。</>
             : '，每一關都答得不錯。'}
         </p>
       )}
 
       <section className="cr">
       <h2>全班進度</h2>
-      <p className="lede left small">每章「過了幾關」和全班答對率。點名字看那個孩子的報告（可以給家長看）。</p>
+      <p className="lede left small">每篇「過了幾關」和全班答對率。點名字看那個孩子的報告（可以給家長看）。</p>
       <div className="cr-wrap">
         <table className="cr-table cr-grid">
-          <thead><tr><th>暱稱</th>{CHAPTERS.map((c, i) => <th key={c.no}>第{CH_NO[i]}章</th>)}<th>答對率</th><th>最近在打</th><th>最後玩</th></tr></thead>
+          <thead><tr><th>暱稱</th>{CHAPTERS.map((c) => <th key={c.no}>{c.name}篇</th>)}<th>答對率</th><th>最近在打</th><th>最後玩</th></tr></thead>
           <tbody>
             {order.map((x) => {
               const rows = byKid.get(x.id) ?? []
@@ -231,14 +230,14 @@ function ClassView({ d, byKid, onPick }: { d: ClassDetail; byKid: Map<string, Ro
       </section>
 
       <section className="cr">
-      <h2>每一章：上課可以加強的地方</h2>
-      <p className="lede left small">點一章打開，看每一關幾個人玩、幾個人過、答對多少，和這章全班最常錯的字。</p>
+      <h2>每一篇：上課可以加強的地方</h2>
+      <p className="lede left small">點一篇打開，看每一關幾個人玩、幾個人過、答對多少，和這篇全班最常錯的字。</p>
       <p className="cr-legend">
         <span className="cr-pct good">80% 以上</span><span className="cr-pct mid">60～79%</span><span className="cr-pct bad">不到 60%</span>
         <span>＝全班答對率，紅色的先看。</span>
         <button className="cr-link" onClick={() => setOpenAll((o) => !o)}>{openAll ? '全部收起' : '全部展開'}</button>
       </p>
-      {CHAPTERS.map((c, i) => {
+      {CHAPTERS.map((c) => {
         const rows = d.levels.filter((r) => LEVEL.get(r.l)?.chapter === c.no)
         const kidsIn = new Set(rows.map((r) => r.s))
         const ok = sum(rows, (r) => r.ok), n = sum(rows, (r) => r.n)
@@ -247,7 +246,7 @@ function ClassView({ d, byKid, onPick }: { d: ClassDetail; byKid: Map<string, Ro
         return (
           <details key={`${c.no}-${openAll}`} className={`cr-ch ${tone(pctOf(ok, n))}`} open={openAll}>
             <summary>
-              <b>第{CH_NO[i]}章 {c.name}</b><Pct ok={ok} n={n} />
+              <b>{c.name}篇</b><Pct ok={ok} n={n} />
               <span>{kidsIn.size ? `${kidsIn.size} 人玩過、過了 ${rows.filter((r) => r.cleared).length} 關次` : '還沒有人玩'}</span>
             </summary>
             {kidsIn.size > 0 && <>
@@ -268,7 +267,7 @@ function ClassView({ d, byKid, onPick }: { d: ClassDetail; byKid: Map<string, Ro
                   </tbody>
                 </table>
               </div>
-              <p className="cr-sub">這章全班錯的字（點題型看）</p>
+              <p className="cr-sub">這篇全班錯的字（點題型看）</p>
               <SkillBoard words={words} kids />
             </>}
           </details>
@@ -313,8 +312,8 @@ function KidReport({ kid, d, rows, onBack }: { kid: { id: string; nickname: stri
       {!all.length ? <p className="lede left">還沒開始玩守護異世界。</p> : (
         <p className="cr-sum">
           過了 <b>{cleared.length}／{LEVELS.length}</b> 關
-          （{CHAPTERS.map((c, i) => `第${CH_NO[i]}章 ${cleared.filter((r) => LEVEL.get(r.l)?.chapter === c.no).length}/${c.levels.length}`).join('、')}）。
-          {lv && <>最近在打第{CH_NO[lv.chapter - 1]}章第 {lv.no} 關「{lv.name}」（{when(last.last)}）。</>}
+          （{CHAPTERS.map((c) => `${c.name}篇 ${cleared.filter((r) => LEVEL.get(r.l)?.chapter === c.no).length}/${c.levels.length}`).join('、')}）。
+          {lv && <>最近在打第{stageOf(lv.no).no}章第 {lv.no} 關「{lv.name}」（{when(last.last)}）。</>}
           總共答了 {n} 題，<Pct ok={ok} n={n} />。
         </p>
       )}
@@ -328,20 +327,20 @@ function KidReport({ kid, d, rows, onBack }: { kid: { id: string; nickname: stri
       {weak.length > 0 && <>
         <h2>答對率比較低的關卡</h2>
         <ul className="cr-ul">
-          {weak.map((r) => { const l = LEVEL.get(r.l)!; return <li key={r.l}>第{CH_NO[l.chapter - 1]}章第 {l.no} 關「{l.name}」：打了 {r.plays} 場，<Pct ok={r.ok} n={r.n} />{r.cleared ? '，已經過關' : '，還沒過關'}。可以陪他把這關的字先念一遍再打。</li> })}
+          {weak.map((r) => { const l = LEVEL.get(r.l)!; return <li key={r.l}>第{stageOf(l.no).no}章第 {l.no} 關「{l.name}」：打了 {r.plays} 場，<Pct ok={r.ok} n={r.n} />{r.cleared ? '，已經過關' : '，還沒過關'}。可以陪他把這關的字先念一遍再打。</li> })}
         </ul>
       </>}
       </section>}
 
       {rows.length > 0 && <section className="cr">
-      <h2>每一章</h2>
-      {CHAPTERS.map((c, i) => {
+      <h2>每一篇</h2>
+      {CHAPTERS.map((c) => {
         const cr = rows.filter((r) => LEVEL.get(r.l)?.chapter === c.no)
         if (!cr.length) return null
         const cok = sum(cr, (r) => r.ok), cn = sum(cr, (r) => r.n)
         return (
           <details key={c.no} className={`cr-ch ${tone(pctOf(cok, cn))}`}>
-            <summary><b>第{CH_NO[i]}章 {c.name}</b><Pct ok={cok} n={cn} /><span>過了 {cr.filter((r) => r.cleared).length}/{c.levels.length} 關</span></summary>
+            <summary><b>{c.name}篇</b><Pct ok={cok} n={cn} /><span>過了 {cr.filter((r) => r.cleared).length}/{c.levels.length} 關</span></summary>
             <div className="cr-wrap">
               <table className="cr-table">
                 <thead><tr><th>關卡</th><th>星星</th><th>打了幾場</th><th>答對率</th><th>最後玩</th></tr></thead>

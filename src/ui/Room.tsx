@@ -1,8 +1,8 @@
 import { WeeklyStarsStrip } from './Leaderboard'
 import { useCallback, useEffect, useState } from 'react'
 import { frameOf } from '@/data/cosmetics'
-import { BOSSES, BOSS_BY_ID, CATS, TIERS, bossTopic, bossWords, needChapter, raidUrl, type BossDef } from '@/data/bosses'
-import { LEVELS } from '@/data/levels'
+import { BOSSES, BOSS_BY_ID, CATS, TIERS, bossTopic, bossWords, needChapter, needLevel, needStage, raidUrl, type BossDef } from '@/data/bosses'
+import { LEVELS, REGION_NAME } from '@/data/levels'
 import { chapterCleared } from '@/core/progress'
 import type { WordStat } from '@/core/wordStat'
 import { MIN_PLAYERS, MAX_PLAYERS } from '@/games/boss-raid/raid'
@@ -98,12 +98,14 @@ const catOf = (b: BossDef) => `${CATS.find((c) => c.id === b.cat)!.name}・${bos
  * 這隻魔王我打不打得了。稀有以上要把對應那一章全部打過（2026-09-25 Chuck：「這樣才能互相推進」）。
  * 伺服器 open_raid／join_room 也會擋，這裡只是讓畫面先講清楚。cleared＝null 是老師，全部都能開。
  */
-export function bossLocked(b: BossDef, cleared: Set<string> | null): number | null {
+export function bossLocked(b: BossDef, cleared: Set<string> | null): string | null {
+  if (!cleared) return null
+  const lv = needLevel(b)
+  if (lv) return cleared.has(lv) ? null : `守塔第${needStage(b)!.no}章打倒牠才能打`
   const ch = needChapter(b)
-  if (!ch || !cleared) return null
-  return chapterCleared(ch, LEVELS, cleared) ? null : ch
+  if (!ch) return null
+  return chapterCleared(ch, LEVELS, cleared) ? null : `${REGION_NAME[ch as 1 | 2 | 3]}篇全破才能打`
 }
-const CH = ['', '一', '二', '三']
 /** 提案二畫風的小圖（public/td-park） */
 const PARK_ART = `${import.meta.env.BASE_URL}td-park/`.replace(/([^:])\/{2,}/g, '$1/')
 
@@ -181,23 +183,26 @@ function BossGrid({ pick, onPick, stat, cleared }: {
     <>
       {TIERS.map((t) => {
         const list = BOSSES.filter((b) => b.tier === t.id)
-        const lock = bossLocked(list[0], cleared)
+        // 稀有、傳說是一隻一隻開（守塔打倒哪隻開哪隻）；整級都鎖著才在標題寫鎖頭
+        const locks = list.map((b) => bossLocked(b, cleared))
+        const lock = locks.every(Boolean) ? (locks.every((x) => x === locks[0]) ? locks[0] : '守塔打倒牠們才能打') : null
         return (
           <details key={t.id} className={'bosstier tier-' + t.id} open={!lock}>
             <summary><h3>
               {t.name}<small>　{t.words}{t.id === 'myth' ? '，半血會變身' : ''}</small>
-              {lock && <small className="lockmsg">　🔒 第{CH[lock]}章全破才能打</small>}
+              {lock && <small className="lockmsg">　🔒 {lock}</small>}
             </h3></summary>
             <div className="bossgrid">
-              {list.map((b) => (
-                <button key={b.id} className={'bosspick' + (pick === b.id ? ' on' : '') + (lock ? ' locked' : '')}
-                  disabled={!!lock}
+              {list.map((b, k) => (
+                <button key={b.id} className={'bosspick' + (pick === b.id ? ' on' : '') + (locks[k] ? ' locked' : '')}
+                  disabled={!!locks[k]}
                   style={{ ['--boss' as string]: b.color }} onClick={() => onPick(b.id)}>
                   <BossFace b={b} size={46} />
                   <span className="txt">
                     <b>{b.name}</b>
                     <small>{catOf(b)}</small>
-                    {stat && !lock && <small className="fam">你認得 {pct(familiarity(b, stat))}</small>}
+                    {stat && !locks[k] && <small className="fam">你認得 {pct(familiarity(b, stat))}</small>}
+                    {locks[k] && !lock && <small className="lockmsg">🔒 {locks[k]}</small>}
                   </span>
                 </button>
               ))}
@@ -279,7 +284,7 @@ export function RoomList({ rooms, stat, cleared, onJoin, onOpen, onBack }: {
                       if (r.locked && !r.mine) { setAsking(r.id); setGuess(''); return }
                       run(() => onJoin(r.id))
                     }}>
-                    {r.mine ? '進去' : ch ? `第${CH[ch]}章全破才能打` : r.status === 'playing' ? '開打了'
+                    {r.mine ? '進去' : ch ? ch : r.status === 'playing' ? '開打了'
                       : r.members >= MAX_PLAYERS ? '滿了' : '加入'}
                   </button>
                 )

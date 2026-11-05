@@ -38,14 +38,29 @@ if (await page.locator('.jobs .job').count()) {
   await page.locator('.avatars .av').first().click({ timeout: 2000 }).catch(() => {})
   await page.locator('button.btn.big').click()
 }
+// 新玩家註冊完會直接進第 1 關（新手引導），先離開回到選關地圖
+await page.waitForSelector('.levels, .td-cv', { timeout: 20000 })
+if (!(await page.locator('.levels').count())) {
+  await page.waitForTimeout(2500); page.on('dialog', (d) => d.accept())
+  await page.locator('button', { hasText: '離開' }).first().click()
+  await page.waitForTimeout(800)
+  // 還在打的關卡會先問一次「真的要離開嗎」
+  if (!(await page.locator('.levels').count())) await page.locator('button', { hasText: /確定|離開/ }).last().click().catch(() => {})
+}
 await page.waitForSelector('.levels', { timeout: 20000 })
-// 八十五關分三章，一次只攤開一章：先打開那一章再點
-const chIdx = LEVEL <= 14 ? 0 : LEVEL <= 52 ? 1 : 2
-const head = page.locator('.chhead').nth(chIdx)
-if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click()
+// 八十五關分三篇十七章，一次只攤開一章：頁籤只列這一篇的章，先用箭頭換篇再點那一章
+const STAGE_TO = [5, 10, 14, 19, 23, 27, 34, 40, 46, 52, 57, 62, 67, 72, 77, 82, 85]
+const stageNo = STAGE_TO.findIndex((t) => LEVEL <= t) + 1
+const tab = page.locator('.wm-tab', { hasText: `第${stageNo}章` })
+for (let k = 0; k < 3 && !(await tab.count()); k++) {
+  await page.click(`.wm-tab[aria-label=${stageNo > 10 || (stageNo > 3 && !(await page.locator('.wm-tab', { hasText: '第4章' }).count())) ? '下一篇' : '上一篇'}]`)
+}
+if ((await tab.getAttribute('aria-expanded')) !== 'true') await tab.click()
 await page.locator('.lv', { hasText: `第 ${LEVEL} 關` }).first().click(); await page.locator('.lvgo').click()
 await page.waitForSelector('.td-cv')
 await page.waitForTimeout(700)
+// 有劇情的關卡一進來會先演（遊戲暫停），按跳過
+await page.locator('.td-story-skip').click({ timeout: 1500 }).catch(() => {})
 
 const out = await page.evaluate(async ({ accuracy }) => {
   const td = window.__td
