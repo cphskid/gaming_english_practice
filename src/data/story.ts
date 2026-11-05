@@ -1,5 +1,5 @@
 import type { LevelData } from '@/core/types'
-import { STAGES, stageOf } from './levels'
+import { SIDE_INFO, STAGES, stageOf } from './levels'
 import { ENEMIES, ENEMY_KINDS, BOSS_SKILL_NAME } from './enemies'
 import { TOWERS, TOWER_ORDER } from './towers'
 
@@ -220,6 +220,14 @@ export function newcomers(level: LevelData): { badge: string; name: string; desc
 
 /** 開打前要說的話 */
 export function storyBefore(level: LevelData): Line[] {
+  const side = level.rules.side
+  if (side) {
+    const info = SIDE_INFO[side.kind]
+    const out = [L('lumi', `${info.icon} 趣味關「${info.name}」！${info.rule}`)]
+    if (side.kind === 'rescue') out.unshift(L('morg', '露米是我的了！把露米關進籠子，運回我的城堡！'))
+    if (side.kind === 'gold') out.push(L('lumi', '這一關不考你守城，考你手快。答對越多，時光幣越多！'))
+    return out
+  }
   const st = stageOf(level.no)
   const out: Line[] = []
   if (level.no === st.from) {
@@ -242,6 +250,9 @@ export function storyBefore(level: LevelData): Line[] {
 
 /** 打贏之後要說的話：章尾魔王倒下、拿回一頁字典、丟一個下一章的鉤子 */
 export function storyAfter(level: LevelData): Line[] {
+  if (level.rules.side) {
+    return [L('lumi', level.rules.side.kind === 'rescue' ? '謝謝你救了我！我們回主線繼續冒險吧！' : '好好玩！趣味關打完了，回主線繼續冒險吧！')]
+  }
   const st = stageOf(level.no)
   if (level.no === st.to && REGION_FINALE[st.no]) return REGION_FINALE[st.no]
   if (level.isBoss) {

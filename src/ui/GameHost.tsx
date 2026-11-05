@@ -102,7 +102,7 @@ export function GameHost({
     <div className="play">
       <div className="leavebar">
         <button className="leave" onClick={() => ask(true)}>← 離開</button>
-        {level && <span className="leavebar-name">第 {level.no} 關・{level.name}</span>}
+        {level && <span className="leavebar-name">{level.rules.side ? '趣味關' : `第 ${level.no} 關`}・{level.name}</span>}
         {bag.length > 0 && (
           <span className="bagbar">
             {bag.map((it) => (

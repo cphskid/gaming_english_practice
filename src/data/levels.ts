@@ -372,8 +372,66 @@ export function stageOf(no: number): StageDef & { levels: LevelData[] } {
   return STAGES.find((s) => no >= s.from && no <= s.to) ?? STAGES[0]
 }
 
+/**
+ * 旁支趣味關（2026-11-05，Chuck 同意「不擋主線的旁支」，隱藏關先不做）。
+ *
+ * 第 2 章起每章一個，掛在這一章第三關旁邊：第三關過了就能打，不打也不影響往下走。
+ * 四種玩法輪流（金幣哥布林→聽音之夜→拯救露米→限定建築），讓同一套「蓋塔、點怪」有點變化。
+ * 字考這一章的字、難度比這一章中間鬆兩格；不存星星、不算全破，答對的時光幣照算。
+ * 打過的記在這台瀏覽器（localStorage td-side-done），地圖上的小旗子會變成插好的。
+ */
+export type SideKind = 'gold' | 'listen' | 'rescue' | 'limit'
+const SIDE_ORDER: SideKind[] = ['gold', 'listen', 'rescue', 'limit']
+export const SIDE_INFO: Record<SideKind, { name: string; icon: string; rule: string }> = {
+  gold: { name: '金幣哥布林', icon: '💰', rule: '兩波金幣哥布林衝過來，溜走了也不扣血，能點幾隻是幾隻！' },
+  listen: { name: '聽音之夜', icon: '👻', rule: '今晚全是聽音幽靈：不給中文，只念英文給你聽，聽到哪個字就點哪隻。' },
+  rescue: { name: '拯救露米', icon: '🧚', rule: '露米被關在籠子裡運走了！籠子走到城堡就輸，要答對好幾次才打得破。' },
+  limit: { name: '限定建築', icon: '🏹', rule: '這一關只能蓋箭塔，而且最多三座。蓋在哪裡才擋得住？可以升級喔。' },
+}
+
+function sideLevel(st: StageDef, k: number): LevelData {
+  const kind = SIDE_ORDER[k % SIDE_ORDER.length]
+  const mine = LEVELS.filter((l) => l.no >= st.from && l.no <= st.to)
+  const mid = mine[Math.floor(mine.length / 2)]
+  // 主線關卡的難度刻度沒存在 LevelData 裡：第一篇＝關卡編號，二三篇從首通獎勵倒推（獎勵用的是鋸齒前那條直線）
+  const dMid = st.region === 1 ? mid.no : (mid.bonus - 40 - 30 * (st.region - 1)) / 10
+  const d = Math.max(1, dMid - (kind === 'limit' ? 3 : 2))
+  const ids = mine.flatMap((l) => l.wordIds ?? [])
+  const themes = mine.some((l) => !l.themes.length) ? [] : [...new Set(mine.flatMap((l) => l.themes))]
+  const lv = build({
+    no: 100 + st.no, name: SIDE_INFO[kind].name, chapter: st.region, themes,
+    wordIds: ids.length ? [...new Set(ids)] : undefined,
+    layout: (mine[1] ?? mine[0]).skin.map as LayoutName,
+    waveCount: kind === 'gold' ? 2 : kind === 'limit' ? 4 : 3, boss: false, d, tileset: mid.skin.tileset,
+  })
+  const waves = lv.rules.waves.map((w, i) => {
+    if (kind === 'gold') return { ...w, count: Math.min(12, w.count + 3), kinds: Array(Math.min(12, w.count + 3)).fill('gold') }
+    if (kind === 'listen') return { ...w, kinds: Array(w.count).fill('ghost') }
+    if (kind === 'rescue') return i === 1 ? { ...w, kinds: Array.from({ length: w.count }, (_, j) => (j === 1 ? 'cage' : '')) } : { ...w, kinds: undefined }
+    return { ...w, kinds: undefined }
+  })
+  return {
+    ...lv,
+    id: `td-s${String(st.no).padStart(2, '0')}`,
+    bonus: 0,
+    rules: {
+      ...lv.rules, waves,
+      castleHp: kind === 'gold' ? 20 : 15,
+      startCoins: kind === 'limit' ? lv.rules.startCoins + 60 : lv.rules.startCoins,
+      side: kind === 'limit' ? { kind, towers: ['archery'], maxTowers: 3 } : { kind },
+    },
+  }
+}
+
+/** 第 2 章起每章一個旁支關，鍵是章的編號 */
+export const SIDE_LEVELS: Map<number, LevelData> = new Map(
+  STAGE_DEFS.filter((s) => s.no >= 2).map((s, k) => [s.no, sideLevel(s, k)]),
+)
+/** 旁支關掛在這一章第幾關後面（第三關過了就開） */
+export const sideUnlockNo = (st: StageDef): number => Math.min(st.to, st.from + 2)
+
 export const LEVEL_IDS: string[] = LEVELS.map((l) => l.id)
 
 export function levelById(id: string): LevelData | undefined {
-  return LEVELS.find((l) => l.id === id)
+  return LEVELS.find((l) => l.id === id) ?? [...SIDE_LEVELS.values()].find((l) => l.id === id)
 }
