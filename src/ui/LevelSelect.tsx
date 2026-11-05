@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { prefetchMap } from '@/games/tower-defense/park'
-import { CHAPTERS, LEVELS } from '@/data/levels'
+import { CHAPTERS, LEVELS, REGION_NAME, STAGES } from '@/data/levels'
 import { THEME_NAME } from '@/data/words'
-import { chapterCleared, expIntoLevel, isUnlocked, levelFromExp } from '@/core/progress'
+import { expIntoLevel, isUnlocked, levelFromExp } from '@/core/progress'
 import type { Character, LevelData, LevelProgress, Student } from '@/core/types'
 import { JOB_NAME } from '@/core/character'
 import type { RoomBrief } from '@/net'
@@ -12,7 +12,7 @@ import { Avatar } from './Avatar'
 import WORLD from '@/data/world-stops.json'
 import { PARK_URL } from '@/net'
 import { ui } from './park-ui'
-import { CHAPTER_STORY, newcomers } from '@/data/story'
+import { STAGE_STORY, newcomers } from '@/data/story'
 import { BOSS_SKILL_NAME } from '@/data/enemies'
 
 /**
@@ -99,11 +99,13 @@ export function LevelSelect({
   const cleared = new Set([...progress.values()].filter((p) => p.clearedAt).map((p) => p.levelId))
   const lv = levelFromExp(character.exp)
   const { into, need } = expIntoLevel(character.exp)
-  // 預設攤開「正在打的那一章」：已經打開、而且還沒全破的最後一章；三章都破了就攤開第三章。
+  // 這一章是不是照進度打開了（老師開放的單關不算整章打開）
+  const noTeacher = { cleared, teacherOpen: new Set<string>() }
+  const stageOpen = (n: number) => n === 1 || isUnlocked(STAGES[n - 1].from, LEVELS, noTeacher)
+  // 預設攤開「正在打的那一章」：打得到、還沒過的第一關在哪一章；全破了就攤開最後一章。
   const [openCh, setOpenCh] = useState<number>(() => {
-    const live = CHAPTERS.filter((c) => c.no === 1 || chapterCleared(c.no - 1, LEVELS, cleared))
-    const cur = live.find((c) => !chapterCleared(c.no, LEVELS, cleared)) ?? live[live.length - 1]
-    return cur?.no ?? 1
+    const cur = STAGES.find((s) => stageOpen(s.no) && s.levels.some((l) => !cleared.has(l.id)))
+    return cur?.no ?? STAGES.length
   })
   const [card, setCard] = useState<LevelData | null>(null)
   /** 手機底部列的「更多」（商店、排行、徽章） */
@@ -111,23 +113,24 @@ export function LevelSelect({
   /** 接在樂園裡（時光幣模式）：排行榜、徽章交給樂園，商店變成底部的「道具店」 */
   const park = !!(PARK_URL && character.time)
 
-  const ch = CHAPTERS.find((c) => c.no === openCh) ?? CHAPTERS[0]
-  const ci = ch.no - 1
-  const open = ch.no === 1 || chapterCleared(ch.no - 1, LEVELS, cleared)
+  // 一次攤開一章（三篇十七章，2026-11-05）；地圖、畫風照篇
+  const ch = STAGES[openCh - 1] ?? STAGES[0]
+  const open = stageOpen(ch.no)
+  const prevSt = STAGES[ch.no - 2]
   const byTeacher = open ? 0 : ch.levels.filter((l) => teacherOpen.has(l.id)).length
   const stars = ch.levels.reduce((n, l) => n + (progress.get(l.id)?.stars ?? 0), 0)
   const pts = stopsFor(ch.levels.length)
   const unlockedOf = (l: LevelData) => isUnlocked(l.no, LEVELS, { cleared, teacherOpen })
   // 「現在該打這一關」：打得到、還沒過的第一關，旗子會跳、會發光
   const next = ch.levels.find((l) => unlockedOf(l) && !cleared.has(l.id))
-  const dense = ch.levels.length > 20
+  const dense = false
   // 選關畫面閒著的時候先把「該打的那一關」的地圖抓好；點開卡片時再補抓那一關的
   useEffect(() => { if (next) prefetchMap(next) }, [next])
   useEffect(() => { if (card) prefetchMap(card) }, [card])
 
   // 露米的章節故事：手機上每段只自動攤開一次，看完縮成頭像，想再看點頭像（電腦版一直攤開）
-  const chDone = chapterCleared(ch.no, LEVELS, cleared)
-  const storyKey = `td-wm-story:${ch.no}:${chDone ? 'done' : 'now'}`
+  const chDone = ch.levels.every((l) => cleared.has(l.id))
+  const storyKey = `td-wm-story2:${ch.no}:${chDone ? 'done' : 'now'}`
   const [storyOpen, setStoryOpen] = useState(false)
   useEffect(() => {
     let seen = false
@@ -140,7 +143,7 @@ export function LevelSelect({
   }
   const goCh = (d: number) => {
     const n = ch.no + d
-    if (n < 1 || n > CHAPTERS.length) return
+    if (n < 1 || n > STAGES.length) return
     setOpenCh(n); setCard(null)
   }
 
@@ -172,12 +175,12 @@ export function LevelSelect({
         {/* 手機才有：三個章節頁籤合成一顆，左右切章，星星也併進來 */}
         <div className={'wm-chsw' + (open ? '' : ' locked')}>
           <button onClick={() => goCh(-1)} disabled={ch.no === 1} aria-label="上一章">‹</button>
-          <span className="wm-chsw-nm">{ch.name}</span>
+          <span className="wm-chsw-nm">第{ch.no}章 {ch.name}</span>
           {open
             ? <span className="wm-chsw-st">{ch.levels.filter((l) => cleared.has(l.id)).length}/{ch.levels.length}
               <img src={pic('star')} alt="星星" />{stars}</span>
             : <img className="wm-chsw-lock" src={pic('lock')} alt="未開放" />}
-          <button onClick={() => goCh(1)} disabled={ch.no === CHAPTERS.length} aria-label="下一章">›</button>
+          <button onClick={() => goCh(1)} disabled={ch.no === STAGES.length} aria-label="下一章">›</button>
         </div>
         {/* 樂園模式沒有這條：排行榜、徽章交給樂園（班級排行、護照），商店升到底部大按鈕（2026-10-31） */}
         {!park && (
@@ -192,30 +195,35 @@ export function LevelSelect({
       {rooms.length > 0 && <RoomBanner rooms={rooms} onRoom={onRoom} />}
 
       <div className="wm-tabs" role="tablist">
-        {CHAPTERS.map((c, i) => {
-          const o = c.no === 1 || chapterCleared(c.no - 1, LEVELS, cleared)
+        {/* 頁籤只列這一篇的幾章，兩邊的箭頭換篇 */}
+        <button className="chhead wm-tab wm-tab-arrow" disabled={ch.region === 1} aria-label="上一篇"
+          onClick={() => { setOpenCh(STAGES.filter((s) => s.region === ch.region - 1).slice(-1)[0].no); setCard(null) }}>‹</button>
+        {STAGES.filter((c) => c.region === ch.region).map((c) => {
+          const o = stageOpen(c.no)
           const done = c.levels.filter((l) => cleared.has(l.id)).length
           return (
             <button key={c.no} className={'chhead wm-tab' + (c.no === openCh ? ' on' : '') + (o ? '' : ' locked')}
               aria-expanded={c.no === openCh} onClick={() => { setOpenCh(c.no); setCard(null) }}>
-              <span className="chno">第{'一二三'[i]}章</span>
+              <span className="chno">第{c.no}章</span>
               <span className="chnm">{c.name}</span>
               <span className="chst">{o ? `${done}/${c.levels.length}` : <img src={pic('lock')} alt="未開放" />}</span>
             </button>
           )
         })}
+        <button className="chhead wm-tab wm-tab-arrow" disabled={ch.region === 3} aria-label="下一篇"
+          onClick={() => { setOpenCh(STAGES.find((s) => s.region === ch.region + 1)!.no); setCard(null) }}>›</button>
       </div>
 
       <div className="wm-scroll">
         <div className={'levels wm-map' + (dense ? ' dense' : '')}
-          style={{ backgroundImage: `url(${base}td-park/world/ch${ch.no}.webp)`.replace(/([^:])\/{2,}/g, '$1/') }}
+          style={{ backgroundImage: `url(${base}td-park/world/ch${ch.region}.webp)`.replace(/([^:])\/{2,}/g, '$1/') }}
           onClick={() => setCard(null)}>
-          <div className="wm-stars-total"><img src={pic('star')} alt="" /> {stars} / {ch.levels.length * 3}</div>
+          <div className="wm-stars-total">{REGION_NAME[ch.region]}篇　<img src={pic('star')} alt="" /> {stars} / {ch.levels.length * 3}</div>
           {/* 這一章的故事（data/story.ts）：還在打寫現況，全破了寫結局 */}
           {open && (
             <div className={'wm-story' + (storyOpen ? ' open' : '')} onClick={(ev) => { ev.stopPropagation(); closeStory() }}>
               <img src={pic('face-lumi')} alt="露米" />
-              {chDone ? CHAPTER_STORY[ch.no].done : CHAPTER_STORY[ch.no].now}
+              {chDone ? STAGE_STORY[ch.no].done : STAGE_STORY[ch.no].now}
             </div>
           )}
           <img className="wm-castle" src={pic('castle')} alt=""
@@ -238,7 +246,7 @@ export function LevelSelect({
                 {done && <span className="wm-stars">{[0, 1, 2].map((i) => <img key={i} src={pic('star')} alt="" className={i < st ? '' : 'off'} />)}</span>}
                 {!unlocked && <img className="wm-lock" src={pic('lock')} alt="未開放" />}
                 {/* 還沒搶回來的站有敵人佔著（暫代圖示，美術解凍後換手繪小兵） */}
-                {!done && <img className="wm-foe" src={pic('face-boss' + ch.no)} alt="" aria-hidden />}
+                {!done && <img className="wm-foe" src={pic('face-boss' + ch.region)} alt="" aria-hidden />}
                 {unlocked && !open && teacherOpen.has(l.id) && <span className="byteacher">老師開放</span>}
                 {l === next && <span className="wm-here">▼</span>}
               </button>
@@ -248,8 +256,11 @@ export function LevelSelect({
           {!open && (
             <div className="chlock wm-locknote">
               <img src={pic('lock')} alt="" />
-              把第{'一二三'[ci - 1]}章的 {CHAPTERS[ci - 1].levels.length} 關全部打過，就會打開這一章
-              （還差 {CHAPTERS[ci - 1].levels.filter((l) => !cleared.has(l.id)).length} 關）
+              {prevSt && prevSt.region === ch.region
+                ? <>打倒第{prevSt.no}章「{prevSt.name}」的魔王，就會打開這一章
+                  （還差 {prevSt.levels.filter((l) => !cleared.has(l.id)).length} 關）</>
+                : <>把{REGION_NAME[(ch.region - 1) as 1 | 2]}篇的 {CHAPTERS[ch.region - 2].levels.length} 關全部打過，就會打開這一章
+                  （還差 {CHAPTERS[ch.region - 2].levels.filter((l) => !cleared.has(l.id)).length} 關）</>}
               {byTeacher > 0 && `。老師先開放了 ${byTeacher} 關`}
             </div>
           )}

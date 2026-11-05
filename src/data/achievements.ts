@@ -159,12 +159,12 @@ export const ACHIEVEMENTS: AchDef[] = [
     desc: '累計 {n} 顆星。', hint: '累計 {n} 顆星' },
   // 一章一個全破徽章，各給一個外框，第三章的最稀有（2026-09-25）。
   // 第一章沿用舊 id，已經拿到火焰框的人不受影響。
-  { id: 'all-clear', category: 'tower', name: '全破・第一章',
-    desc: '第一章草地城堡的關卡全部通關。', hint: '第一章的關卡全部通關', rewardItem: 'frame-flame' },
-  { id: 'all-clear-2', category: 'tower', name: '全破・第二章',
-    desc: '第二章雪地神殿的關卡全部通關。', hint: '第二章的關卡全部通關', rewardItem: 'frame-frost' },
-  { id: 'all-clear-3', category: 'tower', name: '全破・第三章',
-    desc: '第三章草原木堡的關卡全部通關。兩千字全部走過一遍。', hint: '第三章的關卡全部通關',
+  { id: 'all-clear', category: 'tower', name: '全破・草地城堡篇',
+    desc: '草地城堡篇（第 1～3 章）的關卡全部通關。', hint: '草地城堡篇的關卡全部通關', rewardItem: 'frame-flame' },
+  { id: 'all-clear-2', category: 'tower', name: '全破・雪地神殿篇',
+    desc: '雪地神殿篇（第 4～10 章）的關卡全部通關。', hint: '雪地神殿篇的關卡全部通關', rewardItem: 'frame-frost' },
+  { id: 'all-clear-3', category: 'tower', name: '全破・草原木堡篇',
+    desc: '草原木堡篇（第 11～17 章）的關卡全部通關。兩千字全部走過一遍。', hint: '草原木堡篇的關卡全部通關',
     rewardItem: 'frame-legend', rewardTitle: '兩千字勇者' },
 
   // ---------------------------------------------------------------- 對戰

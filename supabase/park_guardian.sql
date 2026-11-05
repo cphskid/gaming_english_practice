@@ -51,7 +51,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
            when st.last_at is null then '還沒開始'
            when st.best is null then '還在挑戰第 1 關'
            else '已過第 ' || split_part(st.best, ':', 2) || ' 關「' || split_part(st.best, ':', 3)
-                || '」（第' || substr('一二三四五', split_part(st.best, ':', 1)::int, 1) || '章）'
+                || '」（' || (array['草地城堡','雪地神殿','草原木堡'])[split_part(st.best, ':', 1)::int] || '篇）'
          end,
          (coalesce(st.locked_until > now(), false)
           or st.last_at is null

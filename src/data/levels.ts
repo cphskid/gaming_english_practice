@@ -206,6 +206,8 @@ function tilesetFor(no: number): string {
 function build(o: {
   no: number; name: string; chapter: 1 | 2 | 3; themes: string[]; wordIds?: number[]
   layout: LayoutName; waveCount: number; boss: boolean; d: number; tileset: string
+  /** 算首次通關獎勵用的刻度（鋸齒前的那條直線，獎勵不跟著鋸齒掉） */
+  dBonus?: number
 }): LevelData {
   const layout = LAYOUTS[o.layout]
   // 用最短的一條路算，怪走最短那條時也要有合理的時間
@@ -223,7 +225,7 @@ function build(o: {
     maxWordLevel: 3,
     isBoss: o.boss,
     // 第一章照舊 40＋編號×10；後兩章照章內難度刻度，不然第 85 關會給 890
-    bonus: o.chapter === 1 ? 40 + o.no * 10 : 40 + Math.round(o.d * 10) + 30 * (o.chapter - 1),
+    bonus: o.chapter === 1 ? 40 + o.no * 10 : 40 + Math.round((o.dBonus ?? o.d) * 10) + 30 * (o.chapter - 1),
     skin: { tileset: o.tileset, map: o.layout },
     layout,
     rules: {
@@ -286,25 +288,89 @@ function chapterLevels(ch: 2 | 3): LevelData[] {
   const start = ch === 2 ? 2 : 3
   let b = 0, n = 0
   return rows.map((r, i) => {
-    const d = start + ((14 - start) * i) / Math.max(1, rows.length - 1)
-    const layout = r.boss ? BOSS_LAYOUTS[ch][b++ % BOSS_LAYOUTS[ch].length]
+    const boss = STAGE_BOSS_LEVELS.has(r.no)
+    const line = start + ((14 - start) * i) / Math.max(1, rows.length - 1)
+    const d = sawtooth(r.no, line)
+    const layout = boss ? BOSS_LAYOUTS[ch][b++ % BOSS_LAYOUTS[ch].length]
       : NORMAL_LAYOUTS[ch][n++ % NORMAL_LAYOUTS[ch].length]
     return build({
-      no: r.no, name: r.name, chapter: ch, themes: r.themes, wordIds: r.wordIds, layout,
-      waveCount: Math.min(7, 4 + Math.floor((d - 1) / 3.5)) + (r.boss ? 1 : 0) - (r.boss && d > 10 ? 1 : 0),
-      boss: r.boss, d, tileset: ch === 2 ? 'snow' : 'meadow',
+      no: r.no, name: r.name.replace(/魔王$/, '') + (boss ? '魔王' : ''), chapter: ch, themes: r.themes, wordIds: r.wordIds, layout,
+      waveCount: Math.min(7, 4 + Math.floor((d - 1) / 3.5)) + (boss ? 1 : 0) - (boss && d > 10 ? 1 : 0),
+      boss, d, dBonus: line, tileset: ch === 2 ? 'snow' : 'meadow',
     })
   })
 }
 
+/**
+ * 三篇十七章（2026-11-05，「重排守護異世界章節節奏」串，Chuck 選方案 A）。
+ *
+ * 原本二、三章各三十幾關一章，打兩個多小時才看得到「章節完成」，玩到一半就沒動力。
+ * 現在**原本的三章改叫「篇」**（草地／雪地／草原，地圖、畫風、字庫層級、團戰級別都還是照篇分，
+ * 所以 LevelData.chapter 的意思不變＝第幾篇），每篇再切成幾章、一章 3～7 關、章尾一定是魔王。
+ * 單字分配（data/level-plan.json）和關卡 id 一個都沒動，學生的進度不會掉；
+ * 只是把幾個魔王關挪一兩關，讓每章剛好收在魔王：
+ *   24→23、29→27、39→40、44→46、49→52，另外第 85 關（跟莫爾格決戰）補成魔王。
+ *
+ * foe：章尾魔王是誰。普通、稀有、傳說級的是魔王團戰裡同主題的那一隻（data/bosses.ts 的 id），
+ * 守塔打倒牠，團戰就能挑牠（bosses.ts needLevel）；其他是劇情魔王（data/story.ts 的 Speaker）。
+ */
+export interface StageDef { no: number; region: 1 | 2 | 3; name: string; from: number; to: number; foe: string }
+const STAGE_DEFS: StageDef[] = [
+  { no: 1, region: 1, name: '哥布林來了', from: 1, to: 5, foe: 'worm' },
+  { no: 2, region: 1, name: '出門冒險', from: 6, to: 10, foe: 'minotaur' },
+  { no: 3, region: 1, name: '時間之塔', from: 11, to: 14, foe: 'boss1' },
+  { no: 4, region: 2, name: '冰封廚房', from: 15, to: 19, foe: 'demon' },
+  { no: 5, region: 2, name: '結凍的家', from: 20, to: 23, foe: 'shadow' },
+  { no: 6, region: 2, name: '冰柱學校', from: 24, to: 27, foe: 'lich' },
+  { no: 7, region: 2, name: '暴風雪山道', from: 28, to: 34, foe: 'frost' },
+  { no: 8, region: 2, name: '結冰的湖', from: 35, to: 40, foe: 'cthulhu' },
+  { no: 9, region: 2, name: '莫爾格的影子', from: 41, to: 46, foe: 'shade' },
+  { no: 10, region: 2, name: '神殿深處', from: 47, to: 52, foe: 'boss2' },
+  { no: 11, region: 3, name: '草原入口', from: 53, to: 57, foe: 'badger' },
+  { no: 12, region: 3, name: '木堡小鎮', from: 58, to: 62, foe: 'frog' },
+  { no: 13, region: 3, name: '風暴草原', from: 63, to: 67, foe: 'rex' },
+  { no: 14, region: 3, name: '猛獸部落', from: 68, to: 72, foe: 'gorilla' },
+  { no: 15, region: 3, name: '動物大遷徙', from: 73, to: 77, foe: 'penguin' },
+  { no: 16, region: 3, name: '犀牛木堡', from: 78, to: 82, foe: 'boss3' },
+  { no: 17, region: 3, name: '最後的木堡', from: 83, to: 85, foe: 'morg' },
+]
+/** 二、三篇的魔王關＝每章最後一關（第一篇照舊用 SEEDS 的 boss） */
+const STAGE_BOSS_LEVELS = new Set(STAGE_DEFS.filter((s) => s.region > 1).map((s) => s.to))
+
+/**
+ * 難度鋸齒：每章開頭比上一章魔王鬆一點，章內再爬上去，打完魔王會有「變強了」的感覺。
+ * 魔王關（章尾）和整篇的走勢、最高難度都不變。只用在二、三篇，第一篇一個數字都沒動。
+ */
+const DIP = 1.5
+function sawtooth(no: number, d: number): number {
+  const s = STAGE_DEFS.find((x) => no >= x.from && no <= x.to)!
+  const pos = s.to === s.from ? 1 : (no - s.from) / (s.to - s.from)
+  return Math.max(1, d - DIP * (1 - pos))
+}
+
 export const LEVELS: LevelData[] = [...CHAPTER1, ...chapterLevels(2), ...chapterLevels(3)]
 
-/** 每一章的關卡。解鎖與選關畫面照章分。 */
+/**
+ * 每一篇的關卡（LevelData.chapter＝第幾篇）。換篇要整篇打完、地圖與畫風、團戰級別、
+ * 班級報告的欄位都照篇分。
+ */
 export const CHAPTERS: { no: 1 | 2 | 3; name: string; levels: LevelData[] }[] = [
   { no: 1, name: '草地城堡', levels: LEVELS.filter((l) => l.chapter === 1) },
   { no: 2, name: '雪地神殿', levels: LEVELS.filter((l) => l.chapter === 2) },
   { no: 3, name: '草原木堡', levels: LEVELS.filter((l) => l.chapter === 3) },
 ]
+/** 篇名（給畫面用：「草地城堡篇」） */
+export const REGION_NAME: Record<1 | 2 | 3, string> = { 1: '草地城堡', 2: '雪地神殿', 3: '草原木堡' }
+
+/** 十七章。選關地圖一次攤開一章。 */
+export const STAGES: (StageDef & { levels: LevelData[] })[] = STAGE_DEFS.map((s) => ({
+  ...s, levels: LEVELS.filter((l) => l.no >= s.from && l.no <= s.to),
+}))
+
+/** 這一關在第幾章 */
+export function stageOf(no: number): StageDef & { levels: LevelData[] } {
+  return STAGES.find((s) => no >= s.from && no <= s.to) ?? STAGES[0]
+}
 
 export const LEVEL_IDS: string[] = LEVELS.map((l) => l.id)
 

@@ -1888,7 +1888,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       const ln = lines[i]
       const sp = SPEAKERS[ln.who]
       elStory.innerHTML = `<div class="td-story-box${ln.who === 'lumi' ? '' : ' foe'}">`
-        + `<span class="td-story-face"><img src="${pUrl('face-' + ln.who)}" alt="${sp.face}"></span>`
+        + `<span class="td-story-face">${sp.img ? `<img src="${pUrl('face-' + sp.img)}" alt="${sp.face}">` : `<i class="td-story-emoji">${sp.face}</i>`}</span>`
         + `<div class="td-story-txt"><b>${sp.name}</b><p>${ln.text}</p></div>`
         + `<span class="td-story-next">${i < lines.length - 1 ? '點一下繼續 ▶' : '開始！'}</span>`
         + `</div><button class="td-story-skip">跳過</button>`

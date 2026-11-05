@@ -53,6 +53,8 @@ export interface ItemDef {
   needAchievement?: string
   /** 魔王團戰外框：這隻魔王要把第幾章全部打過才能打（伺服器 open_raid／join_room 用） */
   needChapter?: number
+  /** 魔王團戰外框：要先在守塔打倒牠（那一關的 id）才能打（伺服器 raid_boss_check 用） */
+  needLevel?: string
 }
 
 export function count(c: Character, itemId: string): number {

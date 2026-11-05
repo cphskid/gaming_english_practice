@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CHAPTERS, LEVELS } from '@/data/levels'
+import { CHAPTERS, LEVELS, stageOf } from '@/data/levels'
 import { WORDS_BY_ID } from '@/data/words'
 import { WordStat } from '@/core/wordStat'
 import { SKILL_NAME, type ClassRoom, type Staff } from '@/core/types'
@@ -128,7 +128,7 @@ export function Teacher({
       // 開第二、三章的關會讓還沒升章的小朋友直接跳進國中字，先問一聲，免得捲動時誤點。
       const lv = LEVELS.find((l) => l.id === levelId)
       if (lv && lv.chapter > 1
-        && !window.confirm(`要開放第${'一二三'[lv.chapter - 1]}章第 ${lv.no} 關「${lv.name}」嗎？\n還沒打完前面章節的學生也能直接進去打。`)) return
+        && !window.confirm(`要開放第${stageOf(lv.no).no}章第 ${lv.no} 關「${lv.name}」嗎？\n還沒打完前面章節的學生也能直接進去打。`)) return
       next.add(levelId)
     }
     openRef.current = next
@@ -387,15 +387,15 @@ export function Teacher({
                   <div className="open">
                     {LEVELS.filter((l) => open.has(l.id)).map((l) => (
                       <button key={l.id} className="on" onClick={() => toggleOpen(l.id)}>
-                        第{'一二三'[l.chapter - 1]}章　{l.no}. {l.name}　✕
+                        第{stageOf(l.no).no}章　{l.no}. {l.name}　✕
                       </button>
                     ))}
                   </div>
                 </>}
               </div>
-            {CHAPTERS.map((ch, ci) => (
+            {CHAPTERS.map((ch) => (
               <div key={ch.no}>
-                <h3 className="opench">第{'一二三'[ci]}章　{ch.name}</h3>
+                <h3 className="opench">{ch.name}篇</h3>
                 <div className="open">
                   {ch.levels.map((l) => (
                     <button key={l.id} className={open.has(l.id) ? 'on' : ''}

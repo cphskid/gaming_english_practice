@@ -193,6 +193,9 @@ alter table public.shop_items add column if not exists need_achievement text;
 -- 魔王分級（2026-09-25）：魔王團戰的外框（frame-boss-<魔王>）順便記「要把第幾章全部打過
 -- 才能打這隻魔王」。稀有＝第二章、傳說與神話＝第三章，普通是 null。open_raid／join_room 看這一欄。
 alter table public.shop_items add column if not exists need_chapter smallint;
+-- 三篇十七章（2026-11-05）：稀有、傳說級的魔王也是守塔某一章的章尾魔王，改成「守塔打倒牠（這一關）
+-- 就能在團戰挑牠」。有 need_level 的就不看 need_chapter。
+alter table public.shop_items add column if not exists need_level text;
 
 -- 2026-09-20 的品項搬家。第一版賣的「小皇冠／紅披風」是要畫在頭像上的，
 -- 但那 25 張頭像是完成品不是可以疊圖層的人偶，所以改成了「皇冠框／金邊框」。
@@ -3833,9 +3836,16 @@ revoke all on function public.chapter_cleared(uuid, int) from public, anon, auth
 -- 學生能不能打這隻魔王：稀有以上要把對應那章全部打過（Chuck：「這樣才能互相推進」）
 create or replace function public.raid_boss_check(p_student uuid, p_boss text)
 returns void language plpgsql stable security definer set search_path = public, pg_temp as $$
-declare v_ch smallint;
+declare v_ch smallint; v_lv text;
 begin
-  select i.need_chapter into v_ch from public.shop_items i where i.id = 'frame-boss-' || p_boss;
+  select i.need_chapter, i.need_level into v_ch, v_lv from public.shop_items i where i.id = 'frame-boss-' || p_boss;
+  if v_lv is not null then
+    if not exists (select 1 from public.level_progress lp
+                    where lp.student_id = p_student and lp.level_id = v_lv and lp.cleared_at is not null) then
+      raise exception '要先在守塔打倒這隻魔王（第 % 關），才能在團戰挑牠', ltrim(substr(v_lv, 4), '0');
+    end if;
+    return;
+  end if;
   if v_ch is not null and not public.chapter_cleared(p_student, v_ch) then
     raise exception '要先把守塔第%章全部打過，才能打這隻魔王', v_ch;
   end if;
