@@ -11,7 +11,7 @@
  * 美術還在暫停（Chuck 2026-10-08：守護異世界美術先緩），所以先用現有的哥布林換色＋
  * 頭上一個小圖示當暫代。要畫的正式圖列在「讓中後段不膩的提案」那份文件最後一節。
  */
-export type EnemyKind = '' | 'wolf' | 'shield' | 'bat' | 'slime' | 'shaman' | 'ghost'
+export type EnemyKind = '' | 'wolf' | 'shield' | 'bat' | 'slime' | 'shaman' | 'ghost' | 'gold' | 'cage'
 
 export interface EnemySpec {
   name: string
@@ -59,6 +59,17 @@ export const ENEMIES: Record<Exclude<EnemyKind, ''>, EnemySpec> = {
     name: '聽音幽靈', badge: '👻', tint: '#cfe6ff', scale: 1, from: 42,
     desc: '問到牠的時候不給中文，只念英文給你聽：聽到哪個字，就點寫著那個字的怪。',
     hpMul: 1, speedMul: 1,
+  },
+  // 下面兩種只出現在旁支趣味關（from 9999＝主線永遠不會排到）
+  gold: {
+    name: '金幣哥布林', badge: '💰', tint: '#f2c230', scale: 0.95, from: 9999,
+    desc: '抓著時光幣到處跑，溜走了也不扣城堡的血。能點幾隻是幾隻！',
+    hpMul: 0.5, speedMul: 1.25,
+  },
+  cage: {
+    name: '露米的籠子', badge: '🧚', tint: '#c9a46a', scale: 1.25, from: 9999,
+    desc: '露米被關在籠子裡！籠子走到城堡就輸了，要答對好幾次才打得破。',
+    hpMul: 3, speedMul: 0.55,
   },
 }
 

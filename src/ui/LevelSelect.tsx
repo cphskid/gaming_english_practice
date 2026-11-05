@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { prefetchMap } from '@/games/tower-defense/park'
-import { CHAPTERS, LEVELS, REGION_NAME, STAGES } from '@/data/levels'
+import { CHAPTERS, LEVELS, REGION_NAME, SIDE_INFO, SIDE_LEVELS, STAGES, sideUnlockNo } from '@/data/levels'
 import { THEME_NAME } from '@/data/words'
 import { expIntoLevel, isUnlocked, levelFromExp } from '@/core/progress'
 import type { Character, LevelData, LevelProgress, Student } from '@/core/types'
@@ -120,6 +120,16 @@ export function LevelSelect({
   const byTeacher = open ? 0 : ch.levels.filter((l) => teacherOpen.has(l.id)).length
   const stars = ch.levels.reduce((n, l) => n + (progress.get(l.id)?.stars ?? 0), 0)
   const pts = stopsFor(ch.levels.length)
+  // 旁支趣味關：掛在這一章第三關旁邊，第三關過了就開（打過的記在這台瀏覽器）
+  const side = SIDE_LEVELS.get(ch.no)
+  const sideAt = side ? ch.levels.findIndex((l) => l.no === sideUnlockNo(ch)) : -1
+  const sideOpen = !!side && (cleared.has(ch.levels[sideAt].id) || teacherOpen.has(ch.levels[sideAt].id))
+  const [sideDone] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('td-side-done') || '[]')) } catch { return new Set() }
+  })
+  const sidePt = side ? { x: Math.min(0.94, pts[sideAt].x + 0.05), y: Math.max(0.12, pts[sideAt].y - 0.13) } : null
+  /** 卡片要跳在哪一點旁邊 */
+  const ptOf = (l: LevelData) => (l === side && sidePt ? sidePt : pts[ch.levels.indexOf(l)])
   const unlockedOf = (l: LevelData) => isUnlocked(l.no, LEVELS, { cleared, teacherOpen })
   // 「現在該打這一關」：打得到、還沒過的第一關，旗子會跳、會發光
   const next = ch.levels.find((l) => unlockedOf(l) && !cleared.has(l.id))
@@ -253,6 +263,18 @@ export function LevelSelect({
             )
           })}
 
+          {side && sidePt && (
+            <button className={'lv wm-stop wm-side' + (sideDone.has(side.id) ? ' done' : '') + (card === side ? ' sel' : '')}
+              style={{ left: `${sidePt.x * 100}%`, top: `${sidePt.y * 100}%` }}
+              disabled={!sideOpen}
+              onClick={(ev) => { ev.stopPropagation(); setCard(side) }}>
+              <img className="wm-base" src={pic(sideDone.has(side.id) ? 'stop-flag' : 'stop')} alt="" />
+              <span className="wm-side-ico" aria-hidden>{SIDE_INFO[side.rules.side!.kind].icon}</span>
+              <span className="sr">趣味關：{side.name}</span>
+              {!sideOpen && <img className="wm-lock" src={pic('lock')} alt="未開放" />}
+            </button>
+          )}
+
           {!open && (
             <div className="chlock wm-locknote">
               <img src={pic('lock')} alt="" />
@@ -268,25 +290,26 @@ export function LevelSelect({
           {card && (
             <div className="wm-card" onClick={(ev) => ev.stopPropagation()}
               style={{
-                left: `${Math.min(78, Math.max(22, pts[ch.levels.indexOf(card)].x * 100))}%`,
-                top: `${pts[ch.levels.indexOf(card)].y * 100}%`,
+                left: `${Math.min(78, Math.max(22, ptOf(card).x * 100))}%`,
+                top: `${ptOf(card).y * 100}%`,
               }}
-              data-below={pts[ch.levels.indexOf(card)].y < 0.45 ? '1' : '0'}>
+              data-below={ptOf(card).y < 0.45 ? '1' : '0'}>
               <button className="wm-x" onClick={() => setCard(null)} aria-label="關閉">×</button>
-              <div className="wm-cno">第 {card.no} 關{card.isBoss ? '・魔王' : ''}</div>
-              <div className="wm-cnm">{card.name}</div>
+              <div className="wm-cno">{card.rules.side ? `趣味關・第 ${sideUnlockNo(ch)} 關過了就能打` : `第 ${card.no} 關${card.isBoss ? '・魔王' : ''}`}</div>
+              <div className="wm-cnm">{card.rules.side ? `${SIDE_INFO[card.rules.side.kind].icon} ${card.name}` : card.name}</div>
+              {card.rules.side && <div className="wm-new">{SIDE_INFO[card.rules.side.kind].rule}不打也能往下走。</div>}
               <div className="wm-cth">
                 {card.themes.length ? card.themes.slice(0, 3).map((t) => THEME_NAME[t] ?? t).join('、') : '全部主題'}
               </div>
-              {newcomers(card).length > 0 && (
+              {!card.rules.side && newcomers(card).length > 0 && (
                 <div className="wm-new">新登場：{newcomers(card).map((n) => `${n.badge} ${n.name}`).join('、')}</div>
               )}
               {card.isBoss && (card.rules.boss?.skills?.length ?? 0) > 0 && (
                 <div className="wm-new boss">魔王招式：{card.rules.boss!.skills!.map((k) => BOSS_SKILL_NAME[k]).join('、')}</div>
               )}
-              <div className="wm-cst">
+              {!card.rules.side && <div className="wm-cst">
                 {[0, 1, 2].map((i) => <img key={i} src={pic('star')} alt="" className={i < (progress.get(card.id)?.stars ?? 0) ? '' : 'off'} />)}
-              </div>
+              </div>}
               <button className="btn lvgo" onClick={() => onPlay(card)}>出發！</button>
             </div>
           )}

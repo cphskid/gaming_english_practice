@@ -142,6 +142,14 @@ export interface LevelRules {
   startCoins: number
   waves: WaveSpec[]
   boss?: { hp: number; speed: number; art: string; scale: number; skills?: ('summon' | 'shield' | 'charge')[] }
+  /**
+   * 旁支趣味關（2026-11-05，見 data/levels.ts SIDE_LEVELS）。不擋主線、不存星星。
+   *   gold    金幣哥布林：怪溜進城堡不扣血
+   *   listen  聽音之夜：全部是聽音幽靈
+   *   rescue  拯救露米：露米的籠子走到城堡就輸
+   *   limit   限定建築：只能蓋 towers 裡的塔、最多 maxTowers 座
+   */
+  side?: { kind: 'gold' | 'listen' | 'rescue' | 'limit'; towers?: string[]; maxTowers?: number }
 }
 
 export interface LevelData {

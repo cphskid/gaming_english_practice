@@ -202,7 +202,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   const elStory = $<HTMLElement>('.td-story')
   const elLore = $<HTMLButtonElement>('.td-lore')
   /** 這一關蓋得到的塔（新塔照關卡解鎖，見 data/towers.ts） */
-  const BUILDABLE = towersAt(level.no)
+  const BUILDABLE = rules.side?.towers ?? towersAt(level.no)
   /** 聽音幽靈要念字給你聽；這台裝置念不出來就退回看中文 */
   const CAN_SPEAK = 'speechSynthesis' in window
 
@@ -658,6 +658,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         gainCrystals(d.boss ? CRYSTAL.perKill * 5 : CRYSTAL.perKill, d.x, d.y - 70)
         killEnemy(d)
         if (d.kind === 'slime' && !d.child) splitSlime(d)
+        if (d.kind === 'cage') toast('救出露米了！🧚')
       }
     } else ctx.audio.play('enemy-hit')
     pickQuestion()
@@ -791,6 +792,9 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     }
     S.selected = null
     const spec = TOWERS[S.picked]
+    // 限定建築關：最多蓋幾座
+    const cap = rules.side?.maxTowers
+    if (cap && S.towers.length >= cap) return toast(`這一關最多只能蓋 ${cap} 座塔，想清楚蓋哪裡！`)
     if (S.crystals < spec.cost) return toast('水晶不夠，還差 ' + (spec.cost - S.crystals) + ' 顆')
     S.crystals -= spec.cost
     const t: Tower = { slot: idx, kind: S.picked, soldier: null, builtAtWave: S.wave, level: 1 }
@@ -917,8 +921,14 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
         e.x = p.x; e.y = p.y
         if (!e.entered && e.x > ENTER_X) e.entered = true
 
-        if (e.dist >= PATH_LEN[e.path]) {
-          S.hp -= e.boss ? 3 : 1
+        if (e.dist >= PATH_LEN[e.path] && rules.side?.kind === 'gold') {
+          // 金幣哥布林溜走了：不扣血
+          S.pops.push({ x: layout.castle.x - 40, y: layout.castle.y - 70, text: '溜走了', color: '#f2c230', life: 1.1 })
+          killEnemy(e)
+          syncUI()
+        } else if (e.dist >= PATH_LEN[e.path]) {
+          // 露米的籠子走到城堡＝這一關輸了
+          S.hp -= e.kind === 'cage' ? S.hp : e.boss ? 3 : 1
           ctx.audio.play('castle-hit')
           S.pops.push({ x: layout.castle.x - 40, y: layout.castle.y - 70, text: '-1', icon: 'heart', color: '#ff9a94', life: 1.1 })
           killEnemy(e)

@@ -73,6 +73,16 @@ interface Playing {
   raid?: RaidLink
 }
 
+/** 旁支趣味關打贏了：記在這台瀏覽器（data/levels.ts SIDE_LEVELS），選關地圖用來插旗子 */
+function markSideDone(id: string): null {
+  try {
+    const done = new Set<string>(JSON.parse(localStorage.getItem('td-side-done') || '[]'))
+    done.add(id)
+    localStorage.setItem('td-side-done', JSON.stringify([...done]))
+  } catch { /* 存不了就算了，只是旗子 */ }
+  return null
+}
+
 export function App() {
   // 開機先停在「進入中」，等確定沒有登入過才秀登入畫面。
   // 以前一開始就是 'login'，從樂園點進來（明明已經登入）會先閃一下舊的登入版面。
@@ -261,7 +271,8 @@ export function App() {
       participants: [{ studentId: student.id, nickname: student.nickname }],
       wordsById: WORDS_BY_ID,
       stat,
-      alreadyCleared: !!progress.get(level.id)?.clearedAt,
+      // 旁支趣味關沒有首通獎勵（伺服器也沒有這幾關），當成已經過過
+      alreadyCleared: !!level.rules.side || !!progress.get(level.id)?.clearedAt,
     })
     setPlaying({ level, game: towerDefense, session, quizzes: new Map(), quizOpts, opponent: null })
     setScreen('play')
@@ -465,7 +476,8 @@ export function App() {
       // 因為那三個本來就只從答對來，跟你在玩哪個遊戲無關。
       const lv = playing.level
       const [saved, stats] = await Promise.all([
-        !lv ? null : step.saved ?? repo.saveResult({
+        // 旁支趣味關不存星星與通關（伺服器沒有這幾關），打贏記在這台瀏覽器
+        !lv || lv.rules.side ? (outcome.win && lv ? markSideDone(lv.id) : null) : step.saved ?? repo.saveResult({
           levelId: lv.id,
           sessionId: playing.session.id,
           win: outcome.win,

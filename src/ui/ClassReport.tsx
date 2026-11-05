@@ -302,7 +302,8 @@ function KidReport({ kid, d, rows, onBack }: { kid: { id: string; nickname: stri
   const last = [...rows].sort((a, b) => (b.last ?? '').localeCompare(a.last ?? ''))[0]
   const lv = last && LEVEL.get(last.l)
   const cleared = rows.filter((r) => r.cleared)
-  const weak = rows.filter((r) => r.n >= 10 && (pctOf(r.ok, r.n) ?? 100) < 60)
+  // 只看主線關卡（旁支趣味關 td-s.. 不在 LEVELS 裡）
+  const weak = rows.filter((r) => LEVEL.has(r.l) && r.n >= 10 && (pctOf(r.ok, r.n) ?? 100) < 60)
 
   return (
     <>

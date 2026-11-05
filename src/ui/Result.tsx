@@ -34,8 +34,9 @@ export function Result({
             ? (result.outcome.win ? '贏了！' : '這場輸了')
             : (result.outcome.win ? '守住了！' : '城堡被攻破了')}
         </h1>
-        {versus
-          ? <div className="stars">{result.outcome.win ? '🏆' : '⚔️'}</div>
+        {/* 旁支趣味關（td-s..）沒有星星 */}
+        {versus || result.levelId?.startsWith('td-s')
+          ? <div className="stars">{result.outcome.win ? (versus ? '🏆' : '🎉') : '⚔️'}</div>
           : <div className="stars">{'★'.repeat(result.stars)}{'☆'.repeat(3 - result.stars)}</div>}
         <p className="lede">{result.outcome.detail}</p>
         <div className="rows">

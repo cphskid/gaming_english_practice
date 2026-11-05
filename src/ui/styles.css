@@ -1741,3 +1741,7 @@ h1,h2,h3{color:var(--wood)}
 .wm .wm-tab.wm-tab-arrow:disabled{opacity:.35;cursor:default}
 .wm .wm-tabs .wm-tab .chnm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .wm .wm-tabs .wm-tab{min-width:0;padding-left:8px;padding-right:8px}
+/* 旁支趣味關的小旗子：一般站點縮小一點＋頭上一個圖示 */
+.wm .wm-stop.wm-side{transform:translate(-50%,-62%) scale(.82)}
+.wm .wm-side-ico{position:absolute;left:50%;top:-14px;transform:translateX(-50%);font-size:22px;line-height:1;
+  filter:drop-shadow(0 2px 0 rgba(0,0,0,.35));pointer-events:none}
