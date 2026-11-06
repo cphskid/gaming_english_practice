@@ -1745,3 +1745,7 @@ h1,h2,h3{color:var(--wood)}
 .wm .wm-stop.wm-side{transform:translate(-50%,-62%) scale(.82)}
 .wm .wm-side-ico{position:absolute;left:50%;top:-14px;transform:translateX(-50%);font-size:22px;line-height:1;
   filter:drop-shadow(0 2px 0 rgba(0,0,0,.35));pointer-events:none}
+/* 聽音題的「再聽一次」：發亮提醒（2026-11-06） */
+.td-say.td-say-hot{background:#ff9f2e;box-shadow:0 3px 0 #b8620f;animation:tdSayHot 1.2s ease-in-out infinite}
+@keyframes tdSayHot{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.td-quiz:has(+ .td-buffs + .td-say-hot){cursor:pointer}
