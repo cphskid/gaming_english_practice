@@ -298,6 +298,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     rings: [] as Ring[],
     target: null as Enemy | null,
     askedAt: 0,
+    /** 聽音題自動重念了幾次（同一題最多兩次） */
+    replays: 0,
     cooldown: 0,
     idle: 0,
     correct: 0,
@@ -504,8 +506,22 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     S.asked++
     S.askedAt = performance.now()
     // 聽音幽靈：不給中文，直接念給你聽
+    S.replays = 0
     if (listening(S.target)) speak(S.target.word.word)
     syncQuiz()
+  }
+
+  /**
+   * 聽音題沒聽清楚的救援（2026-11-06 Chuck：一開始沒聽到就沒了）：
+   * 題目上方的「🔊 再聽一次」大鈕隨時可按、點題目框也會再念；
+   * 另外 5 秒、10 秒還沒答就自動再念一次（最多兩次，不要一直吵）。
+   */
+  function autoReplay() {
+    if (!listening(S.target) || paused || S.replays >= 2) return
+    if (performance.now() - S.askedAt > 5000 * (S.replays + 1)) {
+      S.replays++
+      speak(S.target!.word.word)
+    }
   }
 
   // ---------------------------------------------------------------- 作答
@@ -1561,7 +1577,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       // 聽音幽靈：不給中文，只念英文
       elEmoji.textContent = '👂'
       elZh.textContent = '聽聽看！'
-      elHint.textContent = '點出剛剛念的那個字（按 🔊 再聽一次）'
+      elHint.textContent = '點出剛剛念的那個字（沒聽清楚就按「再聽一次」）'
     } else if (S.target) {
       // 題目的 emoji 是題庫的內容不是介面圖示，所以照樣用 textContent
       elEmoji.textContent = S.target.word.emoji
@@ -1577,6 +1593,11 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       elHint.textContent = '等牠們走進來'
     }
     elSay.disabled = !S.target
+    // 聽音題：重播鈕變成寫字、會發亮的大鈕，一眼找得到
+    const lis = listening(S.target)
+    elSay.classList.toggle('wide', lis)
+    elSay.classList.toggle('td-say-hot', lis)
+    elSay.textContent = lis ? '🔊 再聽一次' : '🔊'
   }
 
   // ---------------------------------------------------------------- 輸入
@@ -1647,6 +1668,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
   elGo.addEventListener('click', () => { ctx.audio.unlock(); ctx.audio.play('ui-tap'); startWave() })
   elSell.addEventListener('click', sellSelected)
   elSay.addEventListener('click', () => { if (S.target) speak(S.target.word.word) })
+  // 聽音題時點題目框（👂 聽聽看！）也再念一次
+  $<HTMLElement>('.td-quiz').addEventListener('click', () => { if (listening(S.target)) speak(S.target!.word.word) })
 
   // ---------------------------------------------------------------- 樂園版：圓盤選單與開波鈕
   const pUrl = (k: string) => `${import.meta.env.BASE_URL}td-park/p-${k}.webp`.replace(/([^:])\/{2,}/g, '$1/')
@@ -1938,6 +1961,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     // 上一趟放棄了才會重開，所以在關卡裡也救得回來，不用退出去重進。
     if (!img[PARK ? 'p-castle' : 'tiles'] && now - artKick > 3000) { artKick = now; void (PARK ? loadArt(parkKeys) : loadArt()) }
     syncBuffs()
+    autoReplay()
     if (PARK) { syncGuide(); if (incoming > 0) incoming -= Math.min(0.05, dt) }
     draw()
     raf = requestAnimationFrame(loop)
