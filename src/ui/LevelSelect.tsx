@@ -64,7 +64,10 @@ function stopsFor(n: number): Pt[] {
   return Array.from({ length: n }, (_, k) => {
     const want = (L * k) / Math.max(1, n - 1)
     let i = d.findIndex((v) => v >= want)
-    if (i <= 0) return line[0]
+    // 最後一點：want 算出來可能因為小數誤差比 L 大一點點、找不到 → 要放在路的終點，不能退回起點
+    // （2026-11-07 問題回報 #54：四關、七關的章，魔王旗子疊在第一關上，第 11 關被蓋住看不到）
+    if (i < 0 || k === n - 1) return line[line.length - 1]
+    if (i === 0) return line[0]
     const t = (want - d[i - 1]) / (d[i] - d[i - 1] || 1)
     return { x: line[i - 1].x + (line[i].x - line[i - 1].x) * t, y: line[i - 1].y + (line[i].y - line[i - 1].y) * t }
   })
