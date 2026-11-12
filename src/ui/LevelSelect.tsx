@@ -12,7 +12,7 @@ import { Avatar } from './Avatar'
 import WORLD from '@/data/world-stops.json'
 import { PARK_URL } from '@/net'
 import { ui } from './park-ui'
-import { STAGE_STORY, newcomers } from '@/data/story'
+import { STAGE_STORY, facePath, newcomers, type Speaker } from '@/data/story'
 import { BOSS_SKILL_NAME } from '@/data/enemies'
 
 /**
@@ -258,8 +258,9 @@ export function LevelSelect({
                 <span className="sr">第 {l.no} 關</span>
                 {done && <span className="wm-stars">{[0, 1, 2].map((i) => <img key={i} src={pic('star')} alt="" className={i < st ? '' : 'off'} />)}</span>}
                 {!unlocked && <img className="wm-lock" src={pic('lock')} alt="未開放" />}
-                {/* 還沒搶回來的站有敵人佔著（暫代圖示，美術解凍後換手繪小兵） */}
-                {!done && <img className="wm-foe" src={pic('face-boss' + ch.region)} alt="" aria-hidden />}
+                {/* 還沒搶回來的站有敵人佔著；章尾魔王那一站是這一章真正的魔王（團戰那隻或劇情魔王） */}
+                {!done && <img className={'wm-foe' + (l.isBoss ? ' big' : '')}
+                  src={l.isBoss ? `${base}${facePath(ch.foe as Speaker)}`.replace(/([^:])\/{2,}/g, '$1/') : pic('face-boss' + ch.region)} alt="" aria-hidden />}
                 {unlocked && !open && teacherOpen.has(l.id) && <span className="byteacher">老師開放</span>}
                 {l === next && <span className="wm-here">▼</span>}
               </button>
