@@ -24,8 +24,8 @@ export type Speaker =
 export interface Line { who: Speaker; text: string }
 
 /**
- * img：頭像用哪一張手繪（public/td-park/p-face-<img>.webp）。沒有手繪的（團戰魔王來守章尾的那幾隻）
- * 先用 face 的 emoji，美術解凍後再換。
+ * img：頭像用哪一張手繪（public/td-park/p-face-<img>.webp）。沒有寫 img 的是團戰魔王來守章尾，
+ * 頭像直接用團戰那張（public/td-park/raid/f-<id>.webp，2026-11-12 美術解凍後換上）。face 的 emoji 是圖還沒到時的替身。
  */
 export const SPEAKERS: Record<Speaker, { name: string; face: string; img?: string }> = {
   lumi: { name: '露米', face: '🧚', img: 'lumi' },
@@ -46,6 +46,12 @@ export const SPEAKERS: Record<Speaker, { name: string; face: string; img?: strin
   rex: { name: '暴龍', face: '🦖' },
   gorilla: { name: '大猩猩', face: '🦍' },
   penguin: { name: '企鵝老大', face: '🐧' },
+}
+
+/** 說話的人頭像在 public/ 底下的路徑 */
+export function facePath(who: Speaker): string {
+  const sp = SPEAKERS[who]
+  return sp.img ? `td-park/p-face-${sp.img}.webp` : `td-park/raid/f-${who}.webp`
 }
 
 /** 時光字典一共幾頁＝幾章，一隻章尾魔王拿著一頁 */

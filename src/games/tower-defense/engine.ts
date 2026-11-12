@@ -3,7 +3,9 @@ import {
 } from '@/data/towers'
 import { JOB_EFFECT } from '@/data/jobs'
 import { BOSS_SKILL, ENEMIES, SHAMAN, SLIME_CHILD_HP, SLIME_CHILD_SPEED, type EnemyKind } from '@/data/enemies'
-import { SPEAKERS, storyAfter, storyBefore, type Line } from '@/data/story'
+import { stageOf } from '@/data/levels'
+import RAID_ART from '@/data/raid-art-park.json'
+import { SPEAKERS, facePath, storyAfter, storyBefore, type Line } from '@/data/story'
 import type { GameContext, GameHandle, LevelData, Point, Skill, Word } from '@/core/types'
 import { ART, TERRAIN_KEYS, loadArt, onArt } from './art'
 import { PLATE_RULES, layoutPlates as runPlateLayout, plateY } from './plates'
@@ -245,6 +247,18 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     ...rules.waves.flatMap((w) => (w.kinds ?? []).filter(Boolean).map((k) => 'pv-en-' + k)),
     ...(rules.boss?.skills?.includes('summon') ? ['pv-en-wolf'] : []),
   ])
+  /**
+   * 章尾魔王長成團戰裡那一隻（2026-11-12 美術解凍）：這一章的 foe 是團戰魔王，就抓團戰的動作條
+   * （public/td-park/raid/b-<id>.webp，六格：待機×2、攻擊×2、受傷、倒下）。劇情魔王（哥布林大王、莫爾格…）
+   * 和圖還沒到的時候照舊畫大食人魔。
+   */
+  const FOE = level.isBoss ? stageOf(level.no).foe : ''
+  const FOE_SPEC = (RAID_ART as Record<string, { frames: number; anchor: number }>)[FOE]
+  /** 團戰魔王比食人魔大一號 */
+  const FOE_H = 1.45
+  const foeIm = FOE_SPEC ? new Image() : null
+  if (foeIm) foeIm.src = `${import.meta.env.BASE_URL}td-park/raid/b-${FOE}.webp`.replace(/([^:])\/{2,}/g, '$1/')
+  const foeReady = () => !!foeIm && foeIm.complete && foeIm.naturalWidth > 0
   const parkKeys = (k: string) => k === LG_SOLDIER || k === LG_TOWER || VARIETY_KEYS.has(k) || k.startsWith('p-') && (mapFailed || !MAP_NAME || !PARK_FALLBACK.has(k)) &&
     // 別章的城堡和怪不用抓
     !((k.endsWith('-snow') || k.endsWith('-meadow')) && !k.endsWith(PSUF || '#'))
@@ -1442,7 +1456,14 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     const sp = ownIm ? own : PARK ? (PSUF && img[SPRITES[e.art + PSUF]?.k] ? SPRITES[e.art + PSUF] : SPRITES[e.art]) : undefined
     const raw = sp && img[sp.k]
     const pim = raw && e.kind && !ownIm ? tinted(raw, ENEMIES[e.kind].tint) : raw
-    if (sp && pim && (pim instanceof HTMLCanvasElement || pim.complete)) {
+    if (e.boss && FOE_SPEC && foeReady()) {
+      const ahead = pointAt(PATHS[e.path], e.dist + 6)
+      const flip = ahead.x < e.x - 0.5
+      // 被打中＝受傷那格，衝刺＝攻擊那兩格，平常兩格待機輪流（團戰的圖沒有走路格，用上下晃代替）
+      const f = e.good > 0 || (e.shake > 0 && e.bad <= 0) ? 4 : e.charging > 0 ? 2 + (Math.floor(S.t * 6) % 2) : e.frame < 3.5 ? 0 : 1
+      const bob = f < 2 ? Math.abs(Math.sin((e.frame / 7) * Math.PI * 2)) * 3 : 0
+      drawFrame(c2d, foeIm!, FOE_SPEC.frames, FOE_SPEC.anchor, f, e.x + sh, e.y + 4 - bob, 60 * FOE_H, flip)
+    } else if (sp && pim && (pim instanceof HTMLCanvasElement || pim.complete)) {
       // 走路是第 2、1、3、1 格輪流；剛被打中（答對的那隻）換成縮一下的那格。
       // 面向看牠接下來往哪裡走：路往左彎的那一段要翻面。
       const ahead = pointAt(PATHS[e.path], e.dist + 6)
@@ -1476,7 +1497,8 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
     }
     c2d.globalAlpha = 1
     c2d.restore()
-    const top = e.y - fly - (PARK ? 64 : 46) * e.scale
+    // 團戰魔王比較高，走在最上面那條路時血條會跑出畫面，夾在畫面裡
+    const top = Math.max(8, e.y - fly - (PARK ? 64 : 46) * e.scale * (e.boss && FOE_SPEC && foeReady() ? FOE_H : 1))
     bar(e.x + sh - 22 * e.scale, top, 44 * e.scale, 5, e.hp / e.maxHp, e.boss ? '#ff7a3c' : '#d4504a')
     // 還在用換色暫代的怪：頭上一個小 emoji 說明牠是哪一種；有盾再加一面盾
     if (e.kind && !ownIm) emoji(ENEMIES[e.kind].badge, e.x + sh - 30 * e.scale, top + 2, 18)
@@ -1921,7 +1943,7 @@ export function mountTowerDefense(root: HTMLElement, ctx: GameContext): GameHand
       const ln = lines[i]
       const sp = SPEAKERS[ln.who]
       elStory.innerHTML = `<div class="td-story-box${ln.who === 'lumi' ? '' : ' foe'}">`
-        + `<span class="td-story-face">${sp.img ? `<img src="${pUrl('face-' + sp.img)}" alt="${sp.face}">` : `<i class="td-story-emoji">${sp.face}</i>`}</span>`
+        + `<span class="td-story-face"><img src="${(import.meta.env.BASE_URL + facePath(ln.who)).replace(/([^:])\/{2,}/g, '$1/')}" alt="${sp.face}"></span>`
         + `<div class="td-story-txt"><b>${sp.name}</b><p>${ln.text}</p></div>`
         + `<span class="td-story-next">${i < lines.length - 1 ? '點一下繼續 ▶' : '開始！'}</span>`
         + `</div><button class="td-story-skip">跳過</button>`
