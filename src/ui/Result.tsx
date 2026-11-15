@@ -46,6 +46,12 @@ export function Result({
             ? <div className="row"><span>獲得時光幣</span><b><Icon name="coin" size={15} /> {bonus.coins}
                 <small className="muted">　今天 {time.today}/{time.cap}</small></b></div>
             : <div className="row"><span>獲得銅幣</span><b><Icon name="coin" size={15} /> {bonus.coins}</b></div>}
+          {/* 今天答題換的時光幣拿滿了：只寫 0 小朋友會以為壞掉沒拿到（2026-11-15 回報 #64 Darren） */}
+          {time && time.today >= time.cap && (
+            <p className="muted" style={{ margin: '2px 0 6px', textAlign: 'center' }}>
+              今天答題換的時光幣已經拿滿 {time.cap} 枚囉！明天再來就能再拿，現在可以繼續練習、拿經驗。
+            </p>
+          )}
           <div className="row"><span>獲得經驗</span><b>{bonus.exp} exp</b></div>
           {result.bonusCoins > 0 && (
             <div className="row"><span>首次通關獎勵</span><b><Icon name="coin" size={15} /> {result.bonusCoins}</b></div>
