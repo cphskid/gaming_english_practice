@@ -139,6 +139,9 @@ function waveKinds(no: number, d: number, wave: number, count: number, boss: boo
  */
 export const VARIETY_HP = 1
 
+/** 一般怪在畫面上最快每秒走幾格（邏輯座標 px）；其他圖大多 40～90 */
+const SPEED_CAP = 100
+
 function waves(waveCount: number, d: number, pathLen: number, volley: number, no = 0, boss = false): WaveSpec[] {
   // d 是「難度刻度」，第一章就是關卡編號 1～14。後兩章不是一路加上去，而是每章
   // 從頭爬一次、最高一樣到 14（見 chapterLevels），所以封頂在每分鐘 25 題。
@@ -146,7 +149,10 @@ function waves(waveCount: number, d: number, pathLen: number, volley: number, no
   const hits = d <= 4.5 ? 1 : d <= 9.5 ? 2 : 3          // 一隻怪要答對幾次才會死
   const gap = (60 / rate) * hits                        // 出怪間隔
   const onScreen = Math.max(14, 24 - d * 0.6)           // 怪在畫面上待幾秒
-  const speed = Math.round(pathLen / onScreen)
+  // 一條很長的路（梳子、髮夾彎、繞圈）照「待幾秒」回推，怪會跑到別張圖的兩三倍快（每秒 140 多），
+  // 加上相鄰兩條路上的怪一上一下交錯，看不清楚要點哪隻。畫面上的速度封頂，路長的就多待幾秒。
+  // 2026-11-20 問題回報 #77 zuyu（第 39 關「太快了！怪物交叉時太混亂了！」）
+  const speed = Math.min(SPEED_CAP, Math.round(pathLen / onScreen))
 
   const out: WaveSpec[] = []
   for (let i = 0; i < waveCount; i++) {
